@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverunes", "crates/runemultiplier", "crates/weightmultiplier", "crates/risearcher"]
+
+[workspace.dependencies]
+# https://github.com/vswarte/fromsoftware-rs - safe Rust bindings to Elden Ring's
+# own engine structures (WorldChrMan/ChrIns/CSTaskImp/...), used instead of hand
+# rolled AOB scanning + manual offsets. Declared once here so every mod crate
+# builds against the exact same version.
+eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", package = "eldenring" }
+fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", package = "fromsoftware-shared" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+# Applies to every crate in the workspace when built from here (`cargo build
+# --release` at the workspace root, or per-member with `-p <name>`) - each
+# mod crate's own Cargo.toml does not need to repeat this.
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

@@ -1,0 +1,72 @@
+Adds automatic HP, FP, and Stamina regeneration over time, with configurable rates - plus optional HP/FP/Stamina restore the instant your own attack lands a hit, and/or the instant you take a hit yourself.
+
+Default configuration ([b]AutoRegen.ini[/b]):
+[code][General]
+ReloadKey=F5          ; hotkey that reloads this file while the game is running
+
+[Regen Per Tick]
+Interval=1000         ; how often (ms) HP/FP/Stamina are topped up
+Hp=0                  ; HP restored per tick
+Fp=0                  ; FP restored per tick
+Stamina=0             ; Stamina restored per tick
+HpPct=0.5             ; % of max HP restored per tick
+FpPct=1               ; % of max FP restored per tick
+StaminaPct=5          ; % of max Stamina restored per tick
+
+[Regen Per Hit]        ; fires once when YOUR OWN weapon attack lands a hit
+HpOnHit=0
+FpOnHit=0
+StaminaOnHit=0
+HpPctOnHit=0
+FpPctOnHit=0
+StaminaPctOnHit=0
+
+[Regen Per Damage]     ; fires once when YOU take a hit from something else
+HpOnDamage=0
+FpOnDamage=0
+StaminaOnDamage=0[/code]
+
+Every value follows the same "0 disables" convention. Editing the ini while the game is running and pressing [b]ReloadKey[/b] applies the change without restarting.
+
+[b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
+
+[size=4][b]Installation[/b][/size]
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\AutoRegen.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]AutoRegen.dll[/b] and [b]AutoRegen.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+[size=4][b]Changelog[/b][/size]
+
+[b]3.0[/b]
+[list]
+[*]Rewritten in Rust on top of [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url] - reads/writes HP/FP/Stamina through the game's own reflected structures instead of hand-maintained byte offsets.[/*]
+[*]Added Stamina to the per-hit heal (renamed to [b]HpOnHit[/b]/[b]FpOnHit[/b]/[b]StaminaOnHit[/b] + percent variants).[/*]
+[*]Added restore-on-taking-damage: [b]HpOnDamage[/b] / [b]FpOnDamage[/b] / [b]StaminaOnDamage[/b], fires when you're hit rather than when you land one.[/*]
+[*]Added [b]ReloadKey[/b] (default F5) to hot-reload the ini without restarting the game.[/*]
+[*]Regen tick now runs on the game's own frame scheduler instead of a separate sleeping thread - no more 50ms floor needed.[/*]
+[/list]
+[b]2.0[/b]
+[list]
+[*]Added restore-on-hit: [b]HpOnHit[/b] / [b]FpOnHit[/b] / [b]HpPercentOnHit[/b] / [b]FpPercentOnHit[/b].[/*]
+[*]Interval is now clamped to a 50ms floor.[/*]
+[/list]
+[b]1.0[/b]
+[list]
+[*]HP/FP/Stamina regeneration over time.[/*]
+[/list]

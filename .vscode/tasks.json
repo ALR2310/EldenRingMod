@@ -1,0 +1,122 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Cargo: Build AutoRegen (Release)",
+            "detail": "Builds AutoRegen (release), then copies AutoRegen.dll + AutoRegen.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "AutoRegen"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build SomeTweaks (Release)",
+            "detail": "Builds SomeTweaks (release), then copies SomeTweaks.dll + SomeTweaks.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "SomeTweaks"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build PassiveRunes (Release)",
+            "detail": "Builds PassiveRunes (release), then copies PassiveRunes.dll + PassiveRunes.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "PassiveRunes"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build RuneMultiplier (Release)",
+            "detail": "Builds RuneMultiplier (release), then copies RuneMultiplier.dll + RuneMultiplier.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "RuneMultiplier"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build WeightMultiplier (Release)",
+            "detail": "Builds WeightMultiplier (release), then copies WeightMultiplier.dll + WeightMultiplier.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "WeightMultiplier"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build RiseArcher (Release)",
+            "detail": "Builds RiseArcher (release), then copies RiseArcher.dll + RiseArcher.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "RiseArcher"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build All (Release)",
+            "detail": "Runs every per-mod build task - build/ ends up with every mod's .dll + .ini",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "Cargo: Build AutoRegen (Release)",
+                "Cargo: Build SomeTweaks (Release)",
+                "Cargo: Build PassiveRunes (Release)",
+                "Cargo: Build RuneMultiplier (Release)",
+                "Cargo: Build WeightMultiplier (Release)",
+                "Cargo: Build RiseArcher (Release)"
+            ],
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

@@ -1,0 +1,15 @@
+[package]
+name = "sometweaks"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "SomeTweaks"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { path = "../../shared" }
+eldenring.workspace = true
+fromsoftware-shared.workspace = true
+chrono.workspace = true

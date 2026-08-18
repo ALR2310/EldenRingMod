@@ -1,0 +1,42 @@
+Reduces your total equip load by a configurable percentage - patches the actual gameplay weight calculation, not just the displayed number, so roll type and run speed change too.
+
+Default configuration ([b]WeightMultiplier.ini[/b]):
+[code]InitialDelaySeconds=5      ; seconds to wait after game launch before applying the mod
+WeightReductionPercent=50  ; % to reduce your total equip load by (0 = no change)
+                           ; e.g. 50 turns a real load of 60.9 into 30.45
+                           ; e.g. 100 turns a real load of 60.9 into 0
+[/code]
+
+[b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
+
+[size=4][b]Installation[/b][/size]
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\WeightMultiplier.dll",
+]
+[/code]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.
+[*]Download this mod and drag [b]WeightMultiplier.dll[/b] and [b]WeightMultiplier.ini[/b] into the [b]mods[/b] folder.
+[*]Launch the game - the mod will be loaded automatically.
+[/list]
+
+[size=4][b]Changelog[/b][/size]
+
+[b]2.0[/b]
+[list]
+[*]Renamed from ReductionWeight to WeightMultiplier and rewritten in Rust - same single hook on the equip-load summing loop's finish point, byte-identical patch technique.[/*]
+[/list]
+[b]1.0[/b]
+[list]
+[*]Reduces total equip load by a configurable percentage via a single inline hook.[/*]
+[/list]

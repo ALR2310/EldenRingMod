@@ -1,0 +1,256 @@
+//! Multiplies rune gains from every source by a configurable factor, ported
+//! from RuneMultiplierEngine.cpp/CodePatch.cpp - same single hook on
+//! `AddSoul_Call` (the game's lowest-level "add this many runes" function,
+//! used by both enemy kills and rune items), but the redirect and stub-return
+//! jumps are now absolute 64-bit jumps (`mov reg, imm64; jmp reg` - the exact
+//! same technique `attack_hook.rs` in `autoregen`/`sometweaks` already uses)
+//! instead of relative `E9 rel32` jumps. That eliminates `CodePatch.cpp`'s
+//! entire "search nearby pages for `VirtualAlloc`-able memory within rel32
+//! range" routine: an absolute jump reaches any 64-bit address, so the stub
+//! can be allocated anywhere at all.
+//!
+//! Disassembly at `AddSoul_Call` (Ghidra, confirmed against the real
+//! eldenring.exe - see the original C++ README's "RE `AddSoul_Call`" section):
+//!
+//! ```text
+//! MOV R9D,[RCX+0x6C]      ; R9D = current rune count
+//! LEA R8D,[R9+RDX*1]      ; sum = current + amount (RDX = amount to add)
+//! CMP R8D,0x3B9AC9FF      ; clamp to the 999,999,999 cap
+//! ...
+//! MOV [RCX+0x6C],EAX      ; write new rune count - used by every source
+//! RET
+//! ```
+//!
+//! The multiply has to happen to EDX *before* any of that runs, so the first
+//! 3 instructions (12 bytes: `mov r9d,[rcx+0x6c]` + `xor r11d,r11d` +
+//! `mov [rsp+0x10],r11d` - none of which read RDX/EDX) are overwritten with a
+//! redirect to a generated stub that multiplies EDX, re-runs those 3
+//! instructions (copied live from the game, never hardcoded), then jumps back
+//! into `AddSoul_Call` right after them.
+
+use std::ffi::c_void;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::Duration;
+
+use eldenring::cs::{CSTaskGroupIndex, CSTaskImp};
+use eldenring::util::input;
+use fromsoftware_shared::SharedTaskImpExt;
+
+use common::config;
+use common::input::parse_virtual_key;
+use common::logger;
+use common::memscan;
+
+const VK_F9: i32 = 0x78;
+
+unsafe extern "system" {
+    fn VirtualAlloc(lp_address: *mut c_void, dw_size: usize, fl_allocation_type: u32, fl_protect: u32) -> *mut c_void;
+    fn VirtualProtect(lp_address: *mut c_void, dw_size: usize, fl_new_protect: u32, lpfl_old_protect: *mut u32) -> i32;
+    fn FlushInstructionCache(h_process: *mut c_void, lp_base_address: *const c_void, dw_size: usize) -> i32;
+    fn GetCurrentProcess() -> *mut c_void;
+}
+
+const MEM_COMMIT: u32 = 0x1000;
+const MEM_RESERVE: u32 = 0x2000;
+const PAGE_EXECUTE_READWRITE: u32 = 0x40;
+
+// Only used to LOCATE AddSoul_Call - not patched itself. Matches the
+// "Rune Multiplier" CT table entry for the enemy-kill reward scaling step
+// (`mulss xmm0,xmm1`); kept purely as a stable anchor since AddSoul_Call
+// itself has no equally distinctive byte pattern of its own to scan for.
+const ANCHOR_PATTERN: &str = "F3 0F 59 C1 F3 0F 2C F8 48 8B 8B";
+
+// "call AddSoul_Call" sits at anchor+0x11 (mulss[4] + cvttss2si[4] +
+// "mov rcx,[rbx+0x570]"[7] + "mov edx,edi"[2] = 17 bytes).
+const ADDSOUL_CALL_SITE_OFFSET: usize = 0x11;
+
+// First 3 instructions of AddSoul_Call that get overwritten - none of them
+// read RDX/EDX (the amount about to be multiplied), so the multiply can run
+// first and the copied originals re-run after with the new value in place.
+const ADDSOUL_PREFIX_LEN: usize = 12;
+
+// The multiplier as a Q20 fixed-point integer (value = round(multiplier *
+// 2^20)), read by the injected stub through a pointer baked in at install
+// time. Hot-reload updates this value directly - the stub always re-reads it
+// through the pointer, so no re-patching is ever needed.
+static FIXED_Q20: AtomicI64 = AtomicI64::new(1 << 20);
+
+fn init_multiplier() {
+    let multiplier = config::get_double("RuneMultiplier", 1.0);
+    let fixed = (multiplier * (1i64 << 20) as f64 + 0.5) as i64;
+    FIXED_Q20.store(fixed, Ordering::Relaxed);
+    logger::log(&format!("RuneMultiplier={multiplier:.3}"));
+}
+
+/// Reads a 5-byte "E8 rel32" CALL instruction at `call_site` and returns its
+/// absolute target, or `None` if the byte there isn't 0xE8 (layout differs
+/// from expected - fail safe rather than jumping into the wrong place).
+fn resolve_call_target(call_site: *const u8) -> Option<*mut u8> {
+    unsafe {
+        if *call_site != 0xE8 {
+            return None;
+        }
+        let rel = i32::from_le_bytes(*(call_site.add(1) as *const [u8; 4]));
+        Some(call_site.add(5).offset(rel as isize) as *mut u8)
+    }
+}
+
+/// Builds the stub's machine code: multiply EDX by [`FIXED_Q20`] using
+/// integer-only Q20 fixed-point math (deliberately avoiding XMM registers -
+/// `AddSoul_Call` is called far more often, from far more call sites, than
+/// any single hook site, so nothing here should assume any XMM register is
+/// safe to clobber), then re-run `original_prefix` (the 12 bytes overwritten
+/// at the patch site) followed by an absolute jump back to
+/// `return_addr` (`addsoul_entry + ADDSOUL_PREFIX_LEN`).
+fn build_stub(original_prefix: &[u8; ADDSOUL_PREFIX_LEN], return_addr: *const u8) -> Vec<u8> {
+    let mut body = Vec::with_capacity(50);
+
+    // movsxd rax, edx (sign-extend the amount to 64-bit)
+    body.extend_from_slice(&[0x48, 0x63, 0xC2]);
+
+    // mov r10, &FIXED_Q20
+    body.extend_from_slice(&[0x49, 0xBA]);
+    body.extend_from_slice(&(&FIXED_Q20 as *const AtomicI64 as u64).to_le_bytes());
+
+    // mov r8, qword ptr [r10]
+    body.extend_from_slice(&[0x4D, 0x8B, 0x02]);
+
+    // imul rax, r8
+    body.extend_from_slice(&[0x49, 0x0F, 0xAF, 0xC0]);
+
+    // sar rax, 20 (undo the Q20 scale, arithmetic shift keeps sign)
+    body.extend_from_slice(&[0x48, 0xC1, 0xF8, 0x14]);
+
+    // mov edx, eax (write the scaled amount back where AddSoul_Call expects it)
+    body.extend_from_slice(&[0x89, 0xC2]);
+
+    // Re-run the original first 3 instructions we had to overwrite.
+    body.extend_from_slice(original_prefix);
+
+    // mov r11, return_addr; jmp r11 - absolute jump back, so the stub can
+    // live anywhere in the 64-bit address space regardless of how far it
+    // ends up from AddSoul_Call.
+    body.extend_from_slice(&[0x49, 0xBB]);
+    body.extend_from_slice(&(return_addr as u64).to_le_bytes());
+    body.extend_from_slice(&[0x41, 0xFF, 0xE3]);
+
+    body
+}
+
+fn hex_dump(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02X} ")).collect()
+}
+
+/// Scans for the anchor pattern, resolves `AddSoul_Call` from it, and patches
+/// its first 12 bytes to redirect into a freshly allocated stub. Returns
+/// `false` (and logs why) on any failure - the original bytes are left
+/// untouched in that case.
+fn install(debug_log: bool) -> bool {
+    let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) else {
+        logger::log("ERROR: anchor pattern not found (used to locate AddSoul_Call). Game may have been updated - re-check ANCHOR_PATTERN.");
+        return false;
+    };
+    logger::log(&format!("Anchor found at {anchor:p} (known-good offset is +0x630CB3)."));
+
+    let call_site = unsafe { anchor.add(ADDSOUL_CALL_SITE_OFFSET) };
+    let Some(addsoul_entry) = resolve_call_target(call_site) else {
+        logger::log("ERROR: couldn't resolve AddSoul_Call from the anchor - byte layout differs from expected.");
+        return false;
+    };
+    logger::log(&format!("AddSoul_Call resolved at {addsoul_entry:p}."));
+
+    let original_prefix: [u8; ADDSOUL_PREFIX_LEN] =
+        unsafe { std::slice::from_raw_parts(addsoul_entry, ADDSOUL_PREFIX_LEN) }
+            .try_into()
+            .unwrap();
+    if debug_log {
+        logger::log(&format!("AddSoul_Call original prefix bytes: {}", hex_dump(&original_prefix)));
+    }
+
+    let return_addr = unsafe { addsoul_entry.add(ADDSOUL_PREFIX_LEN) };
+    let stub_body = build_stub(&original_prefix, return_addr);
+    if debug_log {
+        logger::log(&format!("AddSoul_Call stub body bytes: {}", hex_dump(&stub_body)));
+    }
+
+    let stub = unsafe {
+        VirtualAlloc(std::ptr::null_mut(), stub_body.len(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE)
+    };
+    if stub.is_null() {
+        logger::log("ERROR: VirtualAlloc failed for the stub.");
+        return false;
+    }
+    unsafe { std::ptr::copy_nonoverlapping(stub_body.as_ptr(), stub as *mut u8, stub_body.len()) };
+
+    // Patch: mov rax, <stub>; jmp rax (10 + 2 = 12 bytes) - fills the entire
+    // overwritten region exactly, no NOP padding needed.
+    let mut patch = [0u8; ADDSOUL_PREFIX_LEN];
+    patch[0] = 0x48;
+    patch[1] = 0xB8; // mov rax, imm64
+    patch[2..10].copy_from_slice(&(stub as u64).to_le_bytes());
+    patch[10] = 0xFF;
+    patch[11] = 0xE0; // jmp rax
+
+    let mut old_protect: u32 = 0;
+    let ok = unsafe { VirtualProtect(addsoul_entry as *mut c_void, ADDSOUL_PREFIX_LEN, PAGE_EXECUTE_READWRITE, &mut old_protect) };
+    if ok == 0 {
+        logger::log("ERROR: VirtualProtect failed, RuneMultiplier disabled.");
+        return false;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(patch.as_ptr(), addsoul_entry, ADDSOUL_PREFIX_LEN);
+        VirtualProtect(addsoul_entry as *mut c_void, ADDSOUL_PREFIX_LEN, old_protect, &mut old_protect);
+        FlushInstructionCache(GetCurrentProcess(), addsoul_entry as *const c_void, ADDSOUL_PREFIX_LEN);
+        FlushInstructionCache(GetCurrentProcess(), stub as *const c_void, stub_body.len());
+    }
+
+    logger::log(&format!("AddSoul_Call hook installed. stub={stub:p}"));
+    true
+}
+
+/// Installs the hook, then watches `HotReloadKey` on the game's own
+/// `FrameBegin` task group for the rest of the DLL's lifetime, reloading
+/// `RuneMultiplier.ini` on each press. Meant to run on its own worker thread
+/// spawned from `DllMain`; never returns (except early, if the hook fails to
+/// install).
+pub fn run(ini_path: String, dir: String) {
+    init_multiplier();
+
+    let debug_log = config::get_bool("DebugLog", false);
+    if !install(debug_log) {
+        logger::log("RuneMultiplier disabled for this session (hook install failed).");
+        return;
+    }
+
+    let hotkey_name = config::get_string("HotReloadKey", "F9");
+    logger::log(&format!("Hook active. Press {hotkey_name} in-game to reload RuneMultiplier.ini."));
+
+    let cs_task = match CSTaskImp::wait_for_instance(Duration::MAX) {
+        Ok(instance) => instance,
+        Err(err) => {
+            logger::log(&format!("ERROR: CSTaskImp never became available ({err:?}) - hot-reload disabled, hook stays active with its startup config."));
+            loop {
+                std::thread::sleep(Duration::from_secs(60));
+            }
+        }
+    };
+
+    let _handle = cs_task.run_recurring(
+        move |_data: &eldenring::fd4::FD4TaskData| {
+            let reload_key = parse_virtual_key(&config::get_string("HotReloadKey", "F9"), VK_F9);
+            if input::is_key_pressed(reload_key) {
+                config::load(&ini_path);
+                if config::get_bool("DebugLog", false) {
+                    logger::init(&dir, "RuneMultiplier.log"); // no-op if already initialized; starts logging if just turned on
+                }
+                init_multiplier();
+                logger::log("Config reloaded (hotkey pressed).");
+            }
+        },
+        CSTaskGroupIndex::FrameBegin,
+    );
+
+    loop {
+        std::thread::sleep(Duration::from_secs(60));
+    }
+}

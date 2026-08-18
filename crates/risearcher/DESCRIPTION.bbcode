@@ -1,0 +1,104 @@
+Overhauls bows, crossbows, ballistae, arrows and bolts to make ranged archery a real playstyle in Elden Ring - more damage, more scaling, lighter weapons, bigger ammo stacks, and faster/stronger arrow-based Ashes of War. Ships two ways: a DLL that patches the values live in memory (recommended - doesn't conflict with other regulation.bin mods, every number configurable in an ini), or the original static regulation.bin edit for Smithbox users who prefer that workflow.
+
+[size=4][b]Features[/b][/size]
+[list]
+[*]Bows/Greatbows: +50% base damage, +100% scaling (configurable).[/*]
+[*]Bows: Ash of War can now always be swapped.[/*]
+[*]Crossbows: +200% base damage (configurable).[/*]
+[*]Ballistae: +300% base damage (configurable).[/*]
+[*](Crossbows and Ballistae can't scale with stats, so they get a much bigger flat damage increase instead.)[/*]
+[*]All bows, crossbows and ballistae: -50% weight, +100% sell value (configurable).[/*]
+[*]Arrows and bolts: max carry quantity raised to 255 (configurable).[/*]
+[*]Arrow flight velocity increased by 250% (configurable).[/*]
+[*]Rain of Arrows: radius increased by 100%, arrow count increased to 6 (configurable).[/*]
+[/list]
+
+[size=4][b]Configuration (RiseArcher.ini)[/b][/size]
+[code][Bow]
+DamageMultiplier=1.5
+ScalingMultiplier=2
+AllowAshOfWar=true
+
+[Crossbow]
+DamageMultiplier=3
+
+[Ballista]
+DamageMultiplier=4
+
+[BowCrossbowBallista]
+WeightMultiplier=0.5
+SellValueMultiplier=2
+
+[Arrow]
+MaxQuantity=255
+
+[Bolt]
+MaxQuantity=255
+
+[Bullet]
+SpeedMultiplier=3.5
+RangeMultiplier=2
+SpreadMultiplier=2
+RainOfArrowsCount=6[/code]
+
+[size=3][b][color=#E74C3C]Disclaimer: Only use in offline mode with EAC disabled![/color][/b][/size]
+
+[size=4][b]Installation[/b][/size]
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\RiseArcher.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]RiseArcher.dll[/b] and [b]RiseArcher.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+Because the DLL doesn't touch [b]regulation.bin[/b] at all, it's compatible with any other regulation.bin-editing mod - no merging with Smithbox required.
+
+[spoiler=Alternative: static regulation.bin edit (Smithbox)]
+Prefer editing regulation.bin directly instead of running a DLL? The same changes are also available as a Smithbox Mass Edit / CSV import, exactly like the original release of this mod.
+
+[b]Option 1 - Mass Edit[/b]
+[list=1]
+[*]Install [url=https://github.com/vawser/Smithbox]Smithbox[/url] and open your regulation.bin as a project, then go to [b]Param Editor[/b].[/*]
+[*]Download [b]RiseArcher.MASSEDIT[/b] from this mod's files and open it in a text editor.[/*]
+[*]In the right-hand panel, click [b]Mass Edit[/b], then open the [b]Command Palette[/b] tab.[/*]
+[*]Copy the entire contents of [b]RiseArcher.MASSEDIT[/b], paste it into the input box, and click [b]Apply[/b].[/*]
+[*]Save the project - you can now copy the resulting regulation.bin wherever you need it.[/*]
+[/list]
+
+[b]Option 2 - CSV import[/b]
+[list=1]
+[*]Install Smithbox and open your regulation.bin as a project, then go to [b]Param Editor[/b].[/*]
+[*]Download [b]EquipParamWeapon.csv[/b] and [b]Bullet.csv[/b] from this mod's files.[/*]
+[*]In the param list, find and click on [b]Bullet[/b], then in the top menu go to [b]Tools > Data Transfer > Import CSV > From File > All Fields[/b] and select [b]Bullet.csv[/b].[/*]
+[*]Do the same for [b]EquipParamWeapon[/b], selecting [b]EquipParamWeapon.csv[/b] this time.[/*]
+[*]Save the project, then copy the resulting regulation.bin into your game folder or your Mod Engine 2 mod folder.[/*]
+[/list]
+Note: CSV import overwrites entire rows with the values from the file, so it will discard any other mod's changes to the same rows - use Option 1 (Mass Edit) if you need to preserve those.
+
+This static regulation.bin file - unlike the DLL - does conflict with other mods that also edit regulation.bin. Merge it with Smithbox as shown above rather than installing both.
+[/spoiler]
+
+[size=4][b]Changelog[/b][/size]
+
+[b]2.0[/b]
+[list]
+[*]Rewritten as a Rust DLL - patches EquipParamWeapon/Bullet live in memory via fromsoftware-rs instead of shipping a modified regulation.bin, so it no longer conflicts with other regulation.bin mods.[/*]
+[*]Every multiplier/value is now configurable via RiseArcher.ini instead of fixed at build time.[/*]
+[/list]
+[b]1.16.1[/b]
+[list]
+[*]Static regulation.bin edit via Smithbox Mass Edit - bow/crossbow/ballista/arrow/bolt overhaul.[/*]
+[/list]

@@ -1,0 +1,58 @@
+[size=4][b]Introduction[/b][/size]
+Inspired by [url=https://www.nexusmods.com/eldenring/mods/3394]Runes Clock[/url] — this mod gives you 25 runes every 5 seconds just from playing normally, and the longer you play, the more you get thanks to time-based milestone bonuses. Everything is configurable.
+
+[size=4][b]Features[/b][/size]
+[list]
+[*]By default you get +25 runes every 5 seconds.[/*]
+[*]The longer you stay in a single session, the bigger the milestone bonuses at 30 minutes, 1 hour, 2 hours, 3 hours, 6 hours, 12 hours, and 24 hours.[/*]
+[*]Rune gain rate and milestone bonuses can all be adjusted in [b]PassiveRunes.ini[/b].[/*]
+[/list]
+
+[size=4][b]Installation[/b][/size]
+
+[u][b]Option 1 — Using ModEngine2 (recommended)[/b][/u]
+[list=1]
+[*]Create a folder to hold the mod, e.g. name it [b]mod[/b].[/*]
+[*]Copy [b]PassiveRunes.dll[/b] and [b]PassiveRunes.ini[/b] into that folder.[/*]
+[*]Open [b]config_eldenring.toml[/b], find the [b]external_dlls[/b] entry and add it, e.g.: [b]mod\\PassiveRunes.dll[/b].[/*]
+[*]Launch [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[u][b]Option 2 — Using Mod Loader[/b][/u]
+[list=1]
+[*]Download [url=https://www.nexusmods.com/eldenring/mods/117]Mod Loader[/url] and drop it into the game's install folder.[/*]
+[*]Drag [b]PassiveRunes.dll[/b] and [b]PassiveRunes.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game as usual.[/*]
+[/list]
+
+[size=4][b][color=#FF0000]Warning: [/color][/b][/size][b][color=#FF0000]Only use in offline mode with EAC disabled![/color][/b]
+
+[size=4][b]Configuration (PassiveRunes.ini)[/b][/size]
+[code][PassiveRunes]
+
+; How often runes are added, in seconds.
+IntervalSeconds=5
+
+; Runes added per interval.
+RunesPerInterval=25
+
+; Enable/disable time-based milestone bonuses.
+EnableMilestones=true
+
+; Write PassiveRunes.log next to the DLL for debugging. Off by default.
+EnableLog=false
+
+; Milestone list, formatted as "seconds:bonus" pairs separated by commas.
+Milestones=1800:5000,3600:10000,7200:25000,10800:40000,21600:100000,43200:500000,86400:1000000[/code]
+
+[size=4][b]Changelog[/b][/size]
+
+[b]2.0[/b]
+[list]
+[*]Rewritten in Rust on top of [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url] - adds runes through the game's own reflected save data instead of a hand-decoded pointer chain.[/*]
+[*]Milestone bonuses are now granted as soon as elapsed playtime reaches or passes a threshold, instead of requiring an exact match - a bonus can no longer be silently skipped by a frame hitch or an interval that doesn't evenly divide it.[/*]
+[/list]
+[b]1.0[/b]
+[list]
+[*]Passive rune gain over time + time-based milestone bonuses.[/*]
+[/list]

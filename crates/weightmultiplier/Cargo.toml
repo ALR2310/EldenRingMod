@@ -1,0 +1,16 @@
+[package]
+name = "weightmultiplier"
+version = "2.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "WeightMultiplier"
+crate-type = ["cdylib"]
+
+# No eldenring/fromsoftware-shared dependency - unlike the other mods, this
+# one never reads/writes a reflected game struct or watches a hotkey on the
+# game's own task scheduler. It's a one-shot code patch applied from a plain
+# worker thread, exactly like the original C++ WeightEngine::Run.
+[dependencies]
+common = { path = "../../shared" }

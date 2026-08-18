@@ -1,0 +1,13 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Deliberately has NO dependency on `eldenring`/`fromsoftware-shared` - this
+# crate is generic mod-loader plumbing (ini config, file logging, AOB
+# scanning) that has nothing to do with Elden Ring's own reflected engine
+# types. Keeping it free of that dependency means it compiles fast and could
+# be reused for a mod targeting a different game entirely.
+[dependencies]
+chrono.workspace = true
