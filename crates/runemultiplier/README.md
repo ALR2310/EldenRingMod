@@ -1,8 +1,29 @@
 # RuneMultiplier
 
-Mod cho Elden Ring: nhân hệ số cấu hình được (`RuneMultiplier` trong ini,
-mặc định `2.0`) lên rune nhận được từ **mọi nguồn** — 1 hook duy nhất,
-patch thẳng vào hàm cộng-rune cấp thấp nhất của game (`AddSoul_Call`).
+Mod cho Elden Ring: nhân hệ số cấu hình được (`Multiplier` trong ini,
+mặc định `2.0`) lên rune **nhận được** từ mọi nguồn (giết quái, nhặt item)
+— 1 hook duy nhất, patch thẳng vào hàm cộng-rune cấp thấp nhất của game
+(`AddSoul_Call`). Rune **chi tiêu** (lên cấp, mua đồ) không bị ảnh hưởng
+(xem mục 2026-08-19 bên dưới).
+
+## 2026-08-19 — Sửa lỗi nhân luôn cả rune chi tiêu; đổi tên key ini
+
+- **Bug**: `AddSoul_Call` là hàm generic "current += amount" dùng chung cho
+  cả cộng rune (kill/item, amount dương) lẫn trừ rune (lên cấp, mua đồ,
+  amount âm) — 2 người dùng Nexus báo cáo hệ số nhân cũng làm tăng giá mua
+  đồ và làm rune còn dư về 0 sau khi lên cấp. Đối chiếu với script "Rune
+  Multiplier" gốc trong CT table Hexinton (`.docs/eldenring_all-in-one_*`)
+  xác nhận bản CE gốc chỉ nhân đúng phép tính phần thưởng giết quái, chưa
+  bao giờ hook `AddSoul_Call` trực tiếp — việc mở rộng sang `AddSoul_Call`
+  (để bắt luôn rune từ item) trong bản C++ port đã vô tình kéo theo cả
+  nhánh trừ rune.
+- **Fix** (`build_stub` trong `src/hook.rs`): stub giờ `test eax,eax; jle`
+  bỏ qua toàn bộ khối nhân Q20 khi `amount <= 0`, chỉ nhân khi dương.
+- **Đổi tên key ini** cho khớp quy ước chung của workspace (`autoregen`/
+  `passiverunes`): `RuneMultiplier` → `Multiplier`, `HotReloadKey` →
+  `ReloadKey` (mặc định đổi từ `F9` sang `F5` theo đúng quy ước
+  `ReloadKey=F5` mà các mod khác dùng), sắp lại vào 2 section
+  `[Settings]`/`[Debug]`. `DebugLog` giữ nguyên tên.
 
 ## Bản Rust hiện tại (2026-08-18)
 
@@ -26,14 +47,17 @@ vẫn đúng nguyên bản), chỉ đổi cách redirect:
   (`common::input::parse_virtual_key` — tách ra từ chính `autoregen`/
   `sometweaks` khi port mod này, vì cả 3 mod cần y hệt 1 hàm) thay vì code
   Config/Logger riêng.
-- Vòng lặp theo dõi `HotReloadKey` chuyển từ thread `Sleep`+`GetAsyncKeyState`
-  polling mỗi 50ms sang task đăng ký trên `CSTaskGroupIndex::FrameBegin`
+- Vòng lặp theo dõi `ReloadKey` (khi mới port, còn tên `HotReloadKey`)
+  chuyển từ thread `Sleep`+`GetAsyncKeyState` polling mỗi 50ms sang task
+  đăng ký trên `CSTaskGroupIndex::FrameBegin`
   (`eldenring::util::input::is_key_pressed`, cùng cơ chế debounce cạnh lên
   `autoregen`/`sometweaks` đã dùng cho `ReloadKey`) — nhất quán với các mod
   khác trong workspace, dù bản thân việc patch code không bắt buộc phải
   chạy trên main thread của game.
-- Giữ nguyên toàn bộ ini key gốc (`RuneMultiplier`, `HotReloadKey`,
-  `DebugLog`) — không đổi tên.
+- Ini key ban đầu giữ nguyên tên gốc từ bản C++ (`RuneMultiplier`,
+  `HotReloadKey`, `DebugLog`); đã đổi tên `RuneMultiplier`→`Multiplier` và
+  `HotReloadKey`→`ReloadKey` ngày 2026-08-19 để khớp quy ước chung của
+  workspace — xem mục ở đầu file.
 
 Xem `src/hook.rs` cho code hiện tại; `RuneMultiplier.ini` cho toàn bộ key
 cấu hình.
@@ -128,25 +152,27 @@ pointer (có thể null lúc loading/transition, nên mới cần bảo vệ ở
 
 ## Config
 
-3 key, giữ nguyên từ bản C++ (`RuneMultiplier.ini`):
-- `RuneMultiplier` (float) — hệ số nhân, `1.0` = không đổi.
-- `HotReloadKey` (mặc định `F9`) — phím kích hoạt reload config. Nhận
-  `F1`-`F24`, 1 ký tự/số (`G`), hoặc **raw virtual-key code** dạng hex
-  (`0x2D`) / decimal (`45`) — xem
+3 key trong `RuneMultiplier.ini` (đổi tên 2026-08-19, xem mục ở đầu file):
+- `Multiplier` (float, section `[Settings]`) — hệ số nhân áp dụng cho rune
+  **nhận được** (kill/item); rune chi tiêu không bị ảnh hưởng. `1.0` =
+  không đổi.
+- `ReloadKey` (mặc định `F5`, section `[Settings]`) — phím kích hoạt reload
+  config. Nhận `F1`-`F24`, 1 ký tự/số (`G`), hoặc **raw virtual-key code**
+  dạng hex (`0x2D`) / decimal (`45`) — xem
   [danh sách VK code của Microsoft](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes).
-- `DebugLog` (0/1, mặc định `0`) — **`RuneMultiplier.log` chỉ được tạo khi
-  giá trị này là `1`**. Bật `1` thì có thêm hex dump byte gốc tại điểm
-  patch và byte của stub tự sinh. Đổi qua hotkey reload lúc đang chạy
-  cũng có tác dụng.
+- `DebugLog` (true/false, mặc định `false`, section `[Debug]`) —
+  **`RuneMultiplier.log` chỉ được tạo khi giá trị này là `true`**. Bật thì
+  có thêm hex dump byte gốc tại điểm patch và byte của stub tự sinh. Đổi
+  qua hotkey reload lúc đang chạy cũng có tác dụng.
 
 ## Hot reload — sửa ini rồi bấm phím, không cần khởi động lại game
 
 Hot reload **không cần patch lại hook** — stub đã cài luôn đọc
 `FIXED_Q20` qua con trỏ tại thời điểm chạy, nên chỉ cần cập nhật giá trị
 biến đó (`init_multiplier` chạy lại) là đủ, không đụng gì đến vùng nhớ đã
-patch. Đổi `HotReloadKey` cần khởi động lại (phím chỉ đọc 1 lần lúc cài
+patch. Đổi `ReloadKey` cần khởi động lại (phím chỉ đọc 1 lần lúc cài
 hook trong bản C++; bản Rust đọc lại config mỗi tick nên **có thể đổi
-`HotReloadKey` mà không cần khởi động lại** — khác biệt nhỏ so với bản
+`ReloadKey` mà không cần khởi động lại** — khác biệt nhỏ so với bản
 C++, do dùng chung cơ chế tick với `autoregen`/`sometweaks` thay vì đọc 1
 lần lúc cài hook).
 

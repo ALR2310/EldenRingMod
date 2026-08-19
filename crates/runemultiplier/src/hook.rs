@@ -41,7 +41,7 @@ use common::input::parse_virtual_key;
 use common::logger;
 use common::memscan;
 
-const VK_F9: i32 = 0x78;
+const VK_F5: i32 = 0x74;
 
 unsafe extern "system" {
     fn VirtualAlloc(lp_address: *mut c_void, dw_size: usize, fl_allocation_type: u32, fl_protect: u32) -> *mut c_void;
@@ -76,10 +76,10 @@ const ADDSOUL_PREFIX_LEN: usize = 12;
 static FIXED_Q20: AtomicI64 = AtomicI64::new(1 << 20);
 
 fn init_multiplier() {
-    let multiplier = config::get_double("RuneMultiplier", 1.0);
+    let multiplier = config::get_double("Multiplier", 1.0);
     let fixed = (multiplier * (1i64 << 20) as f64 + 0.5) as i64;
     FIXED_Q20.store(fixed, Ordering::Relaxed);
-    logger::log(&format!("RuneMultiplier={multiplier:.3}"));
+    logger::log(&format!("Multiplier={multiplier:.3}"));
 }
 
 /// Reads a 5-byte "E8 rel32" CALL instruction at `call_site` and returns its
@@ -102,11 +102,28 @@ fn resolve_call_target(call_site: *const u8) -> Option<*mut u8> {
 /// safe to clobber), then re-run `original_prefix` (the 12 bytes overwritten
 /// at the patch site) followed by an absolute jump back to
 /// `return_addr` (`addsoul_entry + ADDSOUL_PREFIX_LEN`).
+///
+/// `AddSoul_Call` is the single generic "current += amount" function, reused
+/// for every rune-count change - gains (kill rewards, item pickups) AND
+/// spends (level-up cost, shop purchases) alike, both passed as a signed
+/// EDX. The original Cheat Engine "Rune Multiplier" script this was expanded
+/// from only ever scaled the kill-reward computation feeding into this call,
+/// never the call itself, so spends were never touched. Multiplying
+/// unconditionally here scales spends too (over-deducting on level-up,
+/// inflating shop prices), so the multiply block is skipped whenever the
+/// amount is <= 0.
 fn build_stub(original_prefix: &[u8; ADDSOUL_PREFIX_LEN], return_addr: *const u8) -> Vec<u8> {
     let mut body = Vec::with_capacity(50);
 
     // movsxd rax, edx (sign-extend the amount to 64-bit)
     body.extend_from_slice(&[0x48, 0x63, 0xC2]);
+
+    // test eax, eax; jle skip_multiply (rel8) - only scale gains (amount >
+    // 0); leave spends (amount <= 0) untouched so level-up costs and shop
+    // prices aren't affected.
+    body.extend_from_slice(&[0x85, 0xC0]);
+    let multiply_block_len: u8 = 10 + 3 + 4 + 4 + 2; // mov r10,imm64 + mov r8,[r10] + imul + sar + mov edx,eax
+    body.extend_from_slice(&[0x7E, multiply_block_len]);
 
     // mov r10, &FIXED_Q20
     body.extend_from_slice(&[0x49, 0xBA]);
@@ -124,7 +141,7 @@ fn build_stub(original_prefix: &[u8; ADDSOUL_PREFIX_LEN], return_addr: *const u8
     // mov edx, eax (write the scaled amount back where AddSoul_Call expects it)
     body.extend_from_slice(&[0x89, 0xC2]);
 
-    // Re-run the original first 3 instructions we had to overwrite.
+    // skip_multiply: re-run the original first 3 instructions we had to overwrite.
     body.extend_from_slice(original_prefix);
 
     // mov r11, return_addr; jmp r11 - absolute jump back, so the stub can
@@ -208,7 +225,7 @@ fn install(debug_log: bool) -> bool {
     true
 }
 
-/// Installs the hook, then watches `HotReloadKey` on the game's own
+/// Installs the hook, then watches `ReloadKey` on the game's own
 /// `FrameBegin` task group for the rest of the DLL's lifetime, reloading
 /// `RuneMultiplier.ini` on each press. Meant to run on its own worker thread
 /// spawned from `DllMain`; never returns (except early, if the hook fails to
@@ -222,7 +239,7 @@ pub fn run(ini_path: String, dir: String) {
         return;
     }
 
-    let hotkey_name = config::get_string("HotReloadKey", "F9");
+    let hotkey_name = config::get_string("ReloadKey", "F5");
     logger::log(&format!("Hook active. Press {hotkey_name} in-game to reload RuneMultiplier.ini."));
 
     let cs_task = match CSTaskImp::wait_for_instance(Duration::MAX) {
@@ -237,7 +254,7 @@ pub fn run(ini_path: String, dir: String) {
 
     let _handle = cs_task.run_recurring(
         move |_data: &eldenring::fd4::FD4TaskData| {
-            let reload_key = parse_virtual_key(&config::get_string("HotReloadKey", "F9"), VK_F9);
+            let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
                 if config::get_bool("DebugLog", false) {
