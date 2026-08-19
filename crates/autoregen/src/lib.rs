@@ -1,5 +1,6 @@
 #![allow(non_snake_case)] // crate name is "AutoRegen" to control the output DLL's filename
 
+mod attack_hook;
 mod regen;
 
 use common::{config, dll_dir, logger};

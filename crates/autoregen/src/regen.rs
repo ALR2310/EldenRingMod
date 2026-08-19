@@ -8,19 +8,53 @@
 //! `CSTaskGroupIndex::FrameBegin` tasks run. Ported from LifeBetween's
 //! `src/regen/mod.rs`, the reference implementation this rewrite is based on.
 
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, WorldChrMan};
 use eldenring::util::input;
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
-mod attack_hook;
-
+use crate::attack_hook;
 use common::config;
 use common::input::parse_virtual_key;
 use common::logger;
 
 const VK_F5: i32 = 0x74;
+
+// How long a hit landed or taken counts as "in combat" for Regen Per Tick's
+// Condition=1/2, before it's considered over. There's no reliable "is the
+// player currently fighting" flag exposed by the game engine itself, so this
+// approximates it the way many action games do: combat is "active" for a
+// grace period after the last confirmed hit, rather than instantaneous.
+const COMBAT_TIMEOUT_MS: u64 = 15000;
+
+static LAST_COMBAT_ACTIVITY_MS: AtomicU64 = AtomicU64::new(0);
+
+fn clock_start() -> Instant {
+    static START: OnceLock<Instant> = OnceLock::new();
+    *START.get_or_init(Instant::now)
+}
+
+fn now_ms() -> u64 {
+    clock_start().elapsed().as_millis() as u64
+}
+
+/// Called by `attack_hook` whenever the player lands or takes a confirmed
+/// hit - resets the combat timer regardless of whether any heal is
+/// configured for that hit.
+pub fn mark_combat_activity() {
+    LAST_COMBAT_ACTIVITY_MS.store(now_ms(), Ordering::Relaxed);
+}
+
+/// Whether the player is considered "in combat" right now: a hit was landed
+/// or taken within the last `COMBAT_TIMEOUT_MS`. `false` before any combat
+/// activity has ever been recorded this session.
+pub fn is_in_combat() -> bool {
+    let last = LAST_COMBAT_ACTIVITY_MS.load(Ordering::Relaxed);
+    last != 0 && now_ms().saturating_sub(last) < COMBAT_TIMEOUT_MS
+}
 
 /// Heals `flat_amount` plus `percent_fraction` of max (e.g. 0.01 = 1%, already
 /// divided by 100), clamped to max, with at least 1 point restored if the
@@ -118,28 +152,31 @@ pub fn run(ini_path: String) {
                 logger::log("Config reloaded (hotkey pressed).");
             }
 
-            // Heal-on-hit/heal-on-damage are independent of this tick's own
-            // interval (see attack_hook.rs) - installed once we're in-game so
-            // other mods that scan/patch the same game code get to finish
-            // their own startup scans first, and re-synced every tick so a
-            // hot reload updates them without reinstalling the hook.
+            // Condition picks which side of combat Regen Per Tick applies on:
+            // 0 = Always, 1 = out of combat only, 2 = in combat only. Read up
+            // front since it also decides whether the attack hook needs to
+            // be installed purely to track combat activity, even if no
+            // Regen Per Hit amount is configured.
+            let condition = config::get_int("Condition", 0);
+            let needs_combat_tracking = condition == 1 || condition == 2;
+
+            // Regen Per Hit is independent of this tick's own interval (see
+            // attack_hook.rs) - installed once we're in-game so other mods
+            // that scan/patch the same game code get to finish their own
+            // startup scans first, and re-synced every tick so a hot reload
+            // updates it without reinstalling the hook.
             let hook_params = attack_hook::HookParams {
-                on_hit: attack_hook::OnHitParams {
-                    hp_flat: config::get_int("HpOnHit", 0),
-                    fp_flat: config::get_int("FpOnHit", 0),
-                    stamina_flat: config::get_int("StaminaOnHit", 0),
-                    hp_pct: config::get_double("HpPctOnHit", 0.0) / 100.0,
-                    fp_pct: config::get_double("FpPctOnHit", 0.0) / 100.0,
-                    stamina_pct: config::get_double("StaminaPctOnHit", 0.0) / 100.0,
-                },
-                on_damage: attack_hook::OnDamageParams {
-                    hp_flat: config::get_int("HpOnDamage", 0),
-                    fp_flat: config::get_int("FpOnDamage", 0),
-                    stamina_flat: config::get_int("StaminaOnDamage", 0),
-                },
+                trigger: config::get_int("Trigger", 0),
+                hp_flat: config::get_int("HpOnHit", 0),
+                fp_flat: config::get_int("FpOnHit", 0),
+                stamina_flat: config::get_int("StaminaOnHit", 0),
+                hp_pct: config::get_double("HpPctOnHit", 0.0),
+                fp_pct: config::get_double("FpPctOnHit", 0.0),
+                stamina_pct: config::get_double("StaminaPctOnHit", 0.0),
             };
             let chr_resolved = main_player_chr_ins_ptr().is_some();
-            if hook_params.wants_hook() && chr_resolved && !attack_hook_installed {
+            let hook_wanted = hook_params.wants_heal() || needs_combat_tracking;
+            if hook_wanted && chr_resolved && !attack_hook_installed {
                 attack_hook_installed = attack_hook::install(hook_params);
             } else if attack_hook_installed {
                 attack_hook::update_params(hook_params);
@@ -157,6 +194,15 @@ pub fn run(ini_path: String) {
                 return;
             }
             elapsed_ms = 0.0;
+
+            let condition_met = match condition {
+                1 => !is_in_combat(),
+                2 => is_in_combat(),
+                _ => true,
+            };
+            if !condition_met {
+                return;
+            }
 
             // Percent values are given directly as a percent (1 = 1%), so
             // divide by 100 to get the fraction of max restored per tick.

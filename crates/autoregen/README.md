@@ -44,8 +44,46 @@ riêng (không có prefix `Regen.`):
   rsi!=player`), hồi 1 lượng cố định (không có biến thể %) độc lập với
   `HpOnHit`/`FpOnHit`/`StaminaOnHit`.
 
-Xem `src/regen/mod.rs` và `src/regen/attack_hook.rs` cho code hiện tại;
-`AutoRegen.ini` cho toàn bộ key cấu hình.
+Xem `src/regen.rs` và `src/attack_hook.rs` cho code hiện tại; `AutoRegen.ini`
+cho toàn bộ key cấu hình.
+
+## Gộp `Regen Per Hit`/`Regen Per Damage`, thêm `Condition`/`Trigger` (2026-08-19)
+
+`HpOnDamage`/`FpOnDamage`/`StaminaOnDamage` (thêm lúc port sang Rust, xem mục
+"Tính năng mới" ở trên) ban đầu bị hiểu sai ý đồ: code hồi 1 lượng **cố
+định** khi player **bị đánh trúng** ("cushion" chống chịu đòn), nhưng ý đồ
+thật là hồi theo **% sát thương player vừa gây ra** cho địch (lifesteal thật
+sự, ví dụ `0.5` = hồi lại 50% damage vừa gây). Đã sửa lại đúng ý: đọc damage
+thật của cú đánh từ `hitInfo+0x228` (offset vốn chỉ dùng cho debug log trước
+đó), nhân với hệ số rồi hồi.
+
+Sau khi sửa, `HpOnDamage`/`FpOnDamage`/`StaminaOnDamage` trùng trigger hoàn
+toàn với `HpOnHit`/`FpOnHit`/`StaminaOnHit` (cả hai đều chạy khi player đánh
+trúng bằng vũ khí) — nên gộp thẳng `[Regen Per Damage]` vào `[Regen Per
+Hit]`, chỉ còn 2 nhóm chính (`Regen Per Tick`, `Regen Per Hit`) thay vì 3.
+Cách gộp: thêm key `Trigger` (0/1) quyết định `HpPctOnHit`/`FpPctOnHit`/
+`StaminaPctOnHit` nghĩa là gì:
+
+- `Trigger=0` (Fixed, hành vi gốc): `HpPctOnHit` = % **max stat**, cộng dồn
+  với `HpOnHit` (số cố định).
+- `Trigger=1` (damage dealt): `HpPctOnHit` = % **sát thương vừa gây ra** cho
+  địch; `HpOnHit`/`FpOnHit`/`StaminaOnHit` bị bỏ qua ở chế độ này.
+
+Cùng đợt, thêm `Condition` (0/1/2) cho `[Regen Per Tick]`: 0 = luôn hồi,
+1 = chỉ khi ngoài giao tranh, 2 = chỉ khi đang giao tranh. Game không có sẵn
+cờ "đang chiến đấu hay không" nào lộ ra qua `fromsoftware-rs`/engine — xử lý
+bằng cách xấp xỉ kiểu nhiều action game khác: `AttackHook` đánh dấu "vừa có
+hoạt động combat" (`regen::mark_combat_activity()`) mỗi khi player đánh
+trúng **hoặc** bị đánh trúng (hook vẫn cần cài dù không cấu hình heal nào,
+nếu `Condition` yêu cầu theo dõi combat), coi là "còn trong combat" trong
+15 giây kể từ lần đánh/bị đánh gần nhất (`is_in_combat()`). Không chính xác
+100% (ví dụ đứng yên né đòn boss không tính là combat), nhưng đủ dùng cho
+mục đích "regen ngoài combat kiểu MMO".
+
+Nhân dịp gộp, dọn luôn cấu trúc thư mục: `src/regen/mod.rs` +
+`src/regen/attack_hook.rs` (thư mục con chỉ có 2 file, không cần thiết cho
+project nhỏ) → phẳng thành `src/regen.rs` + `src/attack_hook.rs` ngang cấp,
+khai báo `mod attack_hook; mod regen;` trong `lib.rs`.
 
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
@@ -277,7 +315,8 @@ năng hồi máu-khi-đánh-trúng, không ảnh hưởng đến các tính năn
 HP/FP/Stamina theo tick khác của AutoRegen — và quan trọng nhất, không còn
 làm crash mod khác nữa.
 
-### Cách dùng
+### Cách dùng (bản C++, tên key cũ - xem mục "Gộp `Regen Per Hit`/`Regen Per
+Damage`, thêm `Condition`/`Trigger`" bên dưới cho bản Rust hiện tại)
 
 Trong `AutoRegen.ini`, đặt `HpOnHit`/`FpOnHit` (số HP/FP cố định) và/hoặc
 `HpPercentOnHit`/`FpPercentOnHit` (phần trăm HP/FP tối đa, cùng quy ước với
