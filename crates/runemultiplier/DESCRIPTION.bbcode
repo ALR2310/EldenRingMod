@@ -1,9 +1,9 @@
-A DLL mod that multiplies the runes you gain from every source — killing enemies, using items, selling items, and more. Fully configurable, letting you earn more runes, less runes, or even subtract runes.
+Tired of grinding for runes? This mod multiplies every rune you earn — from kills, items, selling loot, you name it. Set your own multiplier: double your runes, go easy with a smaller boost, or even dial it down if you want more of a challenge.
 
 [size=4][b]Configuration[/b][/size]
-[code]RuneMultiplier=2.0    ; multiplier applied to rune gains from all sources - 1.0 = unchanged, 0 = no runes gained, negative subtracts runes
-HotReloadKey=F9       ; key that reloads this file while the game is running
-DebugLog=0            ; log extra debug details - 0 disables it[/code]
+[code]Multiplier=2.0        ; multiplier applied to rune gains from all sources - 1.0 = unchanged, 0 = no runes gained, negative subtracts runes
+ReloadKey=F5          ; key that reloads this file while the game is running
+DebugLog=false        ; log extra debug details - false disables it[/code]
 
 [b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
 
@@ -30,11 +30,11 @@ DebugLog=0            ; log extra debug details - 0 disables it[/code]
 
 [size=4][b]Changelog[/b][/size]
 
-[b]2.0[/b]
+[b]1.1[/b]
 [list]
-[*]Rewritten in Rust - same single AddSoul_Call hook, but the redirect and return jumps are now absolute 64-bit jumps instead of relative ones, so the generated stub no longer needs a nearby-memory search to install.[/*]
+[*]Fixed a bug where the multiplier was also being applied to rune spending - leveling up or buying items cost way more runes than they should have. Spending is now untouched; only your rune gains get multiplied.[/*]
 [/list]
 [b]1.0[/b]
 [list]
-[*]Multiplies rune gains from every source via a single hook on AddSoul_Call.[/*]
+[*]Initial release - multiplies runes gained from every source.[/*]
 [/list]
