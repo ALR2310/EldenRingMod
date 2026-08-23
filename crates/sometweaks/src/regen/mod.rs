@@ -6,7 +6,9 @@
 //! is only safe to mutate from the game's main thread, which is exactly where
 //! `CSTaskGroupIndex::FrameBegin` tasks run.
 
-use std::time::Duration;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, WorldChrMan};
 use eldenring::util::input;
@@ -19,6 +21,52 @@ use common::input::parse_virtual_key;
 use common::logger;
 
 const VK_F5: i32 = 0x74;
+
+// How long a hit landed or taken counts as "in combat" for Regen.PerTick's
+// Trigger=1/2, before it's considered over. There's no reliable "is the
+// player currently fighting" flag exposed by the game engine itself, so this
+// approximates it the way many action games do: combat is "active" for a
+// grace period after the last confirmed hit, rather than instantaneous.
+const COMBAT_TIMEOUT_MS: u64 = 15000;
+
+static LAST_COMBAT_ACTIVITY_MS: AtomicU64 = AtomicU64::new(0);
+
+fn clock_start() -> Instant {
+    static START: OnceLock<Instant> = OnceLock::new();
+    *START.get_or_init(Instant::now)
+}
+
+fn now_ms() -> u64 {
+    clock_start().elapsed().as_millis() as u64
+}
+
+/// Called by `attack_hook` whenever the player lands or takes a confirmed
+/// hit - resets the combat timer regardless of whether any heal is
+/// configured for that hit.
+pub fn mark_combat_activity() {
+    LAST_COMBAT_ACTIVITY_MS.store(now_ms(), Ordering::Relaxed);
+}
+
+/// Whether the player is considered "in combat" right now: a hit was landed
+/// or taken within the last `COMBAT_TIMEOUT_MS`. `false` before any combat
+/// activity has ever been recorded this session.
+pub fn is_in_combat() -> bool {
+    let last = LAST_COMBAT_ACTIVITY_MS.load(Ordering::Relaxed);
+    last != 0 && now_ms().saturating_sub(last) < COMBAT_TIMEOUT_MS
+}
+
+/// Splits a `Regen.PerTick.Unit`-tagged ini value into the `(flat_amount,
+/// percent_fraction)` pair [apply_heal] expects: `Unit=0` treats `value` as
+/// flat points, `Unit=1` as a percent of max (divided by 100 into a
+/// fraction). Only one of the pair is ever non-zero, since the ini has a
+/// single field per stat rather than separate flat/percent keys.
+fn split_by_unit(unit: i32, value: f64) -> (i32, f64) {
+    if unit == 1 {
+        (0, value / 100.0)
+    } else {
+        (value.round() as i32, 0.0)
+    }
+}
 
 /// Heals `flat_amount` plus `percent_fraction` of max (e.g. 0.01 = 1%, already
 /// divided by 100), clamped to max, with at least 1 point restored if the
@@ -116,29 +164,42 @@ pub fn run(ini_path: String) {
                 logger::log("Config reloaded (hotkey pressed).");
             }
 
+            // Regen.PerTick.Trigger picks which side of combat the tick heal
+            // below applies on: 0 = Always, 1 = out of combat only, 2 = in
+            // combat only. Read up front since it also decides whether the
+            // attack hook needs to be installed purely to track combat
+            // activity, even if Regen Per Hit itself is disabled.
+            let per_tick_enabled = config::get_bool("Regen.PerTick.Enabled", true);
+            let condition = config::get_int("Regen.PerTick.Trigger", 0);
+            let needs_combat_tracking = per_tick_enabled && (condition == 1 || condition == 2);
+
             // Heal-on-hit is independent of this tick's own interval (see
             // attack_hook.rs) - installed once we're in-game so other mods that
             // scan/patch the same game code get to finish their own startup
             // scans first, and re-synced every tick so a hot reload updates it
             // without reinstalling the hook.
             let on_hit_params = attack_hook::OnHitParams {
-                hp_flat: config::get_int("Regen.HpOnHit", 0),
-                fp_flat: config::get_int("Regen.FpOnHit", 0),
-                stamina_flat: config::get_int("Regen.StaminaOnHit", 0),
-                hp_pct: config::get_double("Regen.HpPctOnHit", 0.0) / 100.0,
-                fp_pct: config::get_double("Regen.FpPctOnHit", 0.0) / 100.0,
-                stamina_pct: config::get_double("Regen.StaminaPctOnHit", 0.0) / 100.0,
+                enabled: config::get_bool("Regen.PerHit.Enabled", false),
+                trigger: config::get_int("Regen.PerHit.Trigger", 0),
+                hp: config::get_double("Regen.PerHit.HP", 0.0),
+                fp: config::get_double("Regen.PerHit.FP", 0.0),
+                stamina: config::get_double("Regen.PerHit.Stamina", 0.0),
             };
             let chr_resolved = main_player_chr_ins_ptr().is_some();
-            if on_hit_params.wants_hook() && chr_resolved && !attack_hook_installed {
+            let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
+            if hook_wanted && chr_resolved && !attack_hook_installed {
                 attack_hook_installed = attack_hook::install(on_hit_params);
             } else if attack_hook_installed {
                 attack_hook::update_params(on_hit_params);
             }
 
-            // Regen.Interval=0 disables the whole tick-based regen feature,
-            // same "0 disables" convention as every other key in this section.
-            let interval_ms = config::get_int("Regen.Interval", 1000).max(0) as f64;
+            // Regen.PerTick.Enabled=false or Interval=0 disables the whole
+            // tick-based regen feature, same "0 disables" convention as every
+            // other key in this section.
+            if !per_tick_enabled {
+                return;
+            }
+            let interval_ms = config::get_int("Regen.PerTick.Interval", 1000).max(0) as f64;
             if interval_ms <= 0.0 {
                 return;
             }
@@ -149,17 +210,25 @@ pub fn run(ini_path: String) {
             }
             elapsed_ms = 0.0;
 
-            // Percent values are given directly as a percent (1 = 1%), so
-            // divide by 100 to get the fraction of max restored per tick.
-            // Flat values are an absolute amount, independent of max. Both
-            // apply together, so either can be left at 0 to use only the
-            // other.
-            let hp_flat = config::get_int("Regen.Hp", 0);
-            let fp_flat = config::get_int("Regen.Fp", 0);
-            let stamina_flat = config::get_int("Regen.Stamina", 0);
-            let hp_fraction = config::get_double("Regen.HpPct", 0.0) / 100.0;
-            let fp_fraction = config::get_double("Regen.FpPct", 0.0) / 100.0;
-            let stamina_fraction = config::get_double("Regen.StaminaPct", 0.0) / 100.0;
+            let condition_met = match condition {
+                1 => !is_in_combat(),
+                2 => is_in_combat(),
+                _ => true,
+            };
+            if !condition_met {
+                return;
+            }
+
+            // Regen.PerTick.Unit picks what the HP/FP/Stamina values below
+            // mean: 0 = flat points, 1 = percent of max stat (divided by 100
+            // to get the fraction restored per tick).
+            let unit = config::get_int("Regen.PerTick.Unit", 0);
+            let hp_value = config::get_double("Regen.PerTick.HP", 0.0);
+            let fp_value = config::get_double("Regen.PerTick.FP", 0.0);
+            let stamina_value = config::get_double("Regen.PerTick.Stamina", 0.0);
+            let (hp_flat, hp_fraction) = split_by_unit(unit, hp_value);
+            let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
+            let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);
 
             heal_main_player(HealField::Hp, hp_flat, hp_fraction);
             heal_main_player(HealField::Fp, fp_flat, fp_fraction);

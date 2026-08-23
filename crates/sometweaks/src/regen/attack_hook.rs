@@ -25,6 +25,7 @@
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering};
 
+use common::config;
 use common::logger;
 use common::memscan;
 use super::{self as regen, HealField};
@@ -49,6 +50,14 @@ const ON_ATTACK_PATTERN: &str = "45 0F B6 CE 4C 8B C3 48 8B D6 48 8B CF E8";
 // mov/movzx instructions Install() patches over.
 const CALL_SITE_OFFSET: usize = 0xD;
 
+// Offset within `ctx` (arg1) of the hit's target pointer - lets
+// on_attack_observed tell "player just landed a hit" (attacker==player) apart
+// from "player just took a hit" (target==player), the latter only feeding
+// regen::mark_combat_activity(), never a heal. Roles swap symmetrically
+// between "enemy hits player" and "player hits enemy", same confirmation
+// AutoRegen's port of this hook used.
+const CTX_TARGET_OFFSET: isize = 0x8;
+
 // Weapon-vs-spell filter for the OnHit heals: asks the hit's own "source
 // object" what kind it is via the vtable call FromSoft's engine uses for the
 // same purpose elsewhere - sourceType==1 for a direct/melee hit, ==3 for a
@@ -72,45 +81,47 @@ const HITINFO_SOURCE_OBJECT_OFFSET: isize = 0x1D8;
 // real call" hook always returned 0, confirmed in-game (2026-08-17).
 const HITINFO_DAMAGE_OFFSET: isize = 0x228;
 
-static HP_ON_HIT: AtomicI32 = AtomicI32::new(0);
-static FP_ON_HIT: AtomicI32 = AtomicI32::new(0);
-static STAMINA_ON_HIT: AtomicI32 = AtomicI32::new(0);
+static ENABLED: AtomicI32 = AtomicI32::new(0);
+static TRIGGER: AtomicI32 = AtomicI32::new(0);
 
-// Percent fractions (already divided by 100, same convention as
-// Regen.HpPct/FpPct/StaminaPct) - stored as raw f64 bits since there's no
-// AtomicF64 in std.
-static HP_PCT_ON_HIT_BITS: AtomicU64 = AtomicU64::new(0);
-static FP_PCT_ON_HIT_BITS: AtomicU64 = AtomicU64::new(0);
-static STAMINA_PCT_ON_HIT_BITS: AtomicU64 = AtomicU64::new(0);
+// Raw Regen.PerHit.HP/FP/Stamina ini values, unscaled - what each means
+// depends on TRIGGER (see OnHitParams below). Stored as raw f64 bits since
+// there's no AtomicF64 in std.
+static HP_BITS: AtomicU64 = AtomicU64::new(0);
+static FP_BITS: AtomicU64 = AtomicU64::new(0);
+static STAMINA_BITS: AtomicU64 = AtomicU64::new(0);
 
-fn store_pct(cell: &AtomicU64, value: f64) {
+fn store_f64(cell: &AtomicU64, value: f64) {
     cell.store(value.to_bits(), Ordering::Relaxed);
 }
 
-fn load_pct(cell: &AtomicU64) -> f64 {
+fn load_f64(cell: &AtomicU64) -> f64 {
     f64::from_bits(cell.load(Ordering::Relaxed))
 }
 
-/// The 6 Regen.*OnHit ini values: flat amount plus percent-of-max fraction
-/// (already divided by 100) for each of HP/FP/Stamina.
+/// The `[Regen Per Hit]` ini values. `trigger` (the `Regen.PerHit.Trigger`
+/// key) picks what `hp`/`fp`/`stamina` (the raw `Regen.PerHit.HP/FP/Stamina`
+/// values) mean - only one of the three modes ever applies per hit:
+/// - `0` (Fixed points): flat amount restored per hit, independent of max.
+/// - `1` (Percent of max stat): `1` = 1% of max, same "1 = 1%" convention as
+///   `Regen.PerTick.HP/FP/Stamina` under `Unit=1`.
+/// - `2` (Percent of damage dealt): `1` = 1% of the hit's own damage total
+///   (true lifesteal, scales with how hard the hit landed).
 #[derive(Clone, Copy)]
 pub struct OnHitParams {
-    pub hp_flat: i32,
-    pub fp_flat: i32,
-    pub stamina_flat: i32,
-    pub hp_pct: f64,
-    pub fp_pct: f64,
-    pub stamina_pct: f64,
+    pub enabled: bool,
+    pub trigger: i32,
+    pub hp: f64,
+    pub fp: f64,
+    pub stamina: f64,
 }
 
 impl OnHitParams {
-    pub fn wants_hook(&self) -> bool {
-        self.hp_flat > 0
-            || self.fp_flat > 0
-            || self.stamina_flat > 0
-            || self.hp_pct > 0.0
-            || self.fp_pct > 0.0
-            || self.stamina_pct > 0.0
+    /// Whether any heal would actually happen with these values - separate
+    /// from whether the hook is needed just to track combat activity for
+    /// `Regen.PerTick.Trigger` (see `mod.rs`).
+    pub fn wants_heal(&self) -> bool {
+        self.enabled && (self.hp > 0.0 || self.fp > 0.0 || self.stamina > 0.0)
     }
 }
 
@@ -205,6 +216,15 @@ fn read_damage(hit_info: *const c_void) -> Option<i32> {
     unsafe { Some(*(hit_info.byte_offset(HITINFO_DAMAGE_OFFSET) as *const i32)) }
 }
 
+/// Reads the hit's target pointer from `ctx+8`. `None` if `ctx` itself
+/// doesn't look like a valid pointer.
+fn read_target(ctx: *const c_void) -> Option<*const c_void> {
+    if !looks_like_pointer(ctx) {
+        return None;
+    }
+    unsafe { Some(*(ctx.byte_offset(CTX_TARGET_OFFSET) as *const *const c_void)) }
+}
+
 fn is_weapon_damage_hit(hit_info: *const c_void) -> bool {
     if !looks_like_pointer(hit_info) {
         return false;
@@ -230,63 +250,106 @@ fn is_weapon_damage_hit(hit_info: *const c_void) -> bool {
 /// separate, more invasive undertaking. `looks_like_pointer` sanity checks are
 /// kept before every dereference as the primary safety net instead.
 #[unsafe(no_mangle)]
-extern "C" fn on_attack_observed(_ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_void, _r14_flag: u64) {
-    let _ = std::panic::catch_unwind(|| apply_hit_heal(attacker_ptr, hit_info));
+extern "C" fn on_attack_observed(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_void, _r14_flag: u64) {
+    let _ = std::panic::catch_unwind(|| apply_hit_heal(ctx, attacker_ptr, hit_info));
 }
 
-fn apply_hit_heal(attacker_ptr: *mut c_void, hit_info: *mut c_void) {
+fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_void) {
     let Some(player_ptr) = regen::main_player_chr_ins_ptr() else {
         return;
     };
-    if attacker_ptr as *const u8 != player_ptr {
-        return; // not the player's own hit
+
+    let is_player_attacker = attacker_ptr as *const u8 == player_ptr;
+    let is_player_target = read_target(ctx)
+        .map(|target| looks_like_pointer(target) && target as *const u8 == player_ptr)
+        .unwrap_or(false);
+
+    // Any confirmed hit the player is involved in (landed or taken) counts
+    // as combat activity, regardless of whether any heal is configured -
+    // this is what Regen.PerTick.Trigger=1/2 checks.
+    if is_player_attacker || is_player_target {
+        regen::mark_combat_activity();
     }
 
-    if let Some(damage) = read_damage(hit_info) {
-        logger::log(&format!("AttackHook: player dealt {damage} damage."));
+    if !is_player_attacker {
+        return; // not the player's own hit - no heal-on-hit to apply
     }
 
-    if !is_weapon_damage_hit(hit_info) {
+    if config::get_bool("RegenLog", false) {
+        if let Some(damage) = read_damage(hit_info) {
+            logger::log(&format!("AttackHook: player dealt {damage} damage."));
+        }
+    }
+
+    if ENABLED.load(Ordering::Relaxed) == 0 || !is_weapon_damage_hit(hit_info) {
         return;
     }
 
-    let hp_healed = regen::heal_main_player(
-        HealField::Hp,
-        HP_ON_HIT.load(Ordering::Relaxed),
-        load_pct(&HP_PCT_ON_HIT_BITS),
-    );
-    let fp_healed = regen::heal_main_player(
-        HealField::Fp,
-        FP_ON_HIT.load(Ordering::Relaxed),
-        load_pct(&FP_PCT_ON_HIT_BITS),
-    );
-    let stamina_healed = regen::heal_main_player(
-        HealField::Stamina,
-        STAMINA_ON_HIT.load(Ordering::Relaxed),
-        load_pct(&STAMINA_PCT_ON_HIT_BITS),
-    );
-    if hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0 {
+    apply_on_hit_heal(hit_info);
+}
+
+/// Applies the `[Regen Per Hit]` heal per the current `Trigger`. See
+/// `OnHitParams` for what each of `Trigger`'s 3 modes means.
+fn apply_on_hit_heal(hit_info: *const c_void) {
+    let (hp_healed, fp_healed, stamina_healed, source);
+    match TRIGGER.load(Ordering::Relaxed) {
+        2 => {
+            // Percent of damage dealt.
+            let Some(damage) = read_damage(hit_info) else {
+                return;
+            };
+            if damage <= 0 {
+                return;
+            }
+            let hp_flat = (damage as f64 * load_f64(&HP_BITS) / 100.0) as i32;
+            let fp_flat = (damage as f64 * load_f64(&FP_BITS) / 100.0) as i32;
+            let stamina_flat = (damage as f64 * load_f64(&STAMINA_BITS) / 100.0) as i32;
+            hp_healed = regen::heal_main_player(HealField::Hp, hp_flat, 0.0);
+            fp_healed = regen::heal_main_player(HealField::Fp, fp_flat, 0.0);
+            stamina_healed = regen::heal_main_player(HealField::Stamina, stamina_flat, 0.0);
+            source = format!("dealt {damage} damage");
+        }
+        1 => {
+            // Percent of max stat.
+            hp_healed = regen::heal_main_player(HealField::Hp, 0, load_f64(&HP_BITS) / 100.0);
+            fp_healed = regen::heal_main_player(HealField::Fp, 0, load_f64(&FP_BITS) / 100.0);
+            stamina_healed =
+                regen::heal_main_player(HealField::Stamina, 0, load_f64(&STAMINA_BITS) / 100.0);
+            source = "hit landed".to_string();
+        }
+        _ => {
+            // Fixed points.
+            hp_healed = regen::heal_main_player(HealField::Hp, load_f64(&HP_BITS).round() as i32, 0.0);
+            fp_healed = regen::heal_main_player(HealField::Fp, load_f64(&FP_BITS).round() as i32, 0.0);
+            stamina_healed = regen::heal_main_player(
+                HealField::Stamina,
+                load_f64(&STAMINA_BITS).round() as i32,
+                0.0,
+            );
+            source = "hit landed".to_string();
+        }
+    }
+    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("RegenLog", false) {
         return;
     }
-
     logger::log(&format!(
-        "AttackHook: player hit landed -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} Stamina"
+        "AttackHook: player {source} -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} Stamina"
     ));
 }
 
-/// Updates the amounts healed per hit without reinstalling the hook - lets
-/// General.ReloadKey pick up new Regen.*OnHit values from the ini.
+/// Updates the on-hit heal amounts without reinstalling the hook - lets
+/// General.ReloadKey pick up new Regen.PerHit values from the ini.
 pub fn update_params(params: OnHitParams) {
-    HP_ON_HIT.store(params.hp_flat, Ordering::Relaxed);
-    FP_ON_HIT.store(params.fp_flat, Ordering::Relaxed);
-    STAMINA_ON_HIT.store(params.stamina_flat, Ordering::Relaxed);
-    store_pct(&HP_PCT_ON_HIT_BITS, params.hp_pct);
-    store_pct(&FP_PCT_ON_HIT_BITS, params.fp_pct);
-    store_pct(&STAMINA_PCT_ON_HIT_BITS, params.stamina_pct);
+    ENABLED.store(params.enabled as i32, Ordering::Relaxed);
+    TRIGGER.store(params.trigger, Ordering::Relaxed);
+    store_f64(&HP_BITS, params.hp);
+    store_f64(&FP_BITS, params.fp);
+    store_f64(&STAMINA_BITS, params.stamina);
 }
 
-/// Scans for the hook site and installs it, healing per `params` (flat plus
-/// percent-of-max) per confirmed player hit thereafter. Safe to call once at
+/// Scans for the hook site and installs it, healing per `params` (per its
+/// `Trigger` mode) per confirmed player hit thereafter, and tracking combat
+/// activity for `Regen.PerTick`'s `Trigger` regardless. Safe to call once at
 /// startup; returns `false` (and logs why) if the AOB isn't found - callers
 /// should keep running without this feature rather than treat it as fatal.
 pub fn install(params: OnHitParams) -> bool {
@@ -348,6 +411,6 @@ pub fn install(params: OnHitParams) -> bool {
         VirtualProtect(on_attack as *mut c_void, patch.len(), old_protect, &mut old_protect);
     }
 
-    logger::log("AttackHook: installed - Regen.*OnHit now applies only on the player's own confirmed weapon-source hits.");
+    logger::log("AttackHook: installed - Regen.PerHit now applies only on the player's own confirmed weapon-source hits, and combat activity is tracked for Regen.PerTick's Trigger.");
     true
 }
