@@ -25,9 +25,10 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\SomeTweaks.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        if config::get_bool("DebugLog", false) {
-            logger::init(&dir, "SomeTweaks.log");
-        }
+        // The log is always on (overwritten every run) so per-module flags
+        // like Regen.PerTick/PerHit's RegenLog have something to write to
+        // even with DebugLog=false - same convention as AutoRegen.
+        logger::init(&dir, "SomeTweaks.log");
         logger::log("Activating SomeTweaks...");
         if migrated > 0 {
             logger::log(&format!(

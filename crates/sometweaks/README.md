@@ -19,9 +19,9 @@ gameplay mới, chỉ tinh chỉnh trải nghiệm (QoL).
 ## Trạng thái
 
 Crate `cdylib` viết bằng Rust, build ra 1 DLL duy nhất (`SomeTweaks.dll`),
-mỗi tính năng cũ là 1 module bật/tắt độc lập qua `SomeTweaks.ini` (giá trị
-`0` ở key nào thì vô hiệu hoá đúng tính năng đó, không có cờ `Enabled`
-riêng).
+mỗi tính năng cũ là 1 module bật/tắt độc lập qua `SomeTweaks.ini`. Từ
+2026-08-22, `[Regen Per Tick]`/`[Regen Per Hit]` mỗi mục có cờ `Enabled`
+riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 
 **Đã triển khai:** module `Regen` (hồi HP/FP/Stamina theo thời gian +
 theo đòn đánh trúng) — xem `src/regen/mod.rs` + `src/regen/attack_hook.rs`.
@@ -55,6 +55,43 @@ trong ini hiện chỉ là placeholder).
   `regulation.bin` khi cài chung với mod khác. Xem chi tiết ở
   `d:\MyProjects\EldenRing\RiseArcher\README.md` (mục "Quyết định: sẽ
   chuyển sang DLL + libER") - RiseArcher chưa được đưa vào workspace này.
+
+## Gom nhóm lại ini, thêm Enabled/Condition/Trigger cho Regen (2026-08-22)
+
+Cấu trúc key cũ (`Regen.Hp`, `Regen.HpOnHit`, `Regen.HpPctOnHit`...) chỉ có
+1 quy ước "0 = tắt", không tách được "tắt hẳn tính năng" khỏi "để giá trị
+0 vì đang thử". Đã đổi ini sang namespace rõ ràng hơn theo từng nhóm tính
+năng (đúng ý ban đầu khi thêm `[Section]` - xem lịch sử trao đổi lúc cân
+nhắc đổi sang TOML rồi quyết định giữ ini vì section + tiền tố đã đủ gom
+nhóm):
+
+- `[Regen Per Tick]`: thêm `Regen.PerTick.Enabled` (cờ bật/tắt rõ ràng) và
+  `Regen.PerTick.Trigger` (0/1/2 = luôn/ngoài combat/trong combat, đặt tên
+  giống `Regen.PerHit.Trigger` cho nhất quán, dù ý nghĩa là "điều kiện combat"
+  chứ không phải "loại tính hồi phục" như bên PerHit). `Regen.PerTick.Unit`
+  (0=điểm, 1=%) thay cho việc tách riêng `HpPct`/`Hp` như AutoRegen - mỗi
+  stat giờ chỉ có 1 giá trị `Regen.PerTick.HP/FP/Stamina`, ý nghĩa đổi theo
+  `Unit` chứ không cộng dồn flat+percent như bản AutoRegen.
+- `[Regen Per Hit]`: `Regen.PerHit.Enabled` + `Regen.PerHit.Trigger` (0=điểm
+  cố định, 1=% chỉ số tối đa, 2=% sát thương vừa gây ra - gộp 3 chế độ độc
+  lập thay vì AutoRegen's `Trigger` 2 chế độ có flat+pct cộng dồn ở chế độ
+  0). Cùng lý do: mỗi stat 1 giá trị duy nhất `Regen.PerHit.HP/FP/Stamina`.
+- Thêm combat-tracking (`mark_combat_activity`/`is_in_combat`, cửa sổ 15s
+  kể từ lần đánh/bị đánh gần nhất) vào `src/regen/mod.rs`, port từ chính
+  cơ chế `Condition` mà AutoRegen từng làm dựa trên bản gốc của SomeTweaks -
+  giờ port ngược lại đây vì `Regen.PerTick.Trigger=1/2` cần nó.
+  `attack_hook.rs` đọc thêm `[ctx+8]` (target) để phát hiện cả trường hợp
+  player **bị** đánh trúng, không chỉ **đánh** trúng - cả 2 đều tính là hoạt
+  động combat dù chỉ chiều "đánh trúng" mới có heal-on-hit.
+- Debug section thêm `RegenLog` (log riêng cho module Regen, độc lập với
+  `DebugLog`) - theo đó `lib.rs` đổi logger sang luôn init (ghi đè mỗi lần
+  chạy, không cộng dồn), thay vì trước đây chỉ init khi `DebugLog=true`
+  (khiến `RegenLog=true` mặc định trong ini vô nghĩa vì chưa có file log
+  nào được tạo).
+
+Phát hiện thêm 1 lỗi copy-paste trong lúc đổi ini: `[Regen Per Hit]` bị gõ
+nhầm key `Regen.PerTick.HP/FP/Stamina` (trùng với section trên), đã sửa lại
+đúng `Regen.PerHit.HP/FP/Stamina`.
 
 ## Ý tưởng đã thử, chưa chốt: menu cấu hình trong game
 
