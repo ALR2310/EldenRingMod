@@ -85,6 +85,43 @@ Nhân dịp gộp, dọn luôn cấu trúc thư mục: `src/regen/mod.rs` +
 project nhỏ) → phẳng thành `src/regen.rs` + `src/attack_hook.rs` ngang cấp,
 khai báo `mod attack_hook; mod regen;` trong `lib.rs`.
 
+## Đổi ini key sang cấu hình kiểu `SomeTweaks` (2026-08-24)
+
+[`SomeTweaks`](../sometweaks) (cùng module `regen`, port lại từ chính
+AutoRegen ở mục "Bản Rust hiện tại" phía trên) sau đó tự phát triển tiếp
+thành 1 thiết kế ini gọn hơn: mỗi section có cờ `Enabled` riêng thay vì quy
+ước "0 = tắt" rải rác từng key, mỗi stat chỉ còn **1 field giá trị** thay vì
+tách riêng flat/percent, và dùng 1 key số (`Trigger`/`Unit`) để chọn field
+đó nghĩa là gì. Đợt này đưa thiết kế đó **quay lại** AutoRegen, để 2 mod
+dùng chung 1 kiểu cấu hình/code thay vì AutoRegen bị kẹt lại ở bản thiết kế
+cũ nó khởi nguồn.
+
+Đổi cụ thể - toàn bộ key cũ **không tương thích ngược**, phải sửa lại
+`AutoRegen.ini` thủ công (không tự động migrate vì đổi cả tên lẫn ý nghĩa):
+
+- `[Regen Per Tick]`: `Condition` → `Regen.PerTick.Trigger` (cùng ý nghĩa
+  0/1/2), `Interval` → `Regen.PerTick.Interval`. `Hp`/`Fp`/`Stamina` +
+  `HpPct`/`FpPct`/`StaminaPct` (6 key) gộp còn 3 key
+  `Regen.PerTick.HP`/`FP`/`Stamina`, ý nghĩa (điểm cố định hay % max) do
+  `Regen.PerTick.Unit` (0/1) quyết định chung cho cả 3. Thêm
+  `Regen.PerTick.Enabled` (mặc định `true`) thay vì dựa vào `Interval=0`.
+- `[Regen Per Hit]`: `Trigger` giờ có **3 chế độ** thay vì 2 - `0` = điểm cố
+  định, `1` = % max stat, `2` = % sát thương gây ra (lifesteal, thay cho
+  `Trigger=1` cũ). `HpOnHit`/`HpPctOnHit` (2 key/stat) gộp còn 1 key
+  `Regen.PerHit.HP` (tương tự FP/Stamina), ý nghĩa do `Trigger` quyết định.
+  Thêm `Regen.PerHit.Enabled` (mặc định `false`) thay vì dựa vào giá trị
+  khác 0.
+- `[Debug]`: `DebugLog` → `RegenLog`. Bỏ luôn phần dump `atkCategory`/
+  `atkId`/`sourceType` mỗi đòn trúng (dùng để soi lỗi phân loại vũ khí/phép
+  hồi lúc trước) - `RegenLog` giờ chỉ log gọn "dealt N damage" + số hồi mỗi
+  đòn, đúng những gì người dùng cuối cần theo dõi.
+
+Vì đổi tên/cấu trúc key hoàn toàn, `config::migrate()` (xem
+[`shared/src/config.rs`](../../shared/src/config.rs)) sẽ đẩy hết key cũ
+(`Condition`, `HpOnHit`, `DebugLog`, ...) vào `[Legacy]` ở lần chạy game đầu
+tiên sau khi cập nhật DLL - giá trị cũ không mất, nhưng người dùng cần tự
+copy sang key mới nếu muốn giữ cấu hình đã tùy chỉnh.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
@@ -315,8 +352,8 @@ năng hồi máu-khi-đánh-trúng, không ảnh hưởng đến các tính năn
 HP/FP/Stamina theo tick khác của AutoRegen — và quan trọng nhất, không còn
 làm crash mod khác nữa.
 
-### Cách dùng (bản C++, tên key cũ - xem mục "Gộp `Regen Per Hit`/`Regen Per
-Damage`, thêm `Condition`/`Trigger`" bên dưới cho bản Rust hiện tại)
+### Cách dùng (bản C++, tên key cũ - xem mục "Đổi ini key sang cấu hình kiểu
+`SomeTweaks`" ở trên cho tên key/cấu trúc hiện tại)
 
 Trong `AutoRegen.ini`, đặt `HpOnHit`/`FpOnHit` (số HP/FP cố định) và/hoặc
 `HpPercentOnHit`/`FpPercentOnHit` (phần trăm HP/FP tối đa, cùng quy ước với

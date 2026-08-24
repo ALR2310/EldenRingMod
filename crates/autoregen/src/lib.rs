@@ -25,8 +25,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
 
         // The log is always on (overwritten every run) - AutoRegen's
         // original convention: no separate flag to remember to flip, and no
-        // accumulation across play sessions. DebugLog only gates the extra
-        // per-hit source-type dump in attack_hook, not this base log.
+        // accumulation across play sessions. RegenLog only gates the extra
+        // per-hit damage/heal dump in attack_hook, not this base log.
         logger::init(&dir, "AutoRegen.log");
         logger::log("Activating AutoRegen...");
         if migrated > 0 {

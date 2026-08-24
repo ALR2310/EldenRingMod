@@ -1,32 +1,24 @@
-Adds automatic HP, FP, and Stamina regeneration over time, with configurable rates - plus optional HP/FP/Stamina restore the instant your own attack lands a hit, and/or the instant you take a hit yourself.
+Adds automatic HP, FP, and Stamina regeneration over time, with configurable rates - plus optional HP/FP/Stamina restore the instant your own weapon attack lands a hit, either a fixed amount/percent of your max stat, or a percent of the damage you just dealt (true lifesteal).
 
 Default configuration ([b]AutoRegen.ini[/b]):
 [code][General]
-ReloadKey=F5          ; hotkey that reloads this file while the game is running
+ReloadKey=F5                    ; hotkey that reloads this file while the game is running
 
 [Regen Per Tick]
-Interval=1000         ; how often (ms) HP/FP/Stamina are topped up
-Hp=0                  ; HP restored per tick
-Fp=0                  ; FP restored per tick
-Stamina=0             ; Stamina restored per tick
-HpPct=0.5             ; % of max HP restored per tick
-FpPct=1               ; % of max FP restored per tick
-StaminaPct=5          ; % of max Stamina restored per tick
+Regen.PerTick.Enabled=true
+Regen.PerTick.Trigger=0         ; 0 = always, 1 = out of combat only, 2 = in combat only
+Regen.PerTick.Interval=1000     ; how often (ms) HP/FP/Stamina are topped up
+Regen.PerTick.Unit=1            ; 0 = flat points, 1 = percent of max stat
+Regen.PerTick.HP=0.5
+Regen.PerTick.FP=1
+Regen.PerTick.Stamina=5
 
-[Regen Per Hit]        ; fires once when YOUR OWN weapon attack lands a hit
-HpOnHit=0
-FpOnHit=0
-StaminaOnHit=0
-HpPctOnHit=0
-FpPctOnHit=0
-StaminaPctOnHit=0
-
-[Regen Per Damage]     ; fires once when YOU take a hit from something else
-HpOnDamage=0
-FpOnDamage=0
-StaminaOnDamage=0[/code]
-
-Every value follows the same "0 disables" convention. Editing the ini while the game is running and pressing [b]ReloadKey[/b] applies the change without restarting.
+[Regen Per Hit]                 
+Regen.PerHit.Enabled=false
+Regen.PerHit.Trigger=0          ; 0 = flat points, 1 = percent of max stat, 2 = percent of damage dealt
+Regen.PerHit.HP=0.5
+Regen.PerHit.FP=1
+Regen.PerHit.Stamina=5[/code]
 
 [b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
 
@@ -53,20 +45,25 @@ Every value follows the same "0 disables" convention. Editing the ini while the 
 
 [size=4][b]Changelog[/b][/size]
 
-[b]3.0[/b]
+[b]2.0.0[/b]
 [list]
-[*]Rewritten in Rust on top of [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url] - reads/writes HP/FP/Stamina through the game's own reflected structures instead of hand-maintained byte offsets.[/*]
-[*]Added Stamina to the per-hit heal (renamed to [b]HpOnHit[/b]/[b]FpOnHit[/b]/[b]StaminaOnHit[/b] + percent variants).[/*]
-[*]Added restore-on-taking-damage: [b]HpOnDamage[/b] / [b]FpOnDamage[/b] / [b]StaminaOnDamage[/b], fires when you're hit rather than when you land one.[/*]
-[*]Added [b]ReloadKey[/b] (default F5) to hot-reload the ini without restarting the game.[/*]
-[*]Regen tick now runs on the game's own frame scheduler instead of a separate sleeping thread - no more 50ms floor needed.[/*]
+[*]Added Stamina restore on hit.[/*]
+[*]Added restore based on damage dealt, instead of a fixed amount.[/*]
+[*]Added an in-combat / out-of-combat condition for healing.[/*]
+[*]Added a quick reload hotkey (F5).[/*]
+[*]Updated the config file.[/*]
+[*]Rewritten from C++ to Rust.[/*]
 [/list]
-[b]2.0[/b]
+[b]1.1.1[/b]
+[list]
+[*]Projectile damage no longer triggers on-hit healing.[/*]
+[/list]
+[b]1.1.0[/b]
 [list]
 [*]Added restore-on-hit: [b]HpOnHit[/b] / [b]FpOnHit[/b] / [b]HpPercentOnHit[/b] / [b]FpPercentOnHit[/b].[/*]
 [*]Interval is now clamped to a 50ms floor.[/*]
 [/list]
-[b]1.0[/b]
+[b]1.0.0[/b]
 [list]
 [*]HP/FP/Stamina regeneration over time.[/*]
 [/list]
