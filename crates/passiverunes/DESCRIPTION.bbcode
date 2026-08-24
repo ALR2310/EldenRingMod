@@ -28,29 +28,36 @@ Inspired by [url=https://www.nexusmods.com/eldenring/mods/3394]Runes Clock[/url]
 [size=4][b][color=#FF0000]Warning: [/color][/b][/size][b][color=#FF0000]Only use in offline mode with EAC disabled![/color][/b]
 
 [size=4][b]Configuration (PassiveRunes.ini)[/b][/size]
-[code][PassiveRunes]
+[code][General]
+; Key that reloads this file while the game is running.
+ReloadKey=F5
 
-; How often runes are added, in seconds.
-IntervalSeconds=5
+[Rune Reward]
+; Enable/disable this feature
+Rune.Passive.Enabled=true
 
-; Runes added per interval.
-RunesPerInterval=25
+; How often it triggers, in milliseconds. Example: 1000=1 second, 500=0.5 second.
+Rune.Passive.Interval=10000
 
-; Enable/disable time-based milestone bonuses.
-EnableMilestones=true
+; Amount of runes granted per interval
+Rune.Passive.Amount=100
 
-; Write PassiveRunes.log next to the DLL for debugging. Off by default.
-EnableLog=false
+; Bonus runes at time milestones, formatted as (seconds:runes)
+; Leave empty to disable the milestone bonuses
+Rune.Milestone=1800:5000,3600:10000,7200:25000,10800:40000,21600:100000,43200:500000,86400:1000000
 
-; Milestone list, formatted as "seconds:bonus" pairs separated by commas.
-Milestones=1800:5000,3600:10000,7200:25000,10800:40000,21600:100000,43200:500000,86400:1000000[/code]
+[Debug]
+; Logs the Rune Reward module's activity. Only turn this on when you need to check something - it's noisy.
+RuneLog=false[/code]
 
 [size=4][b]Changelog[/b][/size]
 
 [b]2.0[/b]
 [list]
-[*]Rewritten in Rust on top of [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url] - adds runes through the game's own reflected save data instead of a hand-decoded pointer chain.[/*]
-[*]Milestone bonuses are now granted as soon as elapsed playtime reaches or passes a threshold, instead of requiring an exact match - a bonus can no longer be silently skipped by a frame hitch or an interval that doesn't evenly divide it.[/*]
+[*]Rewritten from C++ to Rust.[/*]
+[*]Fixed a mod-loading issue.[/*]
+[*]Updated the config file.[/*]
+[*]Added hot reload.[/*]
 [/list]
 [b]1.0[/b]
 [list]

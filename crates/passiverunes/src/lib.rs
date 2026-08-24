@@ -25,11 +25,10 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\PassiveRunes.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // EnableLog gates the log file entirely (off by default) - same
-        // convention as the original PassiveRunes' Logger::Init(dir, enabled).
-        if config::get_bool("EnableLog", false) {
-            logger::init(&dir, "PassiveRunes.log");
-        }
+        // The log is always on (overwritten every run) so Debug.RuneLog has
+        // something to write to even when it's off by default - same
+        // convention as SomeTweaks.
+        logger::init(&dir, "PassiveRunes.log");
         logger::log("Activating PassiveRunes...");
         if migrated > 0 {
             logger::log(&format!(
@@ -37,7 +36,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        rune::run();
+        rune::run(ini_path);
     });
 
     true

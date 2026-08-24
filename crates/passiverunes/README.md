@@ -1,8 +1,8 @@
 # PassiveRunes
 
 Mod cho Elden Ring: tự động cộng rune theo thời gian thực (mỗi
-`IntervalSeconds` giây cộng `RunesPerInterval` rune), kèm bonus mốc thời
-gian (`Milestones`).
+`Rune.Passive.Interval` mili giây cộng `Rune.Passive.Amount` rune), kèm
+bonus mốc thời gian (`Rune.Milestone`).
 
 ## Bản Rust hiện tại (2026-08-18)
 
@@ -32,6 +32,77 @@ trong số các mod cũ, vì không có ASM hook hay logic patch code nào cả.
 
 Xem `src/rune.rs` cho code hiện tại; `PassiveRunes.ini` cho toàn bộ key
 cấu hình.
+
+## Thêm polling ReloadKey - hot reload chưa thực sự chạy (2026-08-24)
+
+Test thật trong game: nhấn F5 không thấy ini được đọc lại. Nguyên nhân:
+lúc đổi sang format ini mới (mục dưới) có thêm key `[General] ReloadKey=F5`
+theo đúng quy ước, nhưng `rune.rs` **chưa từng đọc phím này hay gọi lại
+`config::load()`** - chỉ copy đúng cái ini, quên phần code tương ứng.
+
+Khác với `SomeTweaks`, nơi module `regen` trong cùng 1 DLL đã tự poll
+`ReloadKey` mỗi tick và gọi `config::load()` cho cả process (nên module
+`rune` của `SomeTweaks` "ăn theo" được mà không cần tự poll - xem comment
+cũ trong `sometweaks/src/lib.rs`), `PassiveRunes` là 1 DLL độc lập, không
+có module nào khác trong cùng process lo việc này giúp nó. Sửa bằng cách
+thêm đúng đoạn poll `input::is_key_pressed(reload_key)` +
+`config::load(&ini_path)` vào đầu tick, y hệt cách `AutoRegen`/`SomeTweaks`
+làm trong `regen.rs`/`regen/mod.rs` - `rune::run()` giờ nhận thêm tham số
+`ini_path` để có đường dẫn gọi lại.
+
+## Đổi sang format ini chung của dự án (2026-08-24)
+
+Ini cũ (`[PassiveRunes]` với `IntervalSeconds`/`RunesPerInterval`/
+`EnableMilestones`/`EnableLog`/`Milestones`) đã lỗi thời - đổi sang đúng
+format `Rune.Passive.*`/`Rune.Milestone` mà `SomeTweaks`' Rune Reward module
+đã dùng, để 2 module song song này không lệch quy ước:
+
+- `[General] ReloadKey=F5` - phím hotkey đọc lại ini khi đang chạy game
+  (như `AutoRegen`/`SomeTweaks`), chỉ ảnh hưởng các giá trị đọc lại mỗi tick,
+  không restart thread. **Sửa lại (xem mục "Thêm polling ReloadKey" bên
+  dưới)**: lúc thêm key này vào ini, code chưa thực sự đọc phím - đã bổ
+  sung ngay sau đó.
+- `[Rune Reward] Rune.Passive.Enabled/Interval/Amount` thay
+  `IntervalSeconds`/`RunesPerInterval` cũ - **đổi đơn vị `Interval` từ giây
+  sang mili giây** để khớp `Regen.PerTick.Interval`. `EnableMilestones` gộp
+  vào `Rune.Passive.Enabled` (tắt cả interval lẫn milestone cùng lúc); muốn
+  tắt riêng milestone thì để `Rune.Milestone=` rỗng.
+- `[Debug] RuneLog=false` thay `EnableLog` cũ - file log giờ luôn được tạo
+  (`logger::init` không còn điều kiện), `RuneLog` chỉ gate từng dòng log cụ
+  thể, giống cách `AutoRegen`/`SomeTweaks` dùng `RegenLog`/`RuneLog`.
+- Toàn bộ comment trong `PassiveRunes.ini` viết bằng tiếng Anh, khớp quy
+  ước của `AutoRegen.ini` (khác `SomeTweaks.ini` đang lẫn tiếng Việt).
+
+Vẫn giữ nguyên 2 bug fix ở mục dưới (`wait_for_cs_task` retry, gate
+`WorldChrMan.main_player`) khi port qua format key mới.
+
+## Sửa 2 bug: activation race + cộng rune ở màn hình chờ (2026-08-24)
+
+Phát hiện khi test thật với ModEngine2: log game (`modengine_2026-08-24.log`
++ `PassiveRunes.log`) cho thấy 2 vấn đề độc lập, ban đầu tưởng nhầm là do
+"để DLL khác ổ đĩa với game" (theo 1 bình luận Nexus) nhưng không phải -
+đã lần theo tận source `fromsoftware-rs` để xác nhận.
+
+- **Bug 1 - `CSTaskImp::wait_for_instance` không retry `InvalidRva`**: dù
+  gọi với `Duration::MAX`, hàm này chỉ tự retry lỗi `Null` bên trong; lỗi
+  `InvalidRva` (RVA lookup chạy trước khi exe game unpack/relocate xong)
+  trả về **ngay lập tức, vĩnh viễn không thử lại** -> mod bị tắt hẳn cho cả
+  session nếu thread của DLL khởi động quá sớm so với lúc game sẵn sàng.
+  Đây là race về thời điểm, không liên quan gì tới ổ đĩa chứa DLL (hàm chỉ
+  đọc module của chính game qua `GetModuleHandleA(NULL)`). Sửa bằng cách tự
+  bọc thêm 1 vòng lặp retry mỗi 1s quanh `wait_for_instance` (hàm
+  `wait_for_cs_task`) thay vì bỏ cuộc ngay lần đầu.
+- **Bug 2 - cộng rune cả khi còn ở màn hình chờ**: `add_runes` trước đây
+  chỉ check `GameDataMan::instance_mut()` - struct này đã có sẵn ngay khi
+  save data được nạp vào bộ nhớ, **trước khi** người chơi thực sự vào lại
+  world (còn đứng ở loading/title screen). Log thực tế cho thấy tick
+  "+25 runes" chạy đều mỗi 5s dù chưa bấm vào game. Sửa bằng cách gate thêm
+  `WorldChrMan.main_player` phải `Some` mới cộng rune - đúng pattern đã
+  dùng ở `AutoRegen`/`SomeTweaks` cho heal-over-time. Kèm theo đó, vòng lặp
+  milestone trước đây tăng `next_milestone` bất kể `add_runes` có thành
+  công hay không, nên nếu vượt mốc thời gian trong lúc chưa vào game thì
+  bonus mốc đó bị bỏ lỡ vĩnh viễn - sửa thành chỉ tăng khi cộng rune thành
+  công, còn không thì dừng vòng lặp để tick sau thử lại đúng mốc đó.
 
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
