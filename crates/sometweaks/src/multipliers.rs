@@ -12,9 +12,9 @@
 /// function, used by both enemy kills and rune items), same absolute
 /// `mov reg, imm64; jmp reg` redirect/stub-return jumps (the same technique
 /// `regen/attack_hook.rs` already uses in this crate). Kept under the
-/// `RuneMultiplier` key/`[General]` section already in `SomeTweaks.ini`
-/// (SomeTweaks predates the standalone crate's `Multiplier`/`[Settings]`
-/// rename) instead of renaming again.
+/// `Rune.Multiplier` key (`[Rune Reward]` section - grouped alongside the
+/// rest of SomeTweaks' own rune-related keys, unlike the standalone crate's
+/// own `Multiplier`/`[Settings]` naming) instead of renaming again.
 ///
 /// Disassembly at `AddSoul_Call` (see `RuneMultiplier/README.md` for the full
 /// reverse-engineering writeup):
@@ -78,17 +78,17 @@ pub mod rune_multiplier {
     // through the pointer, so no re-patching is ever needed.
     static FIXED_Q20: AtomicI64 = AtomicI64::new(1 << 20);
 
-    /// Re-reads `RuneMultiplier` from the shared config and stores it into
+    /// Re-reads `Rune.Multiplier` from the shared config and stores it into
     /// [FIXED_Q20], logging only when it actually changed - called once at
     /// startup and then every tick, so `General.ReloadKey` (polled by
     /// `regen::run`, which already reloads the shared config map) picks up a new
     /// value without this module needing to watch the key itself.
     fn apply_multiplier() {
-        let multiplier = config::get_double("RuneMultiplier", 1.0);
+        let multiplier = config::get_double("Rune.Multiplier", 1.0);
         let fixed = (multiplier * (1i64 << 20) as f64 + 0.5) as i64;
         let previous = FIXED_Q20.swap(fixed, Ordering::Relaxed);
         if previous != fixed {
-            logger::log(&format!("RuneMultiplier={multiplier:.3}"));
+            logger::log(&format!("Rune.Multiplier={multiplier:.3}"));
         }
     }
 
@@ -302,8 +302,8 @@ pub mod rune_multiplier {
 /// within reach of a 32-bit signed displacement.
 ///
 /// Kept `WeightMultiplier`'s ini key as a direct multiplier (`SomeTweaks.ini`
-/// already has `WeightMultiplier=0.5` in `[General]`, same "1 = unchanged"
-/// convention as `RuneMultiplier`) rather than the standalone crate's
+/// has `WeightMultiplier=0.5` in `[Misc]`, same "1 = unchanged" convention
+/// as `RuneMultiplier`) rather than the standalone crate's
 /// `WeightReductionPercent` (0-100, `factor = 1 - percent/100`) - no
 /// conversion needed, just clamp to non-negative.
 ///
