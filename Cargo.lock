@@ -100,7 +100,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
 ]
@@ -375,7 +375,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "passiverunes"
-version = "2.0.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "common",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "risearcher"
-version = "2.0.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "common",
@@ -447,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "runemultiplier"
-version = "2.0.0"
+version = "1.1.0"
 dependencies = [
  "chrono",
  "common",
@@ -501,7 +501,7 @@ checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
 name = "sometweaks"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "common",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "weightmultiplier"
-version = "2.0.0"
+version = "1.0.0"
 dependencies = [
  "common",
 ]
