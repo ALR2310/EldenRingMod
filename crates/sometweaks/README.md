@@ -29,12 +29,18 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   `src/regen.rs` + `src/regen/attack_hook.rs`.
 - `Rune Reward` (cộng rune theo thời gian + bonus mốc thời gian, port từ
   [`PassiveRunes`](../passiverunes)) — xem `src/rune_reward.rs`.
-- `RuneMultiplier` (nhân hệ số rune nhận được từ mọi nguồn, port từ
-  [`RuneMultiplier`](../runemultiplier)) và `WeightMultiplier` (nhân hệ số
-  Trọng Tải, ảnh hưởng cả số hiển thị lẫn roll-type thực tế, port từ
-  [`WeightMultiplier`](../weightmultiplier)) — 2 hook nhỏ, độc lập nhau,
-  gộp chung vào `src/multipliers.rs` (module con `rune_multiplier`/
-  `weight_multiplier`, xem mục 2026-08-24 bên dưới).
+- `Rune.Multiplier` (`[Rune Reward]`, nhân hệ số rune nhận được từ mọi
+  nguồn, port từ [`RuneMultiplier`](../runemultiplier)) và
+  `WeightMultiplier` (`[Misc]`, nhân hệ số Trọng Tải, ảnh hưởng cả số hiển
+  thị lẫn roll-type thực tế, port từ
+  [`WeightMultiplier`](../weightmultiplier) — **chưa test trong game,
+  đang chờ test**) — 2 hook nhỏ, độc lập nhau, gộp chung vào
+  `src/multipliers.rs` (module con `rune_multiplier`/`weight_multiplier`,
+  xem mục 2026-08-24 bên dưới).
+- `Drop Rate` (`DropRate.Multiplier`/`DropRate.ChancePercent`, chọn 1 trong
+  2 qua `DropRate.Mode` - nhân hệ số hoặc ép cứng % tổng cộng "rớt được
+  item gì đó" khi giết quái qua `ItemLotParam_enemy`, có hot-reload —
+  **chưa test trong game, đang chờ test**) — xem `src/drop_rate.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -54,8 +60,24 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   riêng.
 
 **Chưa làm:** RiseArcher (đọc/ghi `regulation.bin` sống qua `param_table`
-của `fromsoftware-rs`/`libER`), các module còn lại (DropRateMultiplier/
-TorrentAnywhere/Spirit/Misc trong ini hiện chỉ là placeholder).
+của `fromsoftware-rs`/`libER`), các module còn lại (TorrentAnywhere/Spirit
+trong ini hiện chỉ là placeholder).
+
+## Chuyển RuneMultiplier/WeightMultiplier ra khỏi [General], gom đúng nhóm (2026-08-24)
+
+`RuneMultiplier` (đổi tên thành `Rune.Multiplier`) chuyển từ `[General]`
+vào `[Rune Reward]` - đứng cùng nhóm với `Rune.Passive.*`/`Rune.Milestone`
+thay vì nằm rời rạc ở đầu file. `WeightMultiplier` (giữ nguyên tên) chuyển
+sang section `[Misc]` mới tạo - hiện chỉ có mình nó, nhưng để sẵn chỗ cho
+các tweak lặt vặt khác sau này (`TorrentAnywhere` đang là placeholder cũng
+là ứng viên chuyển vào đây). Cập nhật `src/multipliers.rs` đọc đúng key
+`Rune.Multiplier` mới (`WeightMultiplier` không đổi tên nên không cần sửa
+code, chỉ đổi vị trí trong ini).
+
+`WeightMultiplier` và `Drop Rate` (`DropRate.*`) **chưa được test trong
+game** - cả 2 đều sửa dữ liệu/patch code sống (`WeightMultiplier` patch
+ASM, `Drop Rate` sửa `ItemLotParam_enemy`), cần verify thực tế trước khi
+xem là hoàn thiện.
 
 ## Đã chốt (nhưng chưa triển khai)
 
@@ -65,6 +87,151 @@ TorrentAnywhere/Spirit/Misc trong ini hiện chỉ là placeholder).
   `regulation.bin` khi cài chung với mod khác. Xem chi tiết ở
   `d:\MyProjects\EldenRing\RiseArcher\README.md` (mục "Quyết định: sẽ
   chuyển sang DLL + libER") - RiseArcher chưa được đưa vào workspace này.
+
+## Dịch toàn bộ comment trong SomeTweaks.ini sang tiếng Anh (2026-08-24)
+
+Toàn bộ comment trong `SomeTweaks.ini` (trước đó bằng tiếng Việt) đã được
+dịch sang tiếng Anh và rút gọn - không đổi bất kỳ key/section/giá trị nào,
+chỉ đổi ngôn ngữ và văn phong mô tả.
+
+## Gom Drop Rate vào 1 section riêng, chọn chế độ tường minh thay vì ngầm định (2026-08-24)
+
+`DropRateMultiplier`/`DropChancePercent` ban đầu nằm rời rạc trong
+`[General]`, và chế độ nào thắng được quyết định ngầm ("`DropChancePercent
+> 0` thì dùng nó, bỏ qua `DropRateMultiplier`") - dễ gây bật nhầm cả 2
+cùng lúc mà không nhận ra. Đã gom thành 1 section `[Drop Rate]` với 4 key
+`DropRate.Enabled`/`DropRate.Mode`/`DropRate.Multiplier`/
+`DropRate.ChancePercent`, trong đó `DropRate.Mode` (0/1) **chọn tường
+minh** đúng 1 trong 2 chế độ - không còn khả năng "cả 2 cùng bật" xảy ra
+được nữa, vì `build_mode()` chỉ đọc giá trị của chế độ đang được `Mode`
+chọn, giá trị kia bị bỏ qua hoàn toàn dù có đặt gì cũng không ảnh hưởng.
+
+`DropRate.Enabled=false` không chỉ "bỏ qua không làm gì" (như
+`Regen.PerTick.Enabled=false`) mà chủ động trả `Mode::Multiplier(1.0)` -
+tức là **ghi lại đúng giá trị gốc từ snapshot** để hoàn tác mọi lần sửa
+trước đó, vì khác `Regen` (tính lại từ đầu mỗi tick, "tắt" tự nhiên = "không
+tính"), `drop_rate.rs` sửa dữ liệu param sống - nếu chỉ "bỏ qua" mà không
+ghi lại gốc, giá trị đã bị nhân/ép % từ trước vẫn còn nguyên trong bộ nhớ
+game dù đã tắt tính năng qua `ReloadKey`.
+
+**Khác biệt triết lý**: `DropRateMultiplier` nhân đều hệ số lên mọi item -
+item vốn hiếm vẫn hiếm hơn item vốn thường sau khi nhân (giữ đúng tỉ lệ
+tương đối gốc của game). `DropChancePercent` thì **san bằng** - ép **tổng
+% "rớt được item gì đó"** của mọi row về đúng 1 con số cố định, bất kể quái
+đó vốn dễ hay khó rớt đồ. Nếu 1 row có nhiều item cạnh tranh nhau, tỉ lệ
+**giữa các item đó với nhau** vẫn giữ nguyên - chỉ tổng của cả nhóm bị ép.
+
+**Công thức** (áp riêng cho từng row, không cần biết item ID nào): gọi
+`itemSum`=tổng weight các slot có item thật, `otherSum`=weight slot "không
+rơi gì" (giữ nguyên) - giải phương trình `target = itemSum_new / (itemSum_new
++ otherSum)` ra `itemSum_new = target × otherSum / (1 - target)`, rồi nhân
+**mỗi item trong row** với hệ số `itemSum_new / itemSum` (bảo toàn tỉ lệ
+tương đối giữa các item, chỉ đổi tổng của cả nhóm).
+
+2 trường hợp biên phải xử lý riêng:
+- `target ≥ 100%`: công thức trên chia cho 0 - xử lý bằng cách **đưa hẳn
+  weight của slot "không rơi gì" về 0** thay vì cố tính ra 1 "weight vô
+  cực" cho item - cách này chắc chắn luôn rớt được gì đó, không cần đụng
+  đến weight của item.
+- Row không có slot "không rơi gì" nào cả (`otherSum=0`, quái vốn dĩ luôn
+  chắc chắn rớt đồ, giữa 5135 row thật đã kiểm tra - chưa xác nhận có row
+  nào rơi đúng ca này, nhưng code vẫn cần chống chịu): không thể giảm %
+  xuống dưới 100% được nữa (không có chỗ nào để "trả" phần % bớt đi vào) -
+  bỏ qua row đó, giữ nguyên.
+
+## Thêm module DropRateMultiplier qua ItemLotParam (2026-08-24)
+
+Kích hoạt `DropRateMultiplier` trong `[General]` (trước đó chỉ là dòng
+comment placeholder mô tả sai cơ chế - xem lịch sử điều tra bên dưới),
+triển khai `src/drop_rate.rs`. Khác hẳn `RuneMultiplier`/`WeightMultiplier`
+- không patch code/AOB, chỉ sửa dữ liệu param sống qua
+`SoloParamRepository` (đúng pattern `risearcher/src/weapon.rs` đã dùng cho
+`EquipParamWeapon`), nên không có rủi ro crash do ghi đè lệnh CPU.
+
+**Quá trình điều tra cơ chế thật** (trước khi chốt cách làm), vì ini gốc
+ghi "hệ số nhân tỉ lệ rơi" nhưng không rõ cơ chế game thật sự hoạt động ra
+sao:
+
+1. Dịch ngược `Zibinha_DropRate_AOB_V2_SAFE.dll` (`.docs/droprate/`, Ghidra
+   headless full-analysis - file chỉ 14KB nên nhanh) để tham khảo 1 mod
+   cộng đồng có sẵn cho cùng tính năng. Tìm ra AOB `41 0F 28 F8 48 85 D2`
+   (`movaps xmm7,xmm8; test rdx,rdx`), patch bằng kỹ thuật JMP tương đối +
+   NOP đệm giống hệt `WeightMultiplier`.
+2. Dò tiếp AOB đó trong `eldenring.exe` thật (Ghidra headless `-noanalysis`
+   + `mem.findBytes`, script `DumpDropRateAOB.java` giữ lại trong
+   `.docs/reverse_engineering/`) - chỉ 1 match tại RVA `0x68652c`. Giải mã
+   ra: DLL này **cộng thẳng** 1 hằng số cấu hình vào 1 giá trị trung gian
+   trong công thức tính "discovery-bonus" (`result = max(0, statBonus +
+   hookedValue)`) - **không phải phép nhân**, ini key `rate` của nó là số
+   điểm cộng thêm, không phải hệ số.
+3. Vì mục tiêu là 1 phép nhân **đúng nghĩa**, chuyển hướng sang
+   `ITEMLOT_PARAM_ST` (đã có sẵn dạng typed field trong `fromsoftware-rs`,
+   đăng ký trong `SoloParamRepository` dưới tên `ItemLotParam_enemy`/
+   `ItemLotParam_map`). Cần xác nhận thêm 1 điều trước khi code: mẫu số
+   dùng để roll là gì. Tra cứu Souls Modding Wiki (`ItemLotParam` page) +
+   dự án `SoulsRandomizers` của thefifthmatt xác nhận: **mẫu số là tổng
+   trọng số của chính row đó** (không phải hằng số cố định toàn cục) -
+   nhân đều cả 8 slot sẽ **vô tác dụng** vì tỉ lệ giữa các slot không đổi.
+4. **[Đã sửa]** Bước 3 ở trên còn 2 chỗ sai, phát hiện được nhờ người dùng
+   tự export `ItemLotParam_enemy.csv` bằng SmithBox và đối chiếu số liệu
+   thật (xem mục sửa lỗi ngay bên dưới) - dùng đúng lượt trao đổi trong
+   phiên làm việc thay vì phải tự dò lại `eldenring.exe`.
+
+## Sửa 2 lỗi trong DropRateMultiplier sau khi đối chiếu dữ liệu thật (2026-08-24)
+
+Người dùng export `ItemLotParam_enemy.csv` qua SmithBox (công cụ sửa param
+cộng đồng) và so khớp % hiển thị của SmithBox với công thức đã dùng, phát
+hiện 2 điểm sai trong bản đầu tiên của `src/drop_rate.rs`:
+
+1. **Slot "không rơi gì" không dùng `category=-1`** như Souls Modding Wiki
+   mô tả (có thể đúng cho Dark Souls 1, không khớp Elden Ring) - dữ liệu
+   thật cho thấy slot rỗng có `lotItemCategory=0` ("None"), `lotItemId=0`.
+   Cách nhận diện đúng và đơn giản hơn: check thẳng **`lot_item_id0N == 0`**
+   (slot rỗng luôn có id=0, bất kể category gì) thay vì so category với
+   `-1`. Đã sửa `scale_row`/`apply` dùng `item_ids` thay vì `categories`.
+2. **`cumulate_lot_point0N` không cần (và không nên) ghi lại** - dữ liệu
+   thật xuất ra cho thấy field này **luôn là `0`** ở mọi slot của mọi row
+   mẫu, và chính SmithBox cũng tính "% chance to occur" hiển thị của nó
+   **chỉ từ `lot_item_base_point`**, không đọc `cumulate_lot_point` -
+   chứng tỏ giả định "game đọc cumulate đã tính sẵn, không tự cộng dồn
+   sống" (dựa theo tài liệu game đời cũ) **không đúng với Elden Ring**.
+   Đã bỏ hẳn bước tính lại `cumulate_lot_point` (`set_cumulate_points` đã
+   xoá) - chỉ còn sửa `lot_item_base_point0N`, để nguyên `cumulate_lot_point`
+   như dữ liệu gốc (`0`) - tránh đưa game vào trạng thái chưa từng được
+   test (giá trị `cumulate_lot_point` khác `0` không tồn tại trong bất kỳ
+   bản `regulation.bin` gốc nào).
+
+Đối chiếu số liệu thật xác nhận công thức `chance_i = weight_i / tổng
+weight cả row` là đúng: row `985/15` cho `98.5%/1.5%` (khớp SmithBox);
+sửa slot phụ từ `15→30` cho `30/1015=2.96%` và `985/1015=97.04%` (khớp
+chính xác số SmithBox hiển thị, kể cả việc % slot còn lại **giảm** - đúng
+bản chất mô hình trọng số tương đối, không phải bug).
+
+**Thiết kế cuối cùng** (`src/drop_rate.rs`):
+
+- Chỉ nhân `lot_item_base_point0N` của các slot có `lot_item_id0N != 0`
+  (slot có item thật), giữ nguyên slot "không rơi gì" nếu có - đúng ý
+  "tăng tỉ lệ rơi", không phải "xáo trộn vô nghĩa tỉ lệ giữa các item".
+- Không đụng đến `cumulate_lot_point0N` - giữ nguyên giá trị gốc (xem mục
+  sửa lỗi ở trên).
+- **Có hot-reload** (khác `risearcher` không hề hỗ trợ, vì `regulation.bin`
+  của nó chỉ áp 1 lần) - do người dùng muốn tinh chỉnh nhanh khi test. Để
+  tránh compounding (nhân 2 lần liên tiếp thành x4 thay vì giữ x2), lưu lại
+  **snapshot giá trị gốc** (`static Mutex<HashMap<u32, [u16; 8]>>`, chụp 1
+  lần duy nhất trước khi sửa gì cả) - mỗi lần bấm `ReloadKey`, luôn tính lại
+  từ snapshot gốc × hệ số hiện tại, không tính chồng lên giá trị đang sống.
+- Không tự đọc lại `SomeTweaks.ini` khi bấm phím (dựa vào `regen.rs` đã lo
+  việc đó, cùng cơ chế `rune_multiplier`/`weight_multiplier` đang dùng) -
+  chỉ tự poll `ReloadKey` để biết lúc nào cần chạy lại vòng lặp áp hệ số
+  (đắt hơn 1 chút vì duyệt cả bảng `ItemLotParam_enemy`, nên phải gate
+  đúng lúc bấm phím, không chạy mỗi tick như các module khác).
+- Hệ số `DropRateMultiplier=2` chỉ **gần đúng** thành "tăng gấp đôi %",
+  không tuyệt đối chính xác - vì công thức `newChance = 2w/(S+w)` (w=trọng
+  số gốc của item, S=tổng row) chỉ tiệm cận đúng 2× khi item càng hiếm
+  (`w` càng nhỏ so với `S`). Chấp nhận sai số này vì đúng bản chất cơ chế
+  game, không có cách nào cho ra kết quả tuyệt đối chính xác mà vẫn giữ
+  đúng nghĩa "nhân hệ số" (xem lịch sử trao đổi quyết định giữ tên
+  `DropRateMultiplier` thay vì đổi sang kiểu "cộng điểm" của Zibinha).
 
 ## Đổi regen/mod.rs thành regen.rs (2026-08-24)
 

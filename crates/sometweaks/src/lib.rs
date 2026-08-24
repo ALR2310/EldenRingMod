@@ -1,5 +1,6 @@
 #![allow(non_snake_case)] // crate name is "SomeTweaks" to control the output DLL's filename
 
+mod drop_rate;
 mod multipliers;
 mod regen;
 mod rune_reward;
@@ -47,6 +48,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(rune_reward::run);
         std::thread::spawn(rune_multiplier::run);
         std::thread::spawn(weight_multiplier::run);
+        std::thread::spawn(drop_rate::run);
 
         regen::run(ini_path);
     });
