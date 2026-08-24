@@ -1,6 +1,10 @@
 {
     "cSpell.words": [
         "lifesteal",
+        "mili",
         "Regen"
-    ]
+    ],
+    "[toml]": {
+        "editor.formatOnSave": false
+    }
 }
