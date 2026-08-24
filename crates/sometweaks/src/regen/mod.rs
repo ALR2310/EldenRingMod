@@ -137,18 +137,33 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
         .map(|p| &p.chr_ins as *const _ as *const u8)
 }
 
+/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
+/// immediately fatal and never retries it, even with `Duration::MAX` - it
+/// only retries the `Null` case internally. `InvalidRva` fires whenever the
+/// version-specific RVA lookup runs before the game executable has finished
+/// unpacking/relocating (e.g. Arxan), which is a timing race against how
+/// early this DLL's worker thread happens to start. Retrying here with a
+/// short delay rides out that race instead of permanently disabling the mod
+/// for the session on a one-off early poll. Same fix as PassiveRunes'
+/// `wait_for_cs_task` (2026-08-24).
+fn wait_for_cs_task() -> &'static CSTaskImp {
+    loop {
+        match CSTaskImp::wait_for_instance(Duration::MAX) {
+            Ok(instance) => return instance,
+            Err(err) => {
+                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+    }
+}
+
 /// Registers the Regen.* tick as a recurring task on the game's own
 /// `FrameBegin` task group and blocks the calling thread forever watching for
 /// `General.ReloadKey`. Meant to run on its own worker thread spawned from
 /// `DllMain`; never returns.
 pub fn run(ini_path: String) {
-    let cs_task = match CSTaskImp::wait_for_instance(Duration::MAX) {
-        Ok(instance) => instance,
-        Err(err) => {
-            logger::log(&format!("ERROR: CSTaskImp never became available ({err:?}) - SomeTweaks disabled for this session."));
-            return;
-        }
-    };
+    let cs_task = wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;

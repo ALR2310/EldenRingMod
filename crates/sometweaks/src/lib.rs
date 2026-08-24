@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "SomeTweaks" to control the output DLL's filename
 
 mod regen;
+mod rune;
 
 use common::{config, dll_dir, logger};
 
@@ -35,6 +36,11 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
                 "SomeTweaks.ini updated: added {migrated} new key(s) from a newer default template."
             ));
         }
+
+        // Rune Reward runs on its own worker thread/task, independent of
+        // Regen's tick - it reads the same shared config map, so it picks up
+        // a General.ReloadKey reload without needing to watch the key itself.
+        std::thread::spawn(rune::run);
 
         regen::run(ini_path);
     });
