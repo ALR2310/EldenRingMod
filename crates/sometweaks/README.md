@@ -41,6 +41,10 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   2 qua `DropRate.Mode` - nhân hệ số hoặc ép cứng % tổng cộng "rớt được
   item gì đó" khi giết quái qua `ItemLotParam_enemy`, có hot-reload —
   **chưa test trong game, đang chờ test**) — xem `src/drop_rate.rs`.
+- `Misc.GraceOnTorrent` (`[Misc]`, cho phép ngồi nghỉ tại Site of Grace mà
+  không cần xuống ngựa Torrent, sửa 2 bit `isInvalidForRide`/
+  `isGrayoutForRide` trên `ActionButtonParam` row `6100` — **chưa test
+  trong game, đang chờ test**) — xem `src/torrent_grace.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -63,7 +67,38 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 của `fromsoftware-rs`/`libER`), các module còn lại (TorrentAnywhere/Spirit
 trong ini hiện chỉ là placeholder).
 
-## Chuyển RuneMultiplier/WeightMultiplier ra khỏi [General], gom đúng nhóm (2026-08-24)
+## Thêm Misc.GraceOnTorrent - ngồi Site of Grace không cần xuống ngựa (2026-08-24)
+
+Xuất phát từ việc khám phá `.docs/EldenConvenienceMod` (tool C# của
+thefifthmatt, sửa `regulation.bin`/EMEVD offline rồi đóng gói cho ModEngine
+2 - kiến trúc hoàn toàn khác `sometweaks`, không port trực tiếp được).
+Dịch code `Mods.cs` của nó ra được cơ chế thật: game chặn tương tác grace
+khi cưỡi ngựa bằng **2 bit trong `ActionButtonParam`**, không phải EMEVD
+event flag nào cả - `isInvalidForRide` (ẩn hẳn nút bấm khi cưỡi ngựa) và
+`isGrayoutForRide` (hiện nhưng xám, không cho bấm).
+
+Xác nhận bằng cách người dùng export `ActionButtonParam.csv` (SmithBox,
+~400 row) và tra row `6100` ("Touch grace" - action ID chung cho mọi Site
+of Grace): `isGrayoutForRide=1` (đúng là bit chặn), `isInvalidForRide=0`,
+`overrideActionButtonIdForRide=-1` (**không có row nào khác thay thế khi
+cưỡi ngựa** - sửa thẳng row 6100 là đủ, không cần lần theo row khác).
+
+May mắn `fromsoftware-rs` đã tự decode sẵn bitfield này thành accessor có
+tên (`is_grayout_for_ride()`/`set_is_grayout_for_ride(bool)`,
+`is_invalid_for_ride()`/`set_is_invalid_for_ride(bool)`) - không cần tự
+thao tác bit thủ công như dự tính ban đầu.
+
+**Khác biệt so với `EldenConvenienceMod`**: họ phải **clone** row 6100
+sang 1 action ID mới toanh rồi tự viết cả 1 EMEVD event mới (vì ID mới
+chưa có event logic nào lắng nghe) - lý do họ clone thay vì sửa thẳng có
+lẽ là để đồng thời tăng `radius` (1.5→3) mà không ảnh hưởng hành vi
+touch-grace bình thường lúc không cưỡi ngựa. `src/torrent_grace.rs` sửa
+**thẳng row gốc `6100`** - event logic vanilla đã lắng nghe sẵn ID này,
+nên chỉ cần đổi 2 bit, không cần viết event nào cả, đơn giản hơn nhiều.
+
+Chạy 1 lần lúc khởi động, giống `risearcher` - row `ActionButtonParam` chỉ
+load 1 lần lúc vào game, không đổi giữa phiên chơi, nên không cần
+hot-reload/tick loop nào.
 
 `RuneMultiplier` (đổi tên thành `Rune.Multiplier`) chuyển từ `[General]`
 vào `[Rune Reward]` - đứng cùng nhóm với `Rune.Passive.*`/`Rune.Milestone`

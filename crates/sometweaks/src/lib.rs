@@ -4,6 +4,7 @@ mod drop_rate;
 mod multipliers;
 mod regen;
 mod rune_reward;
+mod torrent_grace;
 
 use common::{config, dll_dir, logger};
 use multipliers::{rune_multiplier, weight_multiplier};
@@ -49,6 +50,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(rune_multiplier::run);
         std::thread::spawn(weight_multiplier::run);
         std::thread::spawn(drop_rate::run);
+        std::thread::spawn(torrent_grace::run);
 
         regen::run(ini_path);
     });
