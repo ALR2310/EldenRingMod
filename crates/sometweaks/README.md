@@ -26,9 +26,15 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 **Đã triển khai:**
 
 - `Regen` (hồi HP/FP/Stamina theo thời gian + theo đòn đánh trúng) — xem
-  `src/regen/mod.rs` + `src/regen/attack_hook.rs`.
+  `src/regen.rs` + `src/regen/attack_hook.rs`.
 - `Rune Reward` (cộng rune theo thời gian + bonus mốc thời gian, port từ
-  [`PassiveRunes`](../passiverunes)) — xem `src/rune.rs`.
+  [`PassiveRunes`](../passiverunes)) — xem `src/rune_reward.rs`.
+- `RuneMultiplier` (nhân hệ số rune nhận được từ mọi nguồn, port từ
+  [`RuneMultiplier`](../runemultiplier)) và `WeightMultiplier` (nhân hệ số
+  Trọng Tải, ảnh hưởng cả số hiển thị lẫn roll-type thực tế, port từ
+  [`WeightMultiplier`](../weightmultiplier)) — 2 hook nhỏ, độc lập nhau,
+  gộp chung vào `src/multipliers.rs` (module con `rune_multiplier`/
+  `weight_multiplier`, xem mục 2026-08-24 bên dưới).
 
 **Đã chốt kiến trúc:**
 
@@ -48,8 +54,8 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   riêng.
 
 **Chưa làm:** RiseArcher (đọc/ghi `regulation.bin` sống qua `param_table`
-của `fromsoftware-rs`/`libER`), các module còn lại (Spirit/Misc trong ini
-hiện chỉ là placeholder).
+của `fromsoftware-rs`/`libER`), các module còn lại (DropRateMultiplier/
+TorrentAnywhere/Spirit/Misc trong ini hiện chỉ là placeholder).
 
 ## Đã chốt (nhưng chưa triển khai)
 
@@ -60,6 +66,90 @@ hiện chỉ là placeholder).
   `d:\MyProjects\EldenRing\RiseArcher\README.md` (mục "Quyết định: sẽ
   chuyển sang DLL + libER") - RiseArcher chưa được đưa vào workspace này.
 
+## Đổi regen/mod.rs thành regen.rs (2026-08-24)
+
+`src/regen/mod.rs` → `src/regen.rs`, giữ nguyên `src/regen/attack_hook.rs`
+tại chỗ - dùng convention module edition 2018+ của Rust (file `<tên>.rs`
+đặt ngang hàng thư mục `<tên>/` chứa submodule, thay cho `<tên>/mod.rs`
+kiểu edition 2015). Lý do: tên file `mod.rs` không tự mô tả được nội dung
+- mở nhiều file `mod.rs` từ nhiều module khác nhau (kể cả khác crate) cùng
+lúc trong editor khiến tab khó phân biệt hơn hẳn `regen.rs`. Không gộp
+`attack_hook.rs` vào cùng file hay đổi tên nó, và không bỏ thư mục con
+`regen/` (giữ thư mục để tránh trùng tên `attack_hook.rs` với
+`crates/autoregen/src/attack_hook.rs` nếu làm phẳng hoàn toàn) - chỉ đổi
+đúng 1 việc: tên file `mod.rs`.
+
+## Gộp RuneMultiplier + WeightMultiplier vào 1 file, thống nhất tên module (2026-08-24)
+
+`src/rune_multiplier.rs` và `src/weight.rs` ban đầu là 2 file riêng - gộp
+lại thành `src/multipliers.rs` (2 module con `pub mod rune_multiplier`/
+`pub mod weight_multiplier`) vì cả 2 đều là hook 1-lần rất nhỏ, không chia
+sẻ code với nhau, và việc tách file riêng chỉ thêm ceremony không cần
+thiết cho quy mô này. Đồng thời đổi tên cho nhất quán theo 1 quy ước duy
+nhất `<tên>_multiplier` thay vì lẫn lộn `rune_multiplier`/`weight` (module
+`weight` ban đầu, trước khi gộp, chưa có hậu tố `_multiplier`) - và đổi
+luôn `src/rune.rs` (Rune Reward, module `rune`) thành `src/rune_reward.rs`
+(module `rune_reward`) để không còn dễ nhầm với `rune_multiplier`. `lib.rs`
+giờ gọi qua `rune_reward::run`/`multipliers::rune_multiplier::run`/
+`multipliers::weight_multiplier::run`.
+
+## Thêm module WeightMultiplier, port từ WeightMultiplier crate (2026-08-24)
+
+Kích hoạt `WeightMultiplier` trong `[General]` (trước đó chỉ là dòng
+comment placeholder), triển khai `src/multipliers.rs`'s `weight_multiplier` module
+port 1:1 kỹ thuật hook của
+[`WeightMultiplier`](../weightmultiplier)'s `src/hook.rs`: patch 7 byte lệnh
+`movaps xmm0,xmm6` (đúng thời điểm game vừa cộng xong tổng Trọng Tải, chạy
+1 lần duy nhất, không dồn qua vòng lặp 5 slot đồ) để nhân hệ số vào `xmm6`
+trước khi copy ra kết quả - xem README của crate `WeightMultiplier` cho
+toàn bộ lịch sử tìm offset (3 lần thử, xác nhận chéo qua 1 DLL "NoWeight"
+cộng đồng).
+
+Khác biệt so với bản crate độc lập:
+
+- Patch không đủ chỗ cho kỹ thuật absolute-jump 12-byte của
+  `attack_hook.rs`/module `rune_multiplier` (chỉ 7 byte) - dùng
+  `common::codepatch::install_jmp_hook` (JMP tương đối 5 byte + tìm vùng
+  nhớ gần bằng `VirtualAlloc`) thay vì viết tay riêng.
+- Giữ nguyên tên key `WeightMultiplier` (hệ số nhân trực tiếp, `1` = không
+  đổi) - `SomeTweaks.ini` đã có sẵn key này từ trước, không cần đổi thành
+  `WeightReductionPercent` (0-100%) như bản crate độc lập.
+- Không có `InitialDelaySeconds` riêng trong ini (giữ nguyên delay 5s cố
+  định trong code) - `SomeTweaks` chưa có module nào khác cần delay khởi
+  động nên chưa đáng thêm 1 key ini chỉ cho module này. Delay này quan
+  trọng: hook chỉ patch 1 lần, không có vòng lặp retry như
+  `wait_for_cs_task` (xem mục fix `InvalidRva` bên dưới) - nếu quét AOB
+  trước khi game giải nén/relocate code xong thì tắt hẳn cho session đó.
+- Cố tình không có hotkey reload, giống nguyên bản - đổi `WeightMultiplier`
+  cần khởi động lại game.
+
+## Thêm module RuneMultiplier, port từ RuneMultiplier crate (2026-08-24)
+
+Kích hoạt `RuneMultiplier` trong `[General]` (trước đó chỉ là dòng comment
+placeholder), triển khai `src/multipliers.rs`'s `rune_multiplier` module
+port 1:1 kỹ thuật hook của [`RuneMultiplier`](../runemultiplier)'s
+`src/hook.rs`: patch 12 byte đầu
+`AddSoul_Call` (hàm cộng-rune cấp thấp nhất của game, dùng chung mọi
+nguồn) bằng redirect `mov rax,<stub>; jmp rax` sang 1 stub tự sinh nhân
+`EDX` (amount) theo fixed-point Q20 integer, chỉ nhân khi `amount > 0` để
+không ảnh hưởng rune **chi tiêu** (lên cấp, mua đồ) - xem README của
+`RuneMultiplier` crate cho toàn bộ lịch sử dịch ngược/quyết định kỹ thuật.
+
+Khác biệt so với bản crate độc lập:
+
+- Giữ nguyên tên key `RuneMultiplier` (dưới `[General]`, không tách section
+  `[Settings]` riêng) thay vì đổi thành `Multiplier` như bản
+  `RuneMultiplier` đã làm ngày 2026-08-19 - `SomeTweaks.ini` đã có sẵn key
+  này từ trước, không cần đổi tên lần nữa.
+- Không tự poll `General.ReloadKey` - đọc lại `RuneMultiplier` mỗi tick
+  (`apply_multiplier()`, chỉ log khi giá trị thực sự đổi) thay vì so khớp
+  hotkey riêng, vì `regen::run` đã lo việc reload `SomeTweaks.ini` dùng
+  chung config map cho cả module này (cùng cách `rune::run` đã làm).
+- Hook install không phụ thuộc `WorldChrMan`/in-world (không dereference
+  con trỏ player nào), nhưng vòng lặp áp dụng multiplier mỗi tick vẫn cần
+  `CSTaskImp` nên áp dụng luôn fix `wait_for_cs_task` (retry `InvalidRva`)
+  ở mục ngay bên dưới.
+
 ## Fix cả 2 module bị vô hiệu hoá vĩnh viễn bởi InvalidRva (2026-08-24)
 
 Cùng lỗi mà [`PassiveRunes`](../passiverunes) gặp (xem README của nó, mục
@@ -68,16 +158,19 @@ là lỗi chết ngay, không tự retry dù truyền `Duration::MAX` (chỉ t�
 case `Null` bên trong nó) - `InvalidRva` xảy ra khi RVA lookup chạy trước
 lúc game giải nén/relocate xong (Arxan), tức là 1 cuộc đua timing với lúc
 thread của DLL này khởi động, không liên quan gì đến việc DLL đặt ở đâu.
-Log thực tế: cả `regen::run` lẫn `rune::run` đều dính lỗi này cùng lúc và
-tắt hẳn tính năng cho session đó. Đã thêm `wait_for_cs_task()` (retry sau
-1s thay vì bỏ cuộc ngay) vào cả `src/regen/mod.rs` và `src/rune.rs`.
+Log thực tế: cả `regen::run` lẫn `rune_reward::run` đều dính lỗi này cùng
+lúc và tắt hẳn tính năng cho session đó. Đã thêm `wait_for_cs_task()`
+(retry sau 1s thay vì bỏ cuộc ngay) vào cả `src/regen.rs` (khi đó còn tên
+`src/regen/mod.rs`) và `src/rune_reward.rs` (khi đó còn tên `src/rune.rs`,
+xem mục đổi tên module bên trên).
 
 ## Fix Rune Reward cộng rune trước khi vào world (2026-08-24)
 
 Cùng lỗi mà [`PassiveRunes`](../passiverunes) gặp (xem README của nó, mục
 2026-08-24): `GameDataMan` resolve xong ngay khi save slot được chọn, còn
 đang ở màn hình title/loading, **trước khi** player thật sự vào world -
-`add_runes` trong `src/rune.rs` trước đây chỉ check `GameDataMan`, nên cả
+`add_runes` trong `src/rune_reward.rs` (khi đó còn tên `src/rune.rs`) trước
+đây chỉ check `GameDataMan`, nên cả
 tick theo interval lẫn milestone đều bắn sớm hơn dự kiến (milestone dùng
 `session_elapsed_ms` tính từ lúc DLL load, không phải lúc vào game). Đã
 thêm check `regen::main_player_chr_ins_ptr()` (cùng cổng `WorldChrMan.
@@ -107,7 +200,8 @@ nhóm):
   lập thay vì AutoRegen's `Trigger` 2 chế độ có flat+pct cộng dồn ở chế độ
   0). Cùng lý do: mỗi stat 1 giá trị duy nhất `Regen.PerHit.HP/FP/Stamina`.
 - Thêm combat-tracking (`mark_combat_activity`/`is_in_combat`, cửa sổ 15s
-  kể từ lần đánh/bị đánh gần nhất) vào `src/regen/mod.rs`, port từ chính
+  kể từ lần đánh/bị đánh gần nhất) vào `src/regen.rs` (khi đó còn tên
+  `src/regen/mod.rs`), port từ chính
   cơ chế `Condition` mà AutoRegen từng làm dựa trên bản gốc của SomeTweaks -
   giờ port ngược lại đây vì `Regen.PerTick.Trigger=1/2` cần nó.
   `attack_hook.rs` đọc thêm `[ctx+8]` (target) để phát hiện cả trường hợp
@@ -126,7 +220,8 @@ nhầm key `Regen.PerTick.HP/FP/Stamina` (trùng với section trên), đã sử
 ## Thêm module Rune Reward, port từ PassiveRunes (2026-08-23)
 
 Kích hoạt `[Rune Reward]` trong `SomeTweaks.ini` (trước đó chỉ là block
-comment placeholder), triển khai `src/rune.rs` dựa trên
+comment placeholder), triển khai `src/rune_reward.rs` (khi đó còn tên
+`src/rune.rs`, xem mục đổi tên module ngày 2026-08-24) dựa trên
 [`PassiveRunes`](../passiverunes)'s `src/rune.rs` - cùng cơ chế đọc/ghi
 `GameDataMan::main_player_game_data.rune_count` qua `fromsoftware-rs` và
 threshold-crossing cho milestone (không dùng so khớp tuyệt đối

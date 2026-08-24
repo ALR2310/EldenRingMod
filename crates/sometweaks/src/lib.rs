@@ -1,9 +1,11 @@
 #![allow(non_snake_case)] // crate name is "SomeTweaks" to control the output DLL's filename
 
+mod multipliers;
 mod regen;
-mod rune;
+mod rune_reward;
 
 use common::{config, dll_dir, logger};
+use multipliers::{rune_multiplier, weight_multiplier};
 
 // SomeTweaks.ini is embedded verbatim into the binary at compile time via
 // include_str! - no resource compiler step needed. This is the single source
@@ -37,10 +39,14 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        // Rune Reward runs on its own worker thread/task, independent of
-        // Regen's tick - it reads the same shared config map, so it picks up
-        // a General.ReloadKey reload without needing to watch the key itself.
-        std::thread::spawn(rune::run);
+        // Rune Reward and RuneMultiplier each run on their own worker
+        // thread/task, independent of Regen's tick - they read the same
+        // shared config map, so they pick up a General.ReloadKey reload
+        // without needing to watch the key themselves. WeightMultiplier
+        // installs its hook once and returns - no tick/hotkey loop at all.
+        std::thread::spawn(rune_reward::run);
+        std::thread::spawn(rune_multiplier::run);
+        std::thread::spawn(weight_multiplier::run);
 
         regen::run(ini_path);
     });
