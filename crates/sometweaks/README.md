@@ -23,8 +23,12 @@ mỗi tính năng cũ là 1 module bật/tắt độc lập qua `SomeTweaks.ini`
 2026-08-22, `[Regen Per Tick]`/`[Regen Per Hit]` mỗi mục có cờ `Enabled`
 riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 
-**Đã triển khai:** module `Regen` (hồi HP/FP/Stamina theo thời gian +
-theo đòn đánh trúng) — xem `src/regen/mod.rs` + `src/regen/attack_hook.rs`.
+**Đã triển khai:**
+
+- `Regen` (hồi HP/FP/Stamina theo thời gian + theo đòn đánh trúng) — xem
+  `src/regen/mod.rs` + `src/regen/attack_hook.rs`.
+- `Rune Reward` (cộng rune theo thời gian + bonus mốc thời gian, port từ
+  [`PassiveRunes`](../passiverunes)) — xem `src/rune.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -44,8 +48,8 @@ theo đòn đánh trúng) — xem `src/regen/mod.rs` + `src/regen/attack_hook.rs
   riêng.
 
 **Chưa làm:** RiseArcher (đọc/ghi `regulation.bin` sống qua `param_table`
-của `fromsoftware-rs`/`libER`), các module còn lại (Rune/Spirit/Misc/Debug
-trong ini hiện chỉ là placeholder).
+của `fromsoftware-rs`/`libER`), các module còn lại (Spirit/Misc trong ini
+hiện chỉ là placeholder).
 
 ## Đã chốt (nhưng chưa triển khai)
 
@@ -55,6 +59,32 @@ trong ini hiện chỉ là placeholder).
   `regulation.bin` khi cài chung với mod khác. Xem chi tiết ở
   `d:\MyProjects\EldenRing\RiseArcher\README.md` (mục "Quyết định: sẽ
   chuyển sang DLL + libER") - RiseArcher chưa được đưa vào workspace này.
+
+## Fix cả 2 module bị vô hiệu hoá vĩnh viễn bởi InvalidRva (2026-08-24)
+
+Cùng lỗi mà [`PassiveRunes`](../passiverunes) gặp (xem README của nó, mục
+2026-08-24): `CSTaskImp::wait_for_instance` coi `SystemInitError::InvalidRva`
+là lỗi chết ngay, không tự retry dù truyền `Duration::MAX` (chỉ tự retry
+case `Null` bên trong nó) - `InvalidRva` xảy ra khi RVA lookup chạy trước
+lúc game giải nén/relocate xong (Arxan), tức là 1 cuộc đua timing với lúc
+thread của DLL này khởi động, không liên quan gì đến việc DLL đặt ở đâu.
+Log thực tế: cả `regen::run` lẫn `rune::run` đều dính lỗi này cùng lúc và
+tắt hẳn tính năng cho session đó. Đã thêm `wait_for_cs_task()` (retry sau
+1s thay vì bỏ cuộc ngay) vào cả `src/regen/mod.rs` và `src/rune.rs`.
+
+## Fix Rune Reward cộng rune trước khi vào world (2026-08-24)
+
+Cùng lỗi mà [`PassiveRunes`](../passiverunes) gặp (xem README của nó, mục
+2026-08-24): `GameDataMan` resolve xong ngay khi save slot được chọn, còn
+đang ở màn hình title/loading, **trước khi** player thật sự vào world -
+`add_runes` trong `src/rune.rs` trước đây chỉ check `GameDataMan`, nên cả
+tick theo interval lẫn milestone đều bắn sớm hơn dự kiến (milestone dùng
+`session_elapsed_ms` tính từ lúc DLL load, không phải lúc vào game). Đã
+thêm check `regen::main_player_chr_ins_ptr()` (cùng cổng `WorldChrMan.
+main_player` mà `Regen` module đã dùng) vào `add_runes` - milestone loop
+cũng đổi từ "bỏ qua vĩnh viễn nếu add_runes fail" sang "giữ nguyên
+`next_milestone`, thử lại tick sau" để không mất bonus khi milestone rơi
+đúng lúc còn đang loading.
 
 ## Gom nhóm lại ini, thêm Enabled/Condition/Trigger cho Regen (2026-08-22)
 
@@ -92,6 +122,37 @@ nhóm):
 Phát hiện thêm 1 lỗi copy-paste trong lúc đổi ini: `[Regen Per Hit]` bị gõ
 nhầm key `Regen.PerTick.HP/FP/Stamina` (trùng với section trên), đã sửa lại
 đúng `Regen.PerHit.HP/FP/Stamina`.
+
+## Thêm module Rune Reward, port từ PassiveRunes (2026-08-23)
+
+Kích hoạt `[Rune Reward]` trong `SomeTweaks.ini` (trước đó chỉ là block
+comment placeholder), triển khai `src/rune.rs` dựa trên
+[`PassiveRunes`](../passiverunes)'s `src/rune.rs` - cùng cơ chế đọc/ghi
+`GameDataMan::main_player_game_data.rune_count` qua `fromsoftware-rs` và
+threshold-crossing cho milestone (không dùng so khớp tuyệt đối
+`elapsed==milestone`, tránh bỏ lỡ mốc nếu tick lệch nhịp), nhưng đổi tên
+key và đơn vị cho khớp quy ước của `SomeTweaks.ini`:
+
+- `Rune.Passive.Enabled` (cờ bật/tắt cả nhóm, kể cả milestone) thay vì
+  `EnableMilestones` riêng của PassiveRunes.
+- `Rune.Passive.Interval` tính bằng **mili giây** (khớp
+  `Regen.PerTick.Interval`) thay vì `IntervalSeconds` của PassiveRunes.
+- `Rune.Passive.Amount` thay `RunesPerInterval`.
+- `Rune.Milestone` (không có tiền tố `Passive.` vì áp dụng độc lập với
+  interval) vẫn giữ định dạng chuỗi giây:rune như PassiveRunes's
+  `Milestones` - `Rune.Milestone=0` tự nhiên parse ra danh sách rỗng (không
+  có dấu `:`) nên không cần case riêng cho "0 = tắt".
+
+Chạy trên 1 thread/task riêng (`std::thread::spawn(rune::run)` trong
+`lib.rs`), độc lập với tick của `Regen` - không tự lắng nghe
+`General.ReloadKey` vì đọc chung 1 config map với Regen, nên hotkey reload
+ở đâu cũng làm mới giá trị cho cả 2 module. Milestone list chỉ parse 1 lần
+lúc khởi động (không hot-reload), giống hệt giới hạn PassiveRunes gốc đã
+chấp nhận.
+
+Tiện thể sửa 1 lỗi tài liệu trong ini: comment mô tả `Rune.Milestone` ghi
+nhầm định dạng `(ms:rune)` trong khi giá trị mặc định dùng đơn vị giây
+(`1800:5000` = 30 phút) - đã sửa thành `(giây:rune)`.
 
 ## Ý tưởng đã thử, chưa chốt: menu cấu hình trong game
 
