@@ -62,19 +62,16 @@
 //! again would become 4x, not stay at 2x).
 
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, ItemLotParam_enemy, SoloParamRepository};
 use eldenring::param::ITEMLOT_PARAM_ST;
-use eldenring::util::input;
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
 use common::config;
-use common::input::parse_virtual_key;
 use common::logger;
-
-const VK_F5: i32 = 0x74;
 
 type Points = [u16; 8];
 type ItemIds = [i32; 8];
@@ -207,11 +204,18 @@ fn scale_row(original: &Points, item_ids: &ItemIds, mode: &Mode) -> Points {
 /// any mutation). Returns how many rows were touched, for logging.
 fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
     let mut snapshot_guard = ORIGINAL_BASE_POINTS.lock().unwrap();
+    let is_first_call = snapshot_guard.is_none();
+    if is_first_call {
+        logger::log("DropRate: SoloParamRepository ready, snapshotting ItemLotParam_enemy...");
+    }
     let snapshot = snapshot_guard.get_or_insert_with(|| {
         repo.rows_mut::<ItemLotParam_enemy>()
             .map(|(id, row)| (id, get_base_points(row)))
             .collect()
     });
+    if is_first_call {
+        logger::log(&format!("DropRate: snapshotted {} row(s), applying...", snapshot.len()));
+    }
 
     let mut changed = 0;
     for (id, row) in repo.rows_mut::<ItemLotParam_enemy>() {
@@ -229,12 +233,22 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
 /// Waits (up to `timeout`) for `SoloParamRepository` - the live in-memory
 /// regulation.bin - to become available. Ported from `risearcher`'s own
 /// helper of the same name.
+/// Waits for both `SoloParamRepository` to resolve AND the player to
+/// actually be in the game world (`regen::main_player_chr_ins_ptr`) before
+/// returning - `SoloParamRepository::instance_mut()` alone can return `Ok`
+/// as soon as the manager object exists (title/loading screen, well before
+/// its param tables are actually populated), same class of premature-ready
+/// singleton that `rune_reward::add_runes` already had to guard against for
+/// `GameDataMan` (2026-08-24) - crashed in-game here instead of just
+/// granting runes too early.
 fn wait_for_repository(timeout: Duration) -> Option<&'static mut SoloParamRepository> {
     let step = Duration::from_millis(200);
     let mut waited = Duration::ZERO;
     loop {
-        if let Ok(repo) = unsafe { SoloParamRepository::instance_mut() } {
-            return Some(repo);
+        if crate::regen::main_player_chr_ins_ptr().is_some() {
+            if let Ok(repo) = unsafe { SoloParamRepository::instance_mut() } {
+                return Some(repo);
+            }
         }
         if waited >= timeout {
             return None;
@@ -279,21 +293,49 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 /// on every press. Meant to run on its own worker thread spawned from
 /// `DllMain`; never returns (except early, if `SoloParamRepository` never
 /// becomes available).
+///
+/// `DropRate.Enabled=false` at startup skips touching
+/// `SoloParamRepository`/`ItemLotParam_enemy` entirely, rather than calling
+/// `apply` with a no-op `Multiplier(1.0)` - `build_mode`'s own
+/// `Multiplier(1.0)` fallback exists for the *hot-reload* case (undoing an
+/// already-applied scale when toggled off mid-session, from the cached
+/// snapshot), which doesn't apply before this module has ever run once.
 pub fn run() {
-    let Some(repo) = wait_for_repository(Duration::from_secs(60)) else {
-        logger::log("ERROR: SoloParamRepository never became available - DropRate disabled for this session.");
-        return;
-    };
+    let mut last_seen_generation = crate::regen::RELOAD_GENERATION.load(Ordering::Relaxed);
 
-    let mode = build_mode();
-    let changed = apply(repo, &mode);
-    log_mode(&mode, changed, "");
+    if config::get_bool("DropRate.Enabled", true) {
+        match wait_for_repository(Duration::from_secs(300)) {
+            Some(repo) => {
+                logger::log("DropRate: SoloParamRepository instance acquired.");
+                let mode = build_mode();
+                let changed = apply(repo, &mode);
+                log_mode(&mode, changed, "");
+            }
+            None => {
+                logger::log("ERROR: SoloParamRepository never became available - DropRate disabled for this session.");
+            }
+        }
+    } else {
+        logger::log("DropRate.Enabled=false - skipping ItemLotParam_enemy entirely at startup.");
+    }
 
     let cs_task = wait_for_cs_task();
     let _handle = cs_task.run_recurring(
         move |_data: &eldenring::fd4::FD4TaskData| {
-            let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
-            if !input::is_key_pressed(reload_key) {
+            // Poll `regen::RELOAD_GENERATION` instead of calling
+            // `input::is_key_pressed(ReloadKey)` ourselves - see the module
+            // doc comment on that static for why: it debounces per VK code
+            // in one map shared by every caller, so a second caller checking
+            // the same key `regen` already checked this frame would always
+            // see `false`, never picking up a reload at all.
+            let generation = crate::regen::RELOAD_GENERATION.load(Ordering::Relaxed);
+            if generation == last_seen_generation {
+                return;
+            }
+            last_seen_generation = generation;
+
+            if crate::regen::main_player_chr_ins_ptr().is_none() {
+                logger::log("DropRate: not in-world yet, reload skipped.");
                 return;
             }
             let Ok(repo) = (unsafe { SoloParamRepository::instance_mut() }) else {

@@ -31,6 +31,20 @@ const COMBAT_TIMEOUT_MS: u64 = 15000;
 
 static LAST_COMBAT_ACTIVITY_MS: AtomicU64 = AtomicU64::new(0);
 
+// Bumped every time `General.ReloadKey` is detected and `config::load` runs
+// below - `eldenring::util::input::is_key_pressed` debounces per VK code in
+// a single shared map, not per caller (see `crates/eldenring/src/util/
+// input.rs`: `DEBOUNCE_MAP` keyed only by the key code), so if more than one
+// module called it for the same key, only whichever one happened to run
+// first that frame would ever see `true` - the other(s) would see `false`
+// forever (lost the "vé" - the shared debounce entry gets consumed on the
+// first read within its 250ms window). `regen` is the only module that
+// calls `is_key_pressed` for `ReloadKey`; other modules that need to react
+// to a reload (e.g. `drop_rate`, which can't just re-scan its whole param
+// table every tick like `rune_multiplier` cheaply can) poll this counter
+// instead of calling `is_key_pressed` themselves.
+pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
+
 fn clock_start() -> Instant {
     static START: OnceLock<Instant> = OnceLock::new();
     *START.get_or_init(Instant::now)
@@ -151,7 +165,7 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
         match CSTaskImp::wait_for_instance(Duration::MAX) {
             Ok(instance) => return instance,
             Err(err) => {
-                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
+                logger::log(&format!("Regen: CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
                 std::thread::sleep(Duration::from_secs(1));
             }
         }
@@ -176,6 +190,7 @@ pub fn run(ini_path: String) {
             let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
+                RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
                 logger::log("Config reloaded (hotkey pressed).");
             }
 

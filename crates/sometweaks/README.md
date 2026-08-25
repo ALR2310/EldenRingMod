@@ -33,18 +33,18 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   nguồn, port từ [`RuneMultiplier`](../runemultiplier)) và
   `WeightMultiplier` (`[Misc]`, nhân hệ số Trọng Tải, ảnh hưởng cả số hiển
   thị lẫn roll-type thực tế, port từ
-  [`WeightMultiplier`](../weightmultiplier) — **chưa test trong game,
-  đang chờ test**) — 2 hook nhỏ, độc lập nhau, gộp chung vào
+  [`WeightMultiplier`](../weightmultiplier) — **đã test trong game, hoạt
+  động đúng**) — 2 hook nhỏ, độc lập nhau, gộp chung vào
   `src/multipliers.rs` (module con `rune_multiplier`/`weight_multiplier`,
   xem mục 2026-08-24 bên dưới).
 - `Drop Rate` (`DropRate.Multiplier`/`DropRate.ChancePercent`, chọn 1 trong
   2 qua `DropRate.Mode` - nhân hệ số hoặc ép cứng % tổng cộng "rớt được
   item gì đó" khi giết quái qua `ItemLotParam_enemy`, có hot-reload —
-  **chưa test trong game, đang chờ test**) — xem `src/drop_rate.rs`.
-- `Misc.GraceOnTorrent` (`[Misc]`, cho phép ngồi nghỉ tại Site of Grace mà
-  không cần xuống ngựa Torrent, sửa 2 bit `isInvalidForRide`/
-  `isGrayoutForRide` trên `ActionButtonParam` row `6100` — **chưa test
-  trong game, đang chờ test**) — xem `src/torrent_grace.rs`.
+  **đã test `ChancePercent` trong game, hoạt động đúng**: `100` → rớt cùng
+  lúc toàn bộ ~6 item gắn với 1 con Godrick Soldier (đúng vì mỗi row lot
+  của quái là 1 lượt roll độc lập, `100` ép từng row); `1` → 2/3 lần giết
+  có rớt (mẫu quá nhỏ để kết luận % chính xác, nhưng không có dấu hiệu sai)
+  — xem `src/drop_rate.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -65,7 +65,116 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 
 **Chưa làm:** RiseArcher (đọc/ghi `regulation.bin` sống qua `param_table`
 của `fromsoftware-rs`/`libER`), các module còn lại (TorrentAnywhere/Spirit
-trong ini hiện chỉ là placeholder).
+trong ini hiện chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site
+of Grace khi cưỡi Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến
+trúc hiện tại (xem mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+
+## Bỏ hẳn Misc.GraceOnTorrent; fix hot-reload của DropRate không hoạt động (2026-08-24)
+
+**Bỏ hẳn `Misc.GraceOnTorrent`** (`src/torrent_grace.rs` đã xoá, bỏ khỏi
+`lib.rs`/ini) sau khi test thực tế cho kết quả xấu hơn dự tính: site đã mở
++ cưỡi ngựa thì bấm không phản ứng gì; site chưa mở + cưỡi ngựa thì bấm
+làm tự xuống ngựa rồi **kẹt luôn, site không mở được, không tương tác lại
+được nữa**. Xác nhận đúng giả thuyết đã nêu ở mục "Tìm ra nguyên nhân crash"
+bên dưới: chỉ xoá 2 bit gate `ActionButtonParam` là không đủ - logic EMEVD
+event gắn với action ID `6100` có xử lý "đang cưỡi ngựa" riêng của nó,
+không tương thích với việc bị kích hoạt khi đang cưỡi ngựa. Sửa đúng cách
+cần viết/patch cả 1 EMEVD event mới (như `EldenConvenienceMod` đã làm) -
+đòi hỏi công cụ đọc/ghi EMEVD mà workspace này không có, ngoài phạm vi
+kiến trúc "patch bộ nhớ sống"/"sửa param" hiện tại. Không theo đuổi tiếp.
+
+**Fix hot-reload của `DropRate` không hoạt động** (test `WeightMultiplier`
+xong, đến `DropRate` thì phát hiện sửa ini xong bấm `ReloadKey` không có
+tác dụng, phải thoát game vào lại mới áp dụng): nguyên nhân là
+`eldenring::util::input::is_key_pressed` debounce phím bằng 1
+`HashMap<VK code, Instant>` **dùng chung cho mọi lời gọi**, không phải
+edge-detection riêng theo từng caller (`crates/eldenring/src/util/
+input.rs`) - ai gọi hàm này với cùng phím trước trong cửa sổ 250ms thì
+nhận `true`, người gọi sau (dù cùng 1 lần bấm phím thật) luôn nhận `false`.
+`regen.rs` và `drop_rate.rs` cùng gọi `is_key_pressed(ReloadKey)` độc lập
+mỗi tick - `regen.rs` luôn thắng (chạy trước), `drop_rate.rs` không bao
+giờ thấy phím được nhấn.
+
+Sửa bằng cách thêm `regen::RELOAD_GENERATION` (đếm số lần reload thành
+công) - `regen.rs` là nơi **duy nhất** gọi `is_key_pressed`/`config::load`
+cho `ReloadKey`, tăng bộ đếm này mỗi lần reload xong; `drop_rate.rs` chỉ
+so sánh bộ đếm có đổi so với lần tick trước không, không tự gọi
+`is_key_pressed` nữa. `Rune.Multiplier`/`WeightMultiplier` không dính lỗi
+này vì chúng đọc lại config **mỗi tick vô điều kiện** (rẻ, không cần biết
+"vừa mới reload hay chưa"), không giống `DropRate` cần biết chính xác thời
+điểm reload để tránh duyệt lại toàn bộ ~5000 row mỗi frame.
+
+## Tìm ra nguyên nhân crash: SoloParamRepository resolve sớm trước khi vào world (2026-08-24)
+
+Sau khi fix `DropRate.Enabled=false` (mục bên dưới) để test cô lập đúng
+cách: tắt `DropRate` → hết crash khi bật `Misc.GraceOnTorrent` một mình
+vẫn crash, dừng ngay tại `repo.get_mut::<ActionButtonParam>(...)` (log:
+`SoloParamRepository instance acquired, looking up ActionButtonParam
+row...` rồi im bặt). Tắt cả 2 → hết crash hoàn toàn. Xác nhận: cả 2 module
+đều crash độc lập, cùng 1 nguyên nhân gốc.
+
+**Nguyên nhân**: `wait_for_repository()` của cả `drop_rate.rs` và
+`torrent_grace.rs` chỉ chờ `SoloParamRepository::instance_mut()` trả về
+`Ok` - nhưng đây **chỉ là object quản lý tồn tại**, không đảm bảo bảng
+param bên trong (`ItemLotParam_enemy`, `ActionButtonParam`) đã load xong
+dữ liệu thật. Y hệt lỗi đã gặp và sửa cho `rune_reward::add_runes`
+(`GameDataMan` resolve sớm ở title/loading screen, trước khi player thật
+sự vào world) - chỉ khác là lần này không phải "cộng rune sớm" (vô hại) mà
+là **đọc/ghi vào bảng dữ liệu chưa tồn tại → truy cập bộ nhớ rác → crash
+thật**.
+
+**Fix**: cả 2 `wait_for_repository()` giờ chờ thêm điều kiện
+`regen::main_player_chr_ins_ptr().is_some()` (đã vào world thật sự, cùng
+cổng `Regen`/`Rune Reward` đã dùng) **trước khi** gọi
+`SoloParamRepository::instance_mut()` - tăng luôn timeout từ 60s lên 300s
+vì giờ phải chờ tới lúc người chơi thực sự chọn save và vào game, không
+còn chỉ chờ 1 object khởi tạo sớm ở màn hình title. `drop_rate.rs`'s
+reload-key closure cũng được thêm check này (trước đó gọi thẳng
+`SoloParamRepository::instance_mut()` không qua `wait_for_repository`,
+cùng lỗ hổng nếu bấm `F5` quá sớm).
+
+## Fix DropRate.Enabled=false không thực sự tắt (2026-08-24, đang điều tra crash)
+
+Game crash sau khi build+chạy bản có `Drop Rate`/`Misc.GraceOnTorrent` -
+thử tắt cả 2 để cô lập nguyên nhân nhưng vẫn crash. Xem log mới thêm
+(`DropRate: SoloParamRepository ready, snapshotting ItemLotParam_enemy...`)
+mới phát hiện: `DropRate.Enabled=false` **không hề bỏ qua code** như tưởng
+- `build_mode()` chỉ trả `Mode::Multiplier(1.0)` (nhân với 1 = không đổi
+giá trị), nhưng `run()` vẫn gọi `wait_for_repository`/`apply` y hệt lúc
+bật, tức vẫn snapshot + duyệt toàn bộ `ItemLotParam_enemy` dù tắt. Log dừng
+đột ngột ngay tại bước snapshot (`repo.rows_mut::<ItemLotParam_enemy>()`)
+- nghi ngờ chính là điểm crash, nhưng **chưa xác nhận được** vì việc "tắt"
+trước đó không thực sự tắt gì cả.
+
+Đã sửa `run()`: `DropRate.Enabled=false` giờ bỏ qua hẳn
+`wait_for_repository`/`apply` lúc khởi động (không đụng
+`SoloParamRepository` chút nào), chỉ còn đăng ký vòng lặp nghe
+`ReloadKey` (để vẫn bật lại được sau nếu cần) - vòng lặp `Multiplier(1.0)`
+trong `build_mode()` giữ nguyên, chỉ dùng cho trường hợp tắt **giữa
+phiên** qua hot-reload (khi đó `apply()` đã chạy ít nhất 1 lần, cần hoàn
+tác về snapshot gốc, khác với chưa từng chạy lần nào).
+
+Đã thêm log chốt chặn ở `src/drop_rate.rs` (trước/sau snapshot) và
+`src/torrent_grace.rs` (trước/sau lấy row, trước khi sửa bit) để lần chạy
+tiếp theo (với fix tắt thật sự này) xác định được chính xác module nào
+gây crash - **chưa kết luận được nguyên nhân gốc**, cần test lại.
+
+## Đổi WeightMultiplier từ delay 5s cố định sang retry loop (2026-08-24)
+
+`weight_multiplier`'s `install()` chỉ quét AOB **đúng 1 lần**, không có
+vòng lặp thử lại như `wait_for_cs_task` của các module khác - trước đó bù
+bằng cách chờ cố định 5 giây (`InitialDelaySeconds` port từ crate độc lập)
+trước khi quét, với giả định 5s là đủ để game giải nén/relocate code
+(anti-tamper) xong. Rủi ro giống hệt lỗi `InvalidRva` đã gặp (xem mục fix
+2 module bên dưới): máy chậm hơn giả định là quét thất bại, tắt hẳn tính
+năng cho cả phiên chơi, không có cách nào cứu lại.
+
+Thay `std::thread::sleep(5s)` một lần bằng `wait_for_anchor()` (poll
+`memscan::find_pattern_in_module` mỗi 500ms, tối đa 60s) - **nhanh hơn**
+khi máy khoẻ (không cần chờ đủ 5s nếu game sẵn sàng sớm hơn) và **an toàn
+hơn** khi máy chậm (chịu được tới 60s thay vì bỏ cuộc sau 5s). Không thêm
+ini key nào - vẫn hardcode như delay cũ, chỉ đổi từ "chờ 1 lần" sang "thử
+lại nhiều lần".
 
 ## Thêm Misc.GraceOnTorrent - ngồi Site of Grace không cần xuống ngựa (2026-08-24)
 
@@ -316,12 +425,11 @@ Khác biệt so với bản crate độc lập:
 - Giữ nguyên tên key `WeightMultiplier` (hệ số nhân trực tiếp, `1` = không
   đổi) - `SomeTweaks.ini` đã có sẵn key này từ trước, không cần đổi thành
   `WeightReductionPercent` (0-100%) như bản crate độc lập.
-- Không có `InitialDelaySeconds` riêng trong ini (giữ nguyên delay 5s cố
-  định trong code) - `SomeTweaks` chưa có module nào khác cần delay khởi
-  động nên chưa đáng thêm 1 key ini chỉ cho module này. Delay này quan
-  trọng: hook chỉ patch 1 lần, không có vòng lặp retry như
-  `wait_for_cs_task` (xem mục fix `InvalidRva` bên dưới) - nếu quét AOB
-  trước khi game giải nén/relocate code xong thì tắt hẳn cho session đó.
+- Không có `InitialDelaySeconds` riêng trong ini - `SomeTweaks` chưa có
+  module nào khác cần delay khởi động nên chưa đáng thêm 1 key ini chỉ cho
+  module này. Ban đầu port y hệt delay 5s cố định của bản crate độc lập,
+  sau đổi sang retry loop (`wait_for_anchor`) - xem mục ngày hôm nay bên
+  dưới.
 - Cố tình không có hotkey reload, giống nguyên bản - đổi `WeightMultiplier`
   cần khởi động lại game.
 
