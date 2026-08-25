@@ -25,14 +25,16 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 
 **Đã triển khai:**
 
-- `Regen` (hồi HP/FP/Stamina theo thời gian + theo đòn đánh trúng) — xem
-  `src/regen.rs` + `src/regen/attack_hook.rs`.
+- `Regen` (hồi HP/FP/Stamina theo thời gian + theo đòn đánh trúng, cả
+  `Regen.PerTick.*`/`Regen.PerHit.*` — **đã test trong game, hoạt động
+  đúng**) — xem `src/regen.rs` + `src/regen/attack_hook.rs`.
 - `Rune Reward` (cộng rune theo thời gian + bonus mốc thời gian, port từ
-  [`PassiveRunes`](../passiverunes)) — xem `src/rune_reward.rs`.
+  [`PassiveRunes`](../passiverunes) — **đã test trong game, hoạt động
+  đúng**) — xem `src/rune_reward.rs`.
 - `Rune.Multiplier` (`[Rune Reward]`, nhân hệ số rune nhận được từ mọi
-  nguồn, port từ [`RuneMultiplier`](../runemultiplier)) và
-  `WeightMultiplier` (`[Misc]`, nhân hệ số Trọng Tải, ảnh hưởng cả số hiển
-  thị lẫn roll-type thực tế, port từ
+  nguồn, port từ [`RuneMultiplier`](../runemultiplier) — **đã test trong
+  game, hoạt động đúng**) và `WeightMultiplier` (`[Misc]`, nhân hệ số
+  Trọng Tải, ảnh hưởng cả số hiển thị lẫn roll-type thực tế, port từ
   [`WeightMultiplier`](../weightmultiplier) — **đã test trong game, hoạt
   động đúng**) — 2 hook nhỏ, độc lập nhau, gộp chung vào
   `src/multipliers.rs` (module con `rune_multiplier`/`weight_multiplier`,
@@ -40,11 +42,16 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 - `Drop Rate` (`DropRate.Multiplier`/`DropRate.ChancePercent`, chọn 1 trong
   2 qua `DropRate.Mode` - nhân hệ số hoặc ép cứng % tổng cộng "rớt được
   item gì đó" khi giết quái qua `ItemLotParam_enemy`, có hot-reload —
-  **đã test `ChancePercent` trong game, hoạt động đúng**: `100` → rớt cùng
-  lúc toàn bộ ~6 item gắn với 1 con Godrick Soldier (đúng vì mỗi row lot
-  của quái là 1 lượt roll độc lập, `100` ép từng row); `1` → 2/3 lần giết
-  có rớt (mẫu quá nhỏ để kết luận % chính xác, nhưng không có dấu hiệu sai)
-  — xem `src/drop_rate.rs`.
+  **đã test trong game, hoạt động đúng** (cả `Mode=0` nhân hệ số và
+  `Mode=1` ép cứng %, dùng chung `apply`/`scale_row` nên cùng đã xác nhận):
+  `ChancePercent=100` → rớt cùng lúc toàn bộ ~6 item gắn với 1 con Godrick
+  Soldier (đúng vì mỗi row lot của quái là 1 lượt roll độc lập, `100` ép
+  từng row); `ChancePercent=1` → 2/3 lần giết có rớt (mẫu quá nhỏ để kết
+  luận % chính xác, nhưng không có dấu hiệu sai) — xem `src/drop_rate.rs`.
+- `Misc.TorrentAnywhere` (`[Misc]`, mặc định `false` - cho phép cưỡi
+  Torrent ở mọi nơi kể cả khu vực ép xuống ngựa như Abyssal Woods, port từ
+  `.docs/torent_anywhere/CavaloLivre_V7_Cardoso.dll` - **chưa test trong
+  game, đang chờ test**) — xem `src/torrent_anywhere.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -64,10 +71,44 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   riêng.
 
 **Chưa làm:** RiseArcher (đọc/ghi `regulation.bin` sống qua `param_table`
-của `fromsoftware-rs`/`libER`), các module còn lại (TorrentAnywhere/Spirit
-trong ini hiện chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site
-of Grace khi cưỡi Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến
-trúc hiện tại (xem mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+của `fromsoftware-rs`/`libER`), các module còn lại (Spirit trong ini hiện
+chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site of Grace khi cưỡi
+Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến trúc hiện tại (xem
+mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+
+## Thêm Misc.TorrentAnywhere, port từ CavaloLivre_V7_Cardoso.dll (2026-08-25)
+
+Khác `GraceOnTorrent` đã bỏ, tính năng này **không cần EMEVD** - dịch
+ngược (Ghidra headless full-analysis, DLL 311KB nên nhanh) 1 mod C++ tham
+khảo (`.docs/torent_anywhere/CavaloLivre_V7_Cardoso.dll`, tên nghĩa là
+"Ngựa Tự Do" tiếng Bồ Đào Nha) xác nhận toàn bộ 3 kỹ thuật của nó đều là
+patch code/gọi lại hàm game - đúng phạm vi kiến trúc hiện tại:
+
+1. **2 patch điều kiện khu vực** (`area_list_check`/`direct_ride_check`):
+   cả 2 đều đọc `ptr = [this+0x68]`, check byte tại `[ptr+0x36] != 0`
+   (`cmp+setne`) để quyết định "khu vực này có cấm cưỡi ngựa không". Không
+   có field nào trong `fromsoftware-rs` khớp offset này (đã tra
+   `ChrIns`/`PlayerIns`/`WorldChrMan`/`CSChrDataModule` và mọi struct liên
+   quan ride/mount) nên vẫn phải patch code thô. Đọc kỹ byte patch thật từ
+   Ghidra (không đoán): `cmp byte[ptr+0x36],0; setne al` (6 byte) đổi thành
+   `mov byte[ptr+0x36],0; xor al,al` (cùng 6 byte) - vừa **xoá vĩnh viễn cờ
+   cấm** trong bộ nhớ vừa ép kết quả trả về = "không cấm", cùng độ dài nên
+   ghi đè tại chỗ, không cần kỹ thuật nhảy/stub như `weight_multiplier`.
+2. **Bỏ qua ép xuống ngựa ở Abyssal Woods**: patch đúng 1 byte `74`→`EB`
+   (`jz`→`jmp`) tại vị trí kiểm tra SpEffect `19995` ("Forced Torrent
+   Dismount Abyssal Woods"), bỏ qua hẳn lệnh gọi ép dismount.
+3. **Áp lại SpEffect `19996`** ("Remove Forced Torrent Dismount Abyssal
+   Woods") mỗi giây - khác bản C++ (tự AOB tìm hàm `ApplyEffect` gốc của
+   game rồi gọi qua con trỏ thô, chạy trên thread `Sleep` riêng),
+   `fromsoftware-rs` đã có sẵn `ChrInsExt::apply_speffect` (resolve qua RVA
+   table có sẵn trong crate, không cần tự AOB) - gọi trong tick
+   `CSTaskImp::run_recurring` trên `FrameBegin`, đúng pattern
+   `regen.rs`/ví dụ chính thức `examples/apply-speffect` của thư viện,
+   không cần thread riêng.
+
+Mặc định `Misc.TorrentAnywhere=false` (giống `DropRate` lúc đầu) - **chưa
+test trong game**, đặc biệt kỹ thuật 1/2 patch code thô nên cần test cẩn
+thận (không phải giữa 1 trận boss) trước khi bật mặc định `true`.
 
 ## Bỏ hẳn Misc.GraceOnTorrent; fix hot-reload của DropRate không hoạt động (2026-08-24)
 
