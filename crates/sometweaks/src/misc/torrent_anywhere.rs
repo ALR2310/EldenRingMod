@@ -44,6 +44,7 @@ use eldenring::cs::{CSTaskGroupIndex, ChrInsExt, WorldChrMan};
 use eldenring::fd4::FD4TaskData;
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
+use common::codepatch;
 use common::config;
 use common::logger;
 use common::memscan;
@@ -58,30 +59,6 @@ const APPLY_INTERVAL_MS: f64 = 1000.0;
 
 const SCAN_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// Overwrites `patched.len()` bytes at `addr` with `patched` - a plain
-/// in-place replacement (no jump/stub), since both call sites below patch
-/// exactly as many bytes as they read (the replacement instructions are
-/// re-encoded to fit the original space, not appended elsewhere).
-unsafe fn patch_bytes(addr: *mut u8, patched: &[u8]) -> bool {
-    use std::ffi::c_void;
-
-    unsafe extern "system" {
-        fn VirtualProtect(lp_address: *mut c_void, dw_size: usize, fl_new_protect: u32, lpfl_old_protect: *mut u32) -> i32;
-    }
-    const PAGE_EXECUTE_READWRITE: u32 = 0x40;
-
-    let mut old_protect: u32 = 0;
-    let ok = unsafe { VirtualProtect(addr as *mut c_void, patched.len(), PAGE_EXECUTE_READWRITE, &mut old_protect) };
-    if ok == 0 {
-        return false;
-    }
-    unsafe {
-        std::ptr::copy_nonoverlapping(patched.as_ptr(), addr, patched.len());
-        VirtualProtect(addr as *mut c_void, patched.len(), old_protect, &mut old_protect);
-    }
-    true
-}
 
 /// `mov rax,[rax+0x68]; cmp byte[rax+0x36],0; setne al; mov dil,1; mov
 /// [rsi],al` -> `mov rax,[rax+0x68]; mov byte[rax+0x36],0; xor al,al; mov
@@ -112,7 +89,7 @@ fn apply_code_patches() -> usize {
     let mut applied = 0;
 
     match memscan::wait_for_pattern_in_module(AREA_LIST_CHECK_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
-        Some(addr) if unsafe { patch_bytes(addr, &AREA_LIST_CHECK_PATCHED) } => {
+        Some(addr) if unsafe { codepatch::overwrite_bytes(addr, &AREA_LIST_CHECK_PATCHED) } => {
             logger::log(&format!("TorrentAnywhere: area_list_check patched at {addr:p}."));
             applied += 1;
         }
@@ -120,7 +97,7 @@ fn apply_code_patches() -> usize {
     }
 
     match memscan::wait_for_pattern_in_module(DIRECT_RIDE_CHECK_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
-        Some(addr) if unsafe { patch_bytes(addr, &DIRECT_RIDE_CHECK_PATCHED) } => {
+        Some(addr) if unsafe { codepatch::overwrite_bytes(addr, &DIRECT_RIDE_CHECK_PATCHED) } => {
             logger::log(&format!("TorrentAnywhere: direct_ride_check patched at {addr:p}."));
             applied += 1;
         }
@@ -128,7 +105,7 @@ fn apply_code_patches() -> usize {
     }
 
     match memscan::wait_for_pattern_in_module(ABYSSAL_DISMOUNT_SKIP_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
-        Some(addr) if unsafe { patch_bytes(addr.add(ABYSSAL_JZ_OFFSET), &[ABYSSAL_JMP_OPCODE]) } => {
+        Some(addr) if unsafe { codepatch::overwrite_bytes(addr.add(ABYSSAL_JZ_OFFSET), &[ABYSSAL_JMP_OPCODE]) } => {
             logger::log(&format!("TorrentAnywhere: abyssal_forced_dismount_skip patched at {addr:p}."));
             applied += 1;
         }

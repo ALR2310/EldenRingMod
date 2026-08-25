@@ -53,18 +53,26 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   `src/drop_rate/mod.rs`.
 - `TorrentAnywhere` (`[Misc]`, mặc định `false` - cho phép cưỡi Torrent ở
   mọi nơi kể cả khu vực ép xuống ngựa như Abyssal Woods, port từ
-  `.docs/torent_anywhere/CavaloLivre_V7_Cardoso.dll` - **chưa test trong
-  game, đang chờ test**) — xem `src/misc/torrent_anywhere.rs`.
+  `.docs/torent_anywhere/CavaloLivre_V7_Cardoso.dll` - **đã test trong
+  game, hoạt động đúng**) — xem `src/misc/torrent_anywhere.rs`.
 - `Rune.KeepOnDeath` (`[Rune Reward]`, mặc định `false` - giữ nguyên rune
-  hiện có khi chết thay vì bị đem vào vết máu, xem mục "Giải mã
-  DisableRuneLoss.dll..." bên dưới cho cách tìm ra field - **chưa test
-  trong game, đang chờ test**) — xem `src/rune/keep_on_death.rs`.
-- `UnlockAshesOfWar` (`[Misc]`, mặc định `false` - cho phép áp Ash of War
+  hiện có khi chết thay vì bị đem vào vết máu - bản đầu dùng
+  `ChrIns.has_dropped_runes` **đã test và KHÔNG hoạt động** (rune vẫn rơi
+  bình thường), đã đổi sang kỹ thuật AOB-scan-and-NOP port từ
+  `.docs/DisableRuneLoss.dll` (xem mục nhật ký bên dưới) - **chưa test lại
+  bản mới, đang chờ test**) — xem `src/rune/keep_on_death.rs`.
+- `UnlockAshesOfWar` (`[Misc]`, mặc định `false` - cho phép gắn Ash of War
   bất kỳ lên vũ khí bất kỳ (kể cả loại vốn không hỗ trợ AoW như
   cung/khiên/đuốc), port từ mod Nexus "Unlocked Ashes of War and
   Enchantments" (nexusmods.com/eldenring/mods/271) qua diff trực tiếp file
-  CSV của mod đó, xem mục nhật ký bên dưới - **chưa test trong game, đang
-  chờ test**) — xem `src/misc/unlock_ashes_of_war.rs`.
+  CSV của mod đó - **đã test trong game, hoạt động đúng**) và
+  `UnlockEnchantments` (`[Misc]`, mặc định `false` - cho phép yểm bùa chú
+  (enchant) lên vũ khí bất kỳ, phép tạo hào quang gây thêm sát thương như
+  Bloodflame Blade/Order's Blade/Scholar's Armament, KHÔNG phải
+  affinity/thuộc tính vũ khí, tách riêng khỏi `UnlockAshesOfWar` vì 2 field
+  khác nhau trong param, xem mục nhật ký bên dưới - **chưa test, đang chờ
+  test**) — xem `src/misc/unlock_ashes_of_war.rs` +
+  `src/misc/unlock_enchantments.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -88,6 +96,59 @@ của `fromsoftware-rs`/`libER`), các module còn lại (Spirit trong ini hiệ
 chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site of Grace khi cưỡi
 Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến trúc hiện tại (xem
 mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+
+## Thêm hot-reload cho WeightMultiplier (2026-08-25)
+
+Người dùng hỏi có thể thêm hot-reload cho `WeightMultiplier` không - trước
+đó README/comment ghi rõ "no hot-reload" vì lý do "không có tick loop nào
+sẵn để tận dụng". Nhưng cơ chế patch của `WeightMultiplier` giống hệt
+`Rune.Multiplier`: stub được inject đọc `WEIGHT_FACTOR` qua 1 con trỏ mỗi
+lần tính lại trọng tải, nên chỉ cần cập nhật giá trị atomic đó định kỳ là
+có hot-reload ngay lập tức, không cần patch lại code lần nào nữa. Thêm tick
+trên `CSTaskGroupIndex::FrameBegin` (dùng `crate::task::wait_for_cs_task`,
+y hệt pattern `rune::multiplier` đã có) gọi lại `apply_weight_factor()`
+(đổi tên từ `init_weight_factor`, giờ chỉ log khi giá trị thực sự đổi) mỗi
+frame. Bỏ dòng comment "Applied once at startup (no hot-reload)" khỏi ini
+cho `WeightMultiplier`.
+
+## Test kết quả, sửa Rune.KeepOnDeath, tách UnlockEnchantments (2026-08-25)
+
+Test trong game: `TorrentAnywhere` và `UnlockAshesOfWar` hoạt động đúng.
+`Rune.KeepOnDeath` KHÔNG hoạt động - rune vẫn rơi bình thường khi chết.
+
+**Nguyên nhân (suy luận):** `ChrIns.chr_flags1c6.has_dropped_runes()` -
+theo comment gốc của `fromsoftware-rs`, "prevents dead character from
+rewarding runes twice" - gần như chắc chắn là cờ dùng cho việc **NPC/quái
+chết thì thưởng rune cho người giết nó** (field tồn tại trên MỌI `ChrIns`,
+kể cả quái), không liên quan gì đến việc **rune người chơi đang giữ bị mất
+khi chính họ chết** - đây là 2 hệ thống hoàn toàn khác nhau dù tên field
+gây hiểu lầm là chung.
+
+**Đã sửa:** bỏ cách tiếp cận field, chuyển sang đúng kỹ thuật đã port từ
+`.docs/DisableRuneLoss.dll` (xem mục "Giải mã DisableRuneLoss.dll" bên
+dưới) - AOB scan pattern `b0 01 ? 8b ? e8 ? ? ? ? ? 8b ? ? ? 32 c0 ? 83 ?
+28 c3` đã xác nhận thật trong `eldenring.exe` (RVA `0x594f6c`), verify byte
+tại offset+5 là `0xE8` rồi NOP 5 byte đó (xoá lệnh `CALL` chuyển rune vào
+vết máu khi chết). `src/rune/keep_on_death.rs` viết lại hoàn toàn theo
+kỹ thuật này, áp dụng 1 lần lúc khởi động (không hot-reload) - **chưa test
+lại**.
+
+Nhân tiện gộp `patch_bytes` (đang trùng lặp nếu `keep_on_death.rs` tự viết
+lại) vào `common::codepatch::overwrite_bytes` dùng chung, `torrent_anywhere.rs`
+cũng đổi sang gọi hàm này.
+
+**Tách `UnlockAshesOfWar` thành 2 tính năng riêng:** người dùng làm rõ
+`isEnhance` (trên `EquipParamWeapon`) là khả năng **yểm bùa chú lên vũ khí**
+- phép tạo hào quang gây thêm sát thương như Bloodflame Blade, Order's
+Blade, Scholar's Armament, đúng từ game gốc dùng là "enchant" (game báo
+*"This weapon cannot be enchanted"* với vũ khí không hỗ trợ) - KHÔNG phải
+affinity/thuộc tính vũ khí như tôi đoán ban đầu (2 khái niệm dễ nhầm trong
+tiếng Anh), khác với việc **gắn Ash of War**
+(`gemMountType` + `EquipParamGem`'s `canMountWep_*`). Chia lại:
+- `UnlockAshesOfWar`: chỉ còn `EquipParamWeapon.gemMountType=2` +
+  `EquipParamGem`'s `canMountWep_*` - xem `src/misc/unlock_ashes_of_war.rs`.
+- `UnlockEnchantments` (mới): `EquipParamWeapon.isEnhance=1` - xem
+  `src/misc/unlock_enchantments.rs`.
 
 ## Thêm UnlockAshesOfWar, port từ Nexus mod #271 qua diff CSV (2026-08-25)
 

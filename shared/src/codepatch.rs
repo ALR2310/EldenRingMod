@@ -61,6 +61,26 @@ fn alloc_near(anchor: *mut u8, size: usize) -> Option<*mut u8> {
     None
 }
 
+/// Overwrites `patched.len()` bytes at `addr` with `patched` in place - no
+/// jump/stub, for when the replacement instructions fit exactly in the
+/// original byte window (unlike [install_jmp_hook], which redirects
+/// because its replacement doesn't fit). Returns `false` (leaving the
+/// original bytes untouched) if `VirtualProtect` fails.
+pub unsafe fn overwrite_bytes(addr: *mut u8, patched: &[u8]) -> bool {
+    const PAGE_EXECUTE_READWRITE: u32 = 0x40;
+
+    let mut old_protect: u32 = 0;
+    let ok = unsafe { VirtualProtect(addr as *mut c_void, patched.len(), PAGE_EXECUTE_READWRITE, &mut old_protect) };
+    if ok == 0 {
+        return false;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(patched.as_ptr(), addr, patched.len());
+        VirtualProtect(addr as *mut c_void, patched.len(), old_protect, &mut old_protect);
+    }
+    true
+}
+
 /// Allocates a stub near `target_addr`, copies `stub_body` into it, appends a
 /// JMP back to `target_addr + original_len`, then overwrites `original_len`
 /// bytes at `target_addr` with a JMP into the stub (NOP-padded if
