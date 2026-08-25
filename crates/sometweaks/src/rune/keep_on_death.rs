@@ -15,8 +15,8 @@
 //! reward to its killer" bookkeeping (shared by every `ChrIns`, enemies
 //! included), unrelated to the player's OWN held-rune-loss-on-death
 //! system - which, per this AOB, isn't gated by anything on `ChrIns` at
-//! all. Falling back to the AOB-scan-and-NOP technique the reference DLL
-//! actually uses instead, now that it's confirmed correct.
+//! all. The AOB-scan-and-NOP technique below is what actually works -
+//! **confirmed in-game** (2026-08-25).
 //!
 //! Applied once at startup only, no hot-reload (same convention as
 //! `misc::torrent_anywhere`'s code patches) - restart the game with

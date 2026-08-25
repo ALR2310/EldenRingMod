@@ -57,10 +57,10 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   game, hoạt động đúng**) — xem `src/misc/torrent_anywhere.rs`.
 - `Rune.KeepOnDeath` (`[Rune Reward]`, mặc định `false` - giữ nguyên rune
   hiện có khi chết thay vì bị đem vào vết máu - bản đầu dùng
-  `ChrIns.has_dropped_runes` **đã test và KHÔNG hoạt động** (rune vẫn rơi
-  bình thường), đã đổi sang kỹ thuật AOB-scan-and-NOP port từ
-  `.docs/DisableRuneLoss.dll` (xem mục nhật ký bên dưới) - **chưa test lại
-  bản mới, đang chờ test**) — xem `src/rune/keep_on_death.rs`.
+  `ChrIns.has_dropped_runes` KHÔNG hoạt động (rune vẫn rơi bình thường), đã
+  đổi sang kỹ thuật AOB-scan-and-NOP port từ `.docs/DisableRuneLoss.dll`
+  (xem mục nhật ký bên dưới) - **đã test trong game, hoạt động đúng**) —
+  xem `src/rune/keep_on_death.rs`.
 - `UnlockAshesOfWar` (`[Misc]`, mặc định `false` - cho phép gắn Ash of War
   bất kỳ lên vũ khí bất kỳ (kể cả loại vốn không hỗ trợ AoW như
   cung/khiên/đuốc), port từ mod Nexus "Unlocked Ashes of War and
@@ -96,6 +96,22 @@ của `fromsoftware-rs`/`libER`), các module còn lại (Spirit trong ini hiệ
 chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site of Grace khi cưỡi
 Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến trúc hiện tại (xem
 mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+
+## Xác nhận Rune.KeepOnDeath hoạt động, dọn code debug (2026-08-25)
+
+Test lại bản AOB-scan-and-NOP (không phải bản `has_dropped_runes` cũ) -
+**chết thử, rune không bị mất**. Trước đó có 1 khúc quanh: nghi ngờ patch
+port có thể sai (vì đọc pseudocode `FUN_1800047f0` của
+`DisableRuneLoss.dll` không hoàn toàn rõ ràng) nên đã thêm 1 chế độ debug
+(`Rune.KeepOnDeath.DumpOnly`) để đọc byte sống từ `DisableRuneLoss.dll`
+gốc chạy song song nhằm so sánh - nhưng chạy 2 DLL cùng lúc (`SomeTweaks.dll`
++ `natives\DisableRuneLoss.dll`, cả 2 đều active sẵn trong
+`modengine2/config.toml`) gây crash (nghi do race `VirtualProtect` giữa 2
+DLL trên cùng trang bộ nhớ). Hoá ra không cần bước debug đó - bản port ban
+đầu đã đúng, chỉ là **chưa được test trực tiếp** trước khi đi vào nhánh
+điều tra phức tạp. Đã xoá `dump_for_comparison()`/`hex_dump()`/key
+`Rune.KeepOnDeath.DumpOnly` khỏi `keep_on_death.rs` và `SomeTweaks.ini` -
+code hiện tại chỉ còn đúng phần patch chính thức.
 
 ## Thêm hot-reload cho WeightMultiplier (2026-08-25)
 
