@@ -5,7 +5,7 @@
 //! `Regen.PerTick.Interval`) instead of PassiveRunes' own `IntervalSeconds`/
 //! `RunesPerInterval`/`Milestones` seconds-based keys.
 //!
-//! `add_runes` also gates on `regen::main_player_chr_ins_ptr` (not just
+//! `add_runes` also gates on `player::main_player_chr_ins_ptr` (not just
 //! `GameDataMan`) - `GameDataMan` resolves as soon as a save slot loads,
 //! still at the title/loading screen well before control passes to the
 //! player, so runes (including milestone bonuses) were being granted before
@@ -14,7 +14,7 @@
 
 use std::time::Duration;
 
-use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, GameDataMan};
+use eldenring::cs::{CSTaskGroupIndex, GameDataMan};
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
 use common::config;
@@ -58,10 +58,10 @@ fn parse_milestones(spec: &str) -> Vec<Milestone> {
 /// save slot is loaded - while still sitting at the title/loading screen,
 /// well before control passes to the player - so it's not enough on its own
 /// to gate a passive gameplay effect; checking `WorldChrMan.main_player`
-/// (same gate `regen::main_player_chr_ins_ptr` exists for) confirms a live
+/// (same gate `player::main_player_chr_ins_ptr` exists for) confirms a live
 /// player character actually exists.
 fn add_runes(amount: u32) -> bool {
-    if crate::regen::main_player_chr_ins_ptr().is_none() {
+    if crate::player::main_player_chr_ins_ptr().is_none() {
         return false;
     }
     let Ok(game_data_man) = (unsafe { GameDataMan::instance_mut() }) else {
@@ -72,32 +72,11 @@ fn add_runes(amount: u32) -> bool {
     true
 }
 
-/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
-/// immediately fatal and never retries it, even with `Duration::MAX` - it
-/// only retries the `Null` case internally. `InvalidRva` fires whenever the
-/// version-specific RVA lookup runs before the game executable has finished
-/// unpacking/relocating (e.g. Arxan), which is a timing race against how
-/// early this DLL's worker thread happens to start. Retrying here with a
-/// short delay rides out that race instead of permanently disabling the mod
-/// for the session on a one-off early poll. Same fix as PassiveRunes'
-/// `wait_for_cs_task` (2026-08-24).
-fn wait_for_cs_task() -> &'static CSTaskImp {
-    loop {
-        match CSTaskImp::wait_for_instance(Duration::MAX) {
-            Ok(instance) => return instance,
-            Err(err) => {
-                logger::log(&format!("Rune Reward: CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
-                std::thread::sleep(Duration::from_secs(1));
-            }
-        }
-    }
-}
-
 /// Registers the passive-rune tick as a recurring task on the game's own
 /// `FrameBegin` task group. Meant to run on its own worker thread spawned
-/// from `DllMain` (alongside `regen::run`, not instead of it); never returns.
+/// from `DllMain`; never returns.
 pub fn run() {
-    let cs_task = wait_for_cs_task();
+    let cs_task = crate::task::wait_for_cs_task("Rune Reward");
 
     // Milestones are parsed once at startup rather than re-read every tick
     // like Enabled/Interval/Amount below - re-parsing would also require

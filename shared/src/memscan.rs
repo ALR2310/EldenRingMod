@@ -74,6 +74,30 @@ fn find_pattern(haystack: &[u8], pattern: &[PatternByte]) -> Option<usize> {
     None
 }
 
+/// Retries [find_pattern_in_module] every `retry_interval` until it matches
+/// or `timeout` elapses (returns `None` in that case) - useful for a
+/// one-shot startup scan that may race the game's own anti-tamper
+/// unpacking/relocation (e.g. Arxan) on a slow/loaded machine, when the
+/// caller has no other retry path of its own (a hook installed only once,
+/// not re-attempted every tick).
+pub fn wait_for_pattern_in_module(
+    pattern: &str,
+    retry_interval: std::time::Duration,
+    timeout: std::time::Duration,
+) -> Option<*mut u8> {
+    let mut waited = std::time::Duration::ZERO;
+    loop {
+        if let Some(addr) = find_pattern_in_module(pattern) {
+            return Some(addr);
+        }
+        if waited >= timeout {
+            return None;
+        }
+        std::thread::sleep(retry_interval);
+        waited += retry_interval;
+    }
+}
+
 /// Scans the executable sections of the current process's main module (the
 /// game .exe) for `pattern`, returning the absolute address of the first
 /// match, or `None` if not found.

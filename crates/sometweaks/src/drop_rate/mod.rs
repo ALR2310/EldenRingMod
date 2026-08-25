@@ -66,7 +66,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, ItemLotParam_enemy, SoloParamRepository};
+use eldenring::cs::{CSTaskGroupIndex, ItemLotParam_enemy, SoloParamRepository};
 use eldenring::param::ITEMLOT_PARAM_ST;
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
@@ -234,18 +234,18 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
 /// regulation.bin - to become available. Ported from `risearcher`'s own
 /// helper of the same name.
 /// Waits for both `SoloParamRepository` to resolve AND the player to
-/// actually be in the game world (`regen::main_player_chr_ins_ptr`) before
+/// actually be in the game world (`player::main_player_chr_ins_ptr`) before
 /// returning - `SoloParamRepository::instance_mut()` alone can return `Ok`
 /// as soon as the manager object exists (title/loading screen, well before
 /// its param tables are actually populated), same class of premature-ready
-/// singleton that `rune_reward::add_runes` already had to guard against for
+/// singleton that `rune::reward::add_runes` already had to guard against for
 /// `GameDataMan` (2026-08-24) - crashed in-game here instead of just
 /// granting runes too early.
 fn wait_for_repository(timeout: Duration) -> Option<&'static mut SoloParamRepository> {
     let step = Duration::from_millis(200);
     let mut waited = Duration::ZERO;
     loop {
-        if crate::regen::main_player_chr_ins_ptr().is_some() {
+        if crate::player::main_player_chr_ins_ptr().is_some() {
             if let Ok(repo) = unsafe { SoloParamRepository::instance_mut() } {
                 return Some(repo);
             }
@@ -255,24 +255,6 @@ fn wait_for_repository(timeout: Duration) -> Option<&'static mut SoloParamReposi
         }
         std::thread::sleep(step);
         waited += step;
-    }
-}
-
-/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
-/// immediately fatal and never retries it, even with `Duration::MAX` - it
-/// only retries the `Null` case internally. Retrying here with a short delay
-/// rides out that race instead of permanently disabling hot reload for the
-/// session. Same fix as `regen::wait_for_cs_task`/`multipliers::rune_multiplier`'s
-/// `wait_for_cs_task` (2026-08-24).
-fn wait_for_cs_task() -> &'static CSTaskImp {
-    loop {
-        match CSTaskImp::wait_for_instance(Duration::MAX) {
-            Ok(instance) => return instance,
-            Err(err) => {
-                logger::log(&format!("DropRate: CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
-                std::thread::sleep(Duration::from_secs(1));
-            }
-        }
     }
 }
 
@@ -301,7 +283,7 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 /// already-applied scale when toggled off mid-session, from the cached
 /// snapshot), which doesn't apply before this module has ever run once.
 pub fn run() {
-    let mut last_seen_generation = crate::regen::RELOAD_GENERATION.load(Ordering::Relaxed);
+    let mut last_seen_generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("DropRate.Enabled", true) {
         match wait_for_repository(Duration::from_secs(300)) {
@@ -319,22 +301,22 @@ pub fn run() {
         logger::log("DropRate.Enabled=false - skipping ItemLotParam_enemy entirely at startup.");
     }
 
-    let cs_task = wait_for_cs_task();
+    let cs_task = crate::task::wait_for_cs_task("DropRate");
     let _handle = cs_task.run_recurring(
         move |_data: &eldenring::fd4::FD4TaskData| {
-            // Poll `regen::RELOAD_GENERATION` instead of calling
-            // `input::is_key_pressed(ReloadKey)` ourselves - see the module
-            // doc comment on that static for why: it debounces per VK code
-            // in one map shared by every caller, so a second caller checking
-            // the same key `regen` already checked this frame would always
-            // see `false`, never picking up a reload at all.
-            let generation = crate::regen::RELOAD_GENERATION.load(Ordering::Relaxed);
+            // Poll `reload::RELOAD_GENERATION` instead of calling
+            // `input::is_key_pressed(ReloadKey)` ourselves - see that
+            // module's doc comment for why: it debounces per VK code in one
+            // map shared by every caller, so a second caller checking the
+            // same key `reload` already checked this frame would always see
+            // `false`, never picking up a reload at all.
+            let generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
             if generation == last_seen_generation {
                 return;
             }
             last_seen_generation = generation;
 
-            if crate::regen::main_player_chr_ins_ptr().is_none() {
+            if crate::player::main_player_chr_ins_ptr().is_none() {
                 logger::log("DropRate: not in-world yet, reload skipped.");
                 return;
             }
