@@ -367,9 +367,31 @@ pub mod weight_multiplier {
         body
     }
 
+    /// Retries the AOB scan every [SCAN_RETRY_INTERVAL] instead of a single
+    /// attempt - the game's own anti-tamper unpacking/relocation may not be
+    /// finished yet when this runs, and unlike `regen`/`rune_reward`/
+    /// `super::rune_multiplier`'s `wait_for_cs_task`, a failed scan here has
+    /// no other retry path: `install` is only ever called once. Gives up
+    /// (returns `None`) only after `timeout` - a real "pattern doesn't exist
+    /// anymore" (game updated) still fails eventually, just not on the first
+    /// unlucky poll.
+    fn wait_for_anchor(timeout: Duration) -> Option<*mut u8> {
+        let mut waited = Duration::ZERO;
+        loop {
+            if let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) {
+                return Some(anchor);
+            }
+            if waited >= timeout {
+                return None;
+            }
+            std::thread::sleep(SCAN_RETRY_INTERVAL);
+            waited += SCAN_RETRY_INTERVAL;
+        }
+    }
+
     fn install() -> bool {
-        let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) else {
-            logger::log("WeightMultiplier: ERROR - weight-summing-loop anchor pattern not found. Game may have been updated - re-check ANCHOR_PATTERN.");
+        let Some(anchor) = wait_for_anchor(ANCHOR_SCAN_TIMEOUT) else {
+            logger::log("WeightMultiplier: ERROR - weight-summing-loop anchor pattern not found within the timeout. Game may have been updated - re-check ANCHOR_PATTERN.");
             return false;
         };
         let target = unsafe { anchor.add(ANCHOR_TO_TARGET) };
@@ -387,21 +409,22 @@ pub mod weight_multiplier {
         true
     }
 
-    // Same fixed 5s wait `WeightMultiplier`'s standalone crate exposes as
-    // `InitialDelaySeconds` - the AOB scan below has no retry loop (unlike
-    // `regen`/`rune_reward`/`super::rune_multiplier`'s `wait_for_cs_task`), so
-    // if it runs before the game's own anti-tamper unpacking/relocation finishes,
-    // it fails to find the pattern and stays disabled for the rest of the
-    // session. Not exposed as its own ini key here - SomeTweaks has no other
-    // module that needs a startup delay, so one more knob isn't worth it.
-    const INITIAL_DELAY: Duration = Duration::from_secs(5);
+    // How often [wait_for_anchor] retries the AOB scan, and how long it keeps
+    // retrying before giving up. `WeightMultiplier`'s standalone crate instead
+    // used a single fixed `InitialDelaySeconds=5` wait with no retry - replaced
+    // here with polling so a slow/loaded machine (game still unpacking/
+    // relocating past 5s) doesn't lose this feature for the whole session, and
+    // a fast one doesn't wait longer than it needs to. Not exposed as ini keys
+    // - SomeTweaks has no other module that needs this kind of startup tuning,
+    // so more knobs aren't worth it.
+    const SCAN_RETRY_INTERVAL: Duration = Duration::from_millis(500);
+    const ANCHOR_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 
-    /// Waits [INITIAL_DELAY], then installs the weight-scaling hook once. Meant
-    /// to run on its own worker thread spawned from `DllMain`; returns once done
-    /// (no per-tick or hotkey-watching loop for this module).
+    /// Installs the weight-scaling hook once (retrying the AOB scan for up to
+    /// [ANCHOR_SCAN_TIMEOUT] - see [wait_for_anchor]). Meant to run on its own
+    /// worker thread spawned from `DllMain`; returns once done (no per-tick or
+    /// hotkey-watching loop for this module).
     pub fn run() {
-        std::thread::sleep(INITIAL_DELAY);
-
         init_weight_factor();
 
         if !install() {

@@ -86,7 +86,7 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
         match CSTaskImp::wait_for_instance(Duration::MAX) {
             Ok(instance) => return instance,
             Err(err) => {
-                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
+                logger::log(&format!("Rune Reward: CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
                 std::thread::sleep(Duration::from_secs(1));
             }
         }
