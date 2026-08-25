@@ -13,9 +13,10 @@ Regen.PerTick.HP=0.5
 Regen.PerTick.FP=1
 Regen.PerTick.Stamina=5
 
-[Regen Per Hit]                 
+[Regen Per Hit]
 Regen.PerHit.Enabled=false
 Regen.PerHit.Trigger=0          ; 0 = flat points, 1 = percent of max stat, 2 = percent of damage dealt
+Regen.PerHit.DamageType=0       ; 0 = melee hits only, 1 = ranged/spell hits only, 2 = both
 Regen.PerHit.HP=0.5
 Regen.PerHit.FP=1
 Regen.PerHit.Stamina=5[/code]
@@ -45,6 +46,10 @@ Regen.PerHit.Stamina=5[/code]
 
 [size=4][b]Changelog[/b][/size]
 
+[b]2.1.0[/b]
+[list]
+[*]On-hit healing can now be set to melee only, ranged/spells only, or both (was melee only).[/*]
+[/list]
 [b]2.0.0[/b]
 [list]
 [*]Added Stamina restore on hit.[/*]
