@@ -122,6 +122,30 @@ Vì đổi tên/cấu trúc key hoàn toàn, `config::migrate()` (xem
 tiên sau khi cập nhật DLL - giá trị cũ không mất, nhưng người dùng cần tự
 copy sang key mới nếu muốn giữ cấu hình đã tùy chỉnh.
 
+## Thêm `Regen.PerHit.DamageType` - tùy chọn tính cả đòn phép (2026-08-25)
+
+Từ bản C++ gốc (mục "Chỉ hồi máu khi đánh bằng vũ khí, không tính phép" bên
+dưới), Regen Per Hit luôn lọc bỏ đòn từ phép/đạn (`sourceType==3`), chỉ tính
+đòn vũ khí cận chiến (`sourceType==1`) - tránh việc spam phép rẻ cũng được
+thưởng hồi máu như đánh cận chiến. Có người dùng (phản hồi trên Nexus) muốn
+dùng chính cơ chế này để "cycle" FP: cast phép rẻ để hồi FP, dùng FP đó cast
+phép đắt hơn - việc này không làm được vì bộ lọc luôn loại phép ra.
+
+Thêm key `Regen.PerHit.DamageType` (0/1/2) để chọn loại sát thương nào được
+tính, độc lập với `Trigger`:
+
+- `0` (mặc định, giữ hành vi cũ): chỉ đòn cận chiến.
+- `1`: chỉ đòn tầm xa/phép.
+- `2`: cả hai.
+
+Đây là 1 điều kiện chung cho cả 3 stat (Hp/Fp/Stamina) trong `[Regen Per
+Hit]`, không tách riêng "chỉ Fp hồi từ phép" như yêu cầu gốc - đơn giản hơn,
+đủ dùng cho use-case "cast rẻ hồi Fp để cast đắt" nếu người dùng chỉ cấu
+hình `Regen.PerHit.FP` (để `HP`/`Stamina` = 0) và đặt `DamageType=1` hoặc
+`2`. Implementation: `is_weapon_damage_hit()` cũ đổi tên thành
+`matches_damage_type()`, nhận thêm tham số `damage_type` thay vì hard-code
+chỉ chấp nhận `sourceType==1`.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
