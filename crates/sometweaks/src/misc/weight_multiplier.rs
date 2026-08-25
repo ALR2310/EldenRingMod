@@ -20,16 +20,20 @@
 //! `WeightReductionPercent` (0-100, `factor = 1 - percent/100`) - no
 //! conversion needed, just clamp to non-negative.
 //!
-//! Deliberately has no hotkey-driven config reload, same as the standalone
-//! crate: change `WeightMultiplier` and restart the game to apply a new
-//! value - this hook has no per-tick loop of its own to piggyback a re-read
-//! on (unlike `rune::multiplier`, which already needs `CSTaskImp` for its
-//! own tick), and a live weight-scaling patch on a code path other mods
-//! (`RiseArcher`, etc.) might also hook isn't worth complicating for a value
-//! that's rarely tweaked mid-session.
+//! Hot-reload works the same way [`super::super::rune::multiplier`]'s does:
+//! the stub reads [WEIGHT_FACTOR] through a baked-in pointer on every
+//! weight recalculation, so updating that atomic after install takes
+//! effect immediately with no re-patching - a tick on `FrameBegin` just
+//! keeps it in sync with `WeightMultiplier` (2026-08-25, was previously
+//! "no hot-reload" here for lack of a tick loop to piggyback on; now uses
+//! [crate::task::wait_for_cs_task] the same way every other tick-based
+//! feature in this crate does).
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
+
+use eldenring::cs::CSTaskGroupIndex;
+use fromsoftware_shared::SharedTaskImpExt;
 
 use common::codepatch;
 use common::config;
@@ -49,16 +53,21 @@ const TARGET_INSTRUCTION_LEN: usize = 7; // "movaps xmm0,xmm6" (3) + "mov rbx,[r
 
 // The multiplier applied to the finished equip-load total, stored as raw f32
 // bits (no AtomicF32 in std) - read by the injected stub via an absolute
-// address baked into it at hook-install time. No hot-reload for this module,
-// so this is written once by [init_weight_factor] before [install] runs and
-// never again.
+// address baked into it at hook-install time. Re-synced every tick (see
+// `run`) so `General.ReloadKey` picks up a new value without re-patching.
 static WEIGHT_FACTOR: AtomicU32 = AtomicU32::new(0x3F80_0000); // 1.0f32 bit pattern
 
-fn init_weight_factor() {
+/// Re-reads `WeightMultiplier` from the shared config and stores it into
+/// [WEIGHT_FACTOR], logging only when it actually changed - called once at
+/// startup and then every tick, same pattern as
+/// `rune::multiplier::apply_multiplier`.
+fn apply_weight_factor() {
     let multiplier = config::get_double("WeightMultiplier", 1.0).max(0.0);
-    let factor = multiplier as f32;
-    WEIGHT_FACTOR.store(factor.to_bits(), Ordering::Relaxed);
-    logger::log(&format!("WeightMultiplier={multiplier:.3}"));
+    let factor = (multiplier as f32).to_bits();
+    let previous = WEIGHT_FACTOR.swap(factor, Ordering::Relaxed);
+    if previous != factor {
+        logger::log(&format!("WeightMultiplier={multiplier:.3}"));
+    }
 }
 
 fn build_stub(weight_factor_addr: u64) -> Vec<u8> {
@@ -112,11 +121,13 @@ fn install() -> bool {
 }
 
 /// Installs the weight-scaling hook once (retrying the AOB scan for up to
-/// [ANCHOR_SCAN_TIMEOUT]). Meant to run on its own worker thread spawned
-/// from `DllMain`; returns once done (no per-tick or hotkey-watching loop for
-/// this module).
+/// [ANCHOR_SCAN_TIMEOUT]), then re-applies `WeightMultiplier` every tick on
+/// the game's own `FrameBegin` task group for the rest of the DLL's
+/// lifetime - see [WEIGHT_FACTOR]'s doc comment for why hot-reload needs no
+/// re-patching. Meant to run on its own worker thread spawned from
+/// `DllMain`; never returns (except early, if the hook fails to install).
 pub fn run() {
-    init_weight_factor();
+    apply_weight_factor();
 
     if !install() {
         logger::log("WeightMultiplier disabled for this session (hook install failed).");
@@ -124,4 +135,16 @@ pub fn run() {
     }
 
     logger::log("WeightMultiplier: hook active.");
+
+    let cs_task = crate::task::wait_for_cs_task("WeightMultiplier");
+    let _handle = cs_task.run_recurring(
+        move |_data: &eldenring::fd4::FD4TaskData| {
+            apply_weight_factor();
+        },
+        CSTaskGroupIndex::FrameBegin,
+    );
+
+    loop {
+        std::thread::sleep(Duration::from_secs(60));
+    }
 }

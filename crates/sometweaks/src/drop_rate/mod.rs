@@ -230,34 +230,6 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
     changed
 }
 
-/// Waits (up to `timeout`) for `SoloParamRepository` - the live in-memory
-/// regulation.bin - to become available. Ported from `risearcher`'s own
-/// helper of the same name.
-/// Waits for both `SoloParamRepository` to resolve AND the player to
-/// actually be in the game world (`player::main_player_chr_ins_ptr`) before
-/// returning - `SoloParamRepository::instance_mut()` alone can return `Ok`
-/// as soon as the manager object exists (title/loading screen, well before
-/// its param tables are actually populated), same class of premature-ready
-/// singleton that `rune::reward::add_runes` already had to guard against for
-/// `GameDataMan` (2026-08-24) - crashed in-game here instead of just
-/// granting runes too early.
-fn wait_for_repository(timeout: Duration) -> Option<&'static mut SoloParamRepository> {
-    let step = Duration::from_millis(200);
-    let mut waited = Duration::ZERO;
-    loop {
-        if crate::player::main_player_chr_ins_ptr().is_some() {
-            if let Ok(repo) = unsafe { SoloParamRepository::instance_mut() } {
-                return Some(repo);
-            }
-        }
-        if waited >= timeout {
-            return None;
-        }
-        std::thread::sleep(step);
-        waited += step;
-    }
-}
-
 fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
     match mode {
         Mode::Multiplier(factor) => logger::log(&format!(
@@ -286,7 +258,7 @@ pub fn run() {
     let mut last_seen_generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("DropRate.Enabled", true) {
-        match wait_for_repository(Duration::from_secs(300)) {
+        match crate::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
             Some(repo) => {
                 logger::log("DropRate: SoloParamRepository instance acquired.");
                 let mode = build_mode();
