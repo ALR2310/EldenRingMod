@@ -150,6 +150,7 @@ pub fn run() {
             let on_hit_params = attack_hook::OnHitParams {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
                 trigger: config::get_int("Regen.PerHit.Trigger", 0),
+                damage_type: config::get_int("Regen.PerHit.DamageType", 0),
                 hp: config::get_double("Regen.PerHit.HP", 0.0),
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
                 stamina: config::get_double("Regen.PerHit.Stamina", 0.0),
