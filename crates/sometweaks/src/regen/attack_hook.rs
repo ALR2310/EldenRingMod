@@ -83,6 +83,7 @@ const HITINFO_DAMAGE_OFFSET: isize = 0x228;
 
 static ENABLED: AtomicI32 = AtomicI32::new(0);
 static TRIGGER: AtomicI32 = AtomicI32::new(0);
+static DAMAGE_TYPE: AtomicI32 = AtomicI32::new(0);
 
 // Raw Regen.PerHit.HP/FP/Stamina ini values, unscaled - what each means
 // depends on TRIGGER (see OnHitParams below). Stored as raw f64 bits since
@@ -107,10 +108,15 @@ fn load_f64(cell: &AtomicU64) -> f64 {
 ///   `Regen.PerTick.HP/FP/Stamina` under `Unit=1`.
 /// - `2` (Percent of damage dealt): `1` = 1% of the hit's own damage total
 ///   (true lifesteal, scales with how hard the hit landed).
+///
+/// `damage_type` (the `Regen.PerHit.DamageType` key) picks which hits count
+/// at all, independent of `trigger`: `0` = melee only, `1` = ranged/spells
+/// only, `2` = both.
 #[derive(Clone, Copy)]
 pub struct OnHitParams {
     pub enabled: bool,
     pub trigger: i32,
+    pub damage_type: i32,
     pub hp: f64,
     pub fp: f64,
     pub stamina: f64,
@@ -225,17 +231,24 @@ fn read_target(ctx: *const c_void) -> Option<*const c_void> {
     unsafe { Some(*(ctx.byte_offset(CTX_TARGET_OFFSET) as *const *const c_void)) }
 }
 
-fn is_weapon_damage_hit(hit_info: *const c_void) -> bool {
+/// Whether this hit's source type matches `damage_type` (the
+/// `Regen.PerHit.DamageType` ini value): `0` = melee only (`sourceType==1`),
+/// `1` = ranged/spells only (`sourceType==3`), `2` = either (no filtering).
+fn matches_damage_type(hit_info: *const c_void, damage_type: i32) -> bool {
+    if damage_type == 2 {
+        return true;
+    }
     if !looks_like_pointer(hit_info) {
         return false;
     }
     unsafe {
         let source_object = *(hit_info.byte_offset(HITINFO_SOURCE_OBJECT_OFFSET) as *const *const c_void);
         let source_type = get_source_object_type(source_object);
-        if source_type == 3 {
-            return false; // bullet/projectile-style source
+        if damage_type == 1 {
+            source_type == 3 // bullet/projectile-style source (most spells)
+        } else {
+            source_type == 1 // direct/melee hit
         }
-        source_type == 1
     }
 }
 
@@ -281,7 +294,9 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
         }
     }
 
-    if ENABLED.load(Ordering::Relaxed) == 0 || !is_weapon_damage_hit(hit_info) {
+    if ENABLED.load(Ordering::Relaxed) == 0
+        || !matches_damage_type(hit_info, DAMAGE_TYPE.load(Ordering::Relaxed))
+    {
         return;
     }
 
@@ -342,6 +357,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
 pub fn update_params(params: OnHitParams) {
     ENABLED.store(params.enabled as i32, Ordering::Relaxed);
     TRIGGER.store(params.trigger, Ordering::Relaxed);
+    DAMAGE_TYPE.store(params.damage_type, Ordering::Relaxed);
     store_f64(&HP_BITS, params.hp);
     store_f64(&FP_BITS, params.fp);
     store_f64(&STAMINA_BITS, params.stamina);

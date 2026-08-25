@@ -55,6 +55,16 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   mọi nơi kể cả khu vực ép xuống ngựa như Abyssal Woods, port từ
   `.docs/torent_anywhere/CavaloLivre_V7_Cardoso.dll` - **chưa test trong
   game, đang chờ test**) — xem `src/misc/torrent_anywhere.rs`.
+- `Rune.KeepOnDeath` (`[Rune Reward]`, mặc định `false` - giữ nguyên rune
+  hiện có khi chết thay vì bị đem vào vết máu, xem mục "Giải mã
+  DisableRuneLoss.dll..." bên dưới cho cách tìm ra field - **chưa test
+  trong game, đang chờ test**) — xem `src/rune/keep_on_death.rs`.
+- `UnlockAshesOfWar` (`[Misc]`, mặc định `false` - cho phép áp Ash of War
+  bất kỳ lên vũ khí bất kỳ (kể cả loại vốn không hỗ trợ AoW như
+  cung/khiên/đuốc), port từ mod Nexus "Unlocked Ashes of War and
+  Enchantments" (nexusmods.com/eldenring/mods/271) qua diff trực tiếp file
+  CSV của mod đó, xem mục nhật ký bên dưới - **chưa test trong game, đang
+  chờ test**) — xem `src/misc/unlock_ashes_of_war.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -78,6 +88,81 @@ của `fromsoftware-rs`/`libER`), các module còn lại (Spirit trong ini hiệ
 chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site of Grace khi cưỡi
 Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến trúc hiện tại (xem
 mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+
+## Thêm UnlockAshesOfWar, port từ Nexus mod #271 qua diff CSV (2026-08-25)
+
+Người dùng hỏi cách "unlock Ashes of War cho bất kỳ vũ khí nào" - lúc đầu
+tôi đoán field cần sửa là `EQUIP_PARAM_WEAPON_ST::disableGemAttr` (dựa theo
+tên field), nhưng người dùng đưa ra bản mod tham khảo thật:
+[Unlocked Ashes of War and Enchantments](https://www.nexusmods.com/eldenring/mods/271)
+(SmithBox project của mod này export sẵn 2 CSV, đã diff trực tiếp thay vì
+đoán qua tên field):
+
+- `EquipParamWeapon.csv`: **toàn bộ 3554/3554 hàng** (không có ngoại lệ,
+  kể cả đạn) đều bị đổi `gemMountType=2`, `isEnhance=1`. `disableGemAttr`
+  hoàn toàn KHÔNG bị đụng tới (357/3554 hàng vẫn giữ nguyên `disableGemAttr=1`)
+  → chứng minh suy đoán ban đầu của tôi sai: `disableGemAttr` không phải
+  cái khoá quyết định việc đổi AoW ở đá mài, `gemMountType`/`isEnhance`
+  mới đúng.
+- `EquipParamGem.csv` (bảng định nghĩa Ash of War, giữ tên "Gem" từ Dark
+  Souls 3): toàn bộ 44 cột `canMountWep_*` (Dagger/SwordNormal/.../Bow/
+  Staff/Shield/Torch/...) trên MỌI hàng đều bị set `1` - mọi AoW được coi
+  là tương thích với mọi loại vũ khí, kể cả loại chưa từng hỗ trợ AoW
+  trong bản gốc (cung, khiên, đuốc...).
+
+Cả 2 param (`EquipParamWeapon`, `EquipParamGem`) đã có sẵn marker trong
+`solo_params!` macro của `fromsoftware-rs`, y hệt cách `drop_rate.rs` dùng
+`ItemLotParam_enemy` - port thẳng bằng typed API, không cần AOB. Thêm
+`UnlockAshesOfWar` (`[Misc]`, mặc định `false`, áp dụng 1 lần lúc khởi
+động, không hot-reload - revert lại ~3800 hàng không đáng công sức cache
+gốc như `drop_rate` làm cho 1 field, restart game với `false` là quay lại
+vanilla) — xem `src/misc/unlock_ashes_of_war.rs`.
+
+Nhân tiện gộp `wait_for_repository` (chờ `SoloParamRepository` sẵn sàng +
+người chơi đã vào world) từ `drop_rate/mod.rs` vào
+`player::wait_for_solo_param_repository` dùng chung, vì giờ có 2 nơi cần
+đúng logic này.
+
+**Chưa xác nhận:** liệu game có animation/moveset thật cho AoW trên vũ khí
+vốn không hỗ trợ (cung, khiên...) hay không - việc bỏ check tương thích
+không tự tạo ra animation nếu engine chưa có sẵn. Cần test in-game.
+
+## Giải mã DisableRuneLoss.dll, thêm Rune.KeepOnDeath (2026-08-25)
+
+Giải mã `.docs/DisableRuneLoss.dll` bằng Ghidra headless (`DumpAll.java`)
+để xem mod này chống mất rune khi chết bằng cách nào. Phát hiện:
+
+- `DllMain` spawn 1 thread, quét AOB `b0 01 ? 8b ? e8 ? ? ? ? ? 8b ? ? ?
+  32 c0 ? 83 ? 28 c3` trong `eldenring.exe`, verify byte tại offset+5 là
+  `0xE8` rồi NOP 5 byte đó (xoá hẳn 1 lệnh `CALL`).
+- Dùng project Ghidra có sẵn cho `eldenring.exe`
+  (`D:/tmp/ghidra_eldenring`, script mới
+  `.docs/reverse_engineering/DumpRuneLossAOB.java`) để tìm đúng vị trí thật
+  trong game (RVA `0x594f6c`) và disassemble thật (không chỉ dựa vào
+  pseudocode của DLL): lệnh `CALL` bị NOP gọi tới 1 hàm nhận `(manager,
+  player_obj, true)`, hàm đó gọi tiếp nhiều hàm con rồi ghi 2-3 giá trị
+  float liên tiếp vào 1 struct - khớp với việc ghi toạ độ 3D vào 1 bản ghi
+  (nghi là bước tạo/ghi vết máu tại điểm chết).
+- Tra `fromsoftware-rs` (`crates/eldenring/src/cs/chr_ins.rs:453-465`) thì
+  thấy hàm đó gần như chắc chắn đọc đúng field mà crate đã có sẵn dạng
+  typed: `ChrIns::chr_flags1c6.has_dropped_runes()` - doc comment gốc của
+  crate: "Flags that prevents dead character from rewarding runes twice".
+
+**Kết luận:** không cần port kỹ thuật AOB-scan-and-NOP của
+`DisableRuneLoss.dll` - `fromsoftware-rs` đã expose đúng field cần dùng.
+Thêm `Rune.KeepOnDeath` (`[Rune Reward]`, mặc định `false`): tick trên
+`FrameBegin`, khi `chr_flags1c5.death_flag()` bật thì set luôn
+`chr_flags1c6.set_has_dropped_runes(true)` (idempotent, set lại mỗi tick
+trong lúc chết chứ không chỉ 1 lần) - làm game tưởng bước "đem rune vào vết
+máu" đã chạy nên bỏ qua bước đó. Không AOB, không patch byte, không phụ
+thuộc phiên bản game.
+
+**Rủi ro chưa xác nhận:** đây là polling theo frame (`FrameBegin`), không
+phải hook đồng bộ đúng thời điểm game đọc flag - nếu bước "đem rune đi"
+chạy trong đúng frame `death_flag` vừa bật thì có thể trễ 1 frame. Elden
+Ring có animation chết kéo dài vài giây trước khi thực sự trừ rune nên dự
+đoán vẫn đủ thời gian, nhưng **chưa test trong game** - xem
+`src/rune/keep_on_death.rs`.
 
 ## Restructure theo section ini + gom helper dùng chung (2026-08-25)
 
@@ -489,6 +574,32 @@ lúc trong editor khiến tab khó phân biệt hơn hẳn `regen.rs`. Không g�
 `regen/` (giữ thư mục để tránh trùng tên `attack_hook.rs` với
 `crates/autoregen/src/attack_hook.rs` nếu làm phẳng hoàn toàn) - chỉ đổi
 đúng 1 việc: tên file `mod.rs`.
+
+## Thêm `Regen.PerHit.DamageType` - tùy chọn tính cả đòn phép (2026-08-25)
+
+`Regen Per Hit` từ trước tới nay luôn lọc bỏ đòn từ phép/đạn
+(`sourceType==3`), chỉ tính đòn vũ khí cận chiến (`sourceType==1`) - tránh
+việc spam phép rẻ cũng được thưởng hồi máu như đánh cận chiến. Có người
+dùng (phản hồi trên Nexus, bên [`AutoRegen`](../autoregen) - cùng module
+`regen`) muốn dùng chính cơ chế này để "cycle" FP: cast phép rẻ để hồi FP,
+dùng FP đó cast phép đắt hơn - việc này không làm được vì bộ lọc luôn loại
+phép ra.
+
+Thêm key `Regen.PerHit.DamageType` (0/1/2) để chọn loại sát thương nào
+được tính, độc lập với `Trigger`:
+
+- `0` (mặc định, giữ hành vi cũ): chỉ đòn cận chiến.
+- `1`: chỉ đòn tầm xa/phép.
+- `2`: cả hai.
+
+Đây là 1 điều kiện chung cho cả 3 stat (Hp/Fp/Stamina), không tách riêng
+"chỉ Fp hồi từ phép" - đơn giản hơn, đủ dùng cho use-case "cast rẻ hồi Fp
+để cast đắt" nếu người dùng chỉ cấu hình `Regen.PerHit.FP` (để `HP`/
+`Stamina` = 0) và đặt `DamageType=1` hoặc `2`. Đổi cùng lúc và cùng cách
+với `AutoRegen` (xem README của mod đó) để 2 mod tiếp tục dùng chung thiết
+kế: `is_weapon_damage_hit()` cũ đổi tên thành `matches_damage_type()`,
+nhận thêm tham số `damage_type` thay vì hard-code chỉ chấp nhận
+`sourceType==1`.
 
 ## Gộp RuneMultiplier + WeightMultiplier vào 1 file, thống nhất tên module (2026-08-24)
 
