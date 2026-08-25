@@ -10,17 +10,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, WorldChrMan};
-use eldenring::util::input;
+use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
 mod attack_hook;
 
 use common::config;
-use common::input::parse_virtual_key;
 use common::logger;
-
-const VK_F5: i32 = 0x74;
 
 // How long a hit landed or taken counts as "in combat" for Regen.PerTick's
 // Trigger=1/2, before it's considered over. There's no reliable "is the
@@ -30,20 +26,6 @@ const VK_F5: i32 = 0x74;
 const COMBAT_TIMEOUT_MS: u64 = 15000;
 
 static LAST_COMBAT_ACTIVITY_MS: AtomicU64 = AtomicU64::new(0);
-
-// Bumped every time `General.ReloadKey` is detected and `config::load` runs
-// below - `eldenring::util::input::is_key_pressed` debounces per VK code in
-// a single shared map, not per caller (see `crates/eldenring/src/util/
-// input.rs`: `DEBOUNCE_MAP` keyed only by the key code), so if more than one
-// module called it for the same key, only whichever one happened to run
-// first that frame would ever see `true` - the other(s) would see `false`
-// forever (lost the "vé" - the shared debounce entry gets consumed on the
-// first read within its 250ms window). `regen` is the only module that
-// calls `is_key_pressed` for `ReloadKey`; other modules that need to react
-// to a reload (e.g. `drop_rate`, which can't just re-scan its whole param
-// table every tick like `rune_multiplier` cheaply can) poll this counter
-// instead of calling `is_key_pressed` themselves.
-pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 fn clock_start() -> Instant {
     static START: OnceLock<Instant> = OnceLock::new();
@@ -140,60 +122,17 @@ pub enum HealField {
     Stamina,
 }
 
-/// Returns the main player's `ChrIns` address, used by `attack_hook` to
-/// confirm a hit's attacker is the player themselves. `None` if not resolved
-/// yet (title screen, loading, ...).
-pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
-    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
-    world_chr_man
-        .main_player
-        .as_ref()
-        .map(|p| &p.chr_ins as *const _ as *const u8)
-}
-
-/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
-/// immediately fatal and never retries it, even with `Duration::MAX` - it
-/// only retries the `Null` case internally. `InvalidRva` fires whenever the
-/// version-specific RVA lookup runs before the game executable has finished
-/// unpacking/relocating (e.g. Arxan), which is a timing race against how
-/// early this DLL's worker thread happens to start. Retrying here with a
-/// short delay rides out that race instead of permanently disabling the mod
-/// for the session on a one-off early poll. Same fix as PassiveRunes'
-/// `wait_for_cs_task` (2026-08-24).
-fn wait_for_cs_task() -> &'static CSTaskImp {
-    loop {
-        match CSTaskImp::wait_for_instance(Duration::MAX) {
-            Ok(instance) => return instance,
-            Err(err) => {
-                logger::log(&format!("Regen: CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
-                std::thread::sleep(Duration::from_secs(1));
-            }
-        }
-    }
-}
-
 /// Registers the Regen.* tick as a recurring task on the game's own
-/// `FrameBegin` task group and blocks the calling thread forever watching for
-/// `General.ReloadKey`. Meant to run on its own worker thread spawned from
-/// `DllMain`; never returns.
-pub fn run(ini_path: String) {
-    let cs_task = wait_for_cs_task();
+/// `FrameBegin` task group. Meant to run on its own worker thread spawned
+/// from `DllMain`; never returns.
+pub fn run() {
+    let cs_task = crate::task::wait_for_cs_task("Regen");
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
     let _handle = cs_task.run_recurring(
         move |data: &eldenring::fd4::FD4TaskData| {
-            // General.ReloadKey - already debounced by eldenring::util::input,
-            // so this fires once per physical press regardless of how many
-            // frames the key stays down.
-            let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
-            if input::is_key_pressed(reload_key) {
-                config::load(&ini_path);
-                RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
-                logger::log("Config reloaded (hotkey pressed).");
-            }
-
             // Regen.PerTick.Trigger picks which side of combat the tick heal
             // below applies on: 0 = Always, 1 = out of combat only, 2 = in
             // combat only. Read up front since it also decides whether the
@@ -215,7 +154,7 @@ pub fn run(ini_path: String) {
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
                 stamina: config::get_double("Regen.PerHit.Stamina", 0.0),
             };
-            let chr_resolved = main_player_chr_ins_ptr().is_some();
+            let chr_resolved = crate::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
                 attack_hook_installed = attack_hook::install(on_hit_params);

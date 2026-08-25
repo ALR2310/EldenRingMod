@@ -27,18 +27,20 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 
 - `Regen` (hồi HP/FP/Stamina theo thời gian + theo đòn đánh trúng, cả
   `Regen.PerTick.*`/`Regen.PerHit.*` — **đã test trong game, hoạt động
-  đúng**) — xem `src/regen.rs` + `src/regen/attack_hook.rs`.
+  đúng**) — xem `src/regen/mod.rs` + `src/regen/attack_hook.rs`.
 - `Rune Reward` (cộng rune theo thời gian + bonus mốc thời gian, port từ
   [`PassiveRunes`](../passiverunes) — **đã test trong game, hoạt động
-  đúng**) — xem `src/rune_reward.rs`.
+  đúng**) — xem `src/rune/reward.rs`.
 - `Rune.Multiplier` (`[Rune Reward]`, nhân hệ số rune nhận được từ mọi
   nguồn, port từ [`RuneMultiplier`](../runemultiplier) — **đã test trong
-  game, hoạt động đúng**) và `WeightMultiplier` (`[Misc]`, nhân hệ số
-  Trọng Tải, ảnh hưởng cả số hiển thị lẫn roll-type thực tế, port từ
+  game, hoạt động đúng**, xem `src/rune/multiplier.rs`) và
+  `WeightMultiplier` (`[Misc]`, nhân hệ số Trọng Tải, ảnh hưởng cả số hiển
+  thị lẫn roll-type thực tế, port từ
   [`WeightMultiplier`](../weightmultiplier) — **đã test trong game, hoạt
-  động đúng**) — 2 hook nhỏ, độc lập nhau, gộp chung vào
-  `src/multipliers.rs` (module con `rune_multiplier`/`weight_multiplier`,
-  xem mục 2026-08-24 bên dưới).
+  động đúng**, xem `src/misc/weight_multiplier.rs`) — 2 hook nhỏ, độc lập
+  nhau, tách file riêng theo section ini kể từ 2026-08-25 (xem mục
+  "Restructure theo section ini" bên dưới; trước đó gộp chung vào
+  `src/multipliers.rs`, xem mục 2026-08-24).
 - `Drop Rate` (`DropRate.Multiplier`/`DropRate.ChancePercent`, chọn 1 trong
   2 qua `DropRate.Mode` - nhân hệ số hoặc ép cứng % tổng cộng "rớt được
   item gì đó" khi giết quái qua `ItemLotParam_enemy`, có hot-reload —
@@ -47,11 +49,12 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   `ChancePercent=100` → rớt cùng lúc toàn bộ ~6 item gắn với 1 con Godrick
   Soldier (đúng vì mỗi row lot của quái là 1 lượt roll độc lập, `100` ép
   từng row); `ChancePercent=1` → 2/3 lần giết có rớt (mẫu quá nhỏ để kết
-  luận % chính xác, nhưng không có dấu hiệu sai) — xem `src/drop_rate.rs`.
-- `Misc.TorrentAnywhere` (`[Misc]`, mặc định `false` - cho phép cưỡi
-  Torrent ở mọi nơi kể cả khu vực ép xuống ngựa như Abyssal Woods, port từ
+  luận % chính xác, nhưng không có dấu hiệu sai) — xem
+  `src/drop_rate/mod.rs`.
+- `TorrentAnywhere` (`[Misc]`, mặc định `false` - cho phép cưỡi Torrent ở
+  mọi nơi kể cả khu vực ép xuống ngựa như Abyssal Woods, port từ
   `.docs/torent_anywhere/CavaloLivre_V7_Cardoso.dll` - **chưa test trong
-  game, đang chờ test**) — xem `src/torrent_anywhere.rs`.
+  game, đang chờ test**) — xem `src/misc/torrent_anywhere.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -75,6 +78,62 @@ của `fromsoftware-rs`/`libER`), các module còn lại (Spirit trong ini hiệ
 chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site of Grace khi cưỡi
 Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến trúc hiện tại (xem
 mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
+
+## Restructure theo section ini + gom helper dùng chung (2026-08-25)
+
+Sau khi thêm `TorrentAnywhere`, `src/` bắt đầu khó nhìn: `multipliers.rs`
+gộp 2 tính năng không liên quan (`Rune.Multiplier` + `WeightMultiplier`)
+trong 1 file qua `pub mod` lồng nhau, và mỗi feature module lại tự copy 2
+đoạn code giống hệt nhau:
+
+- `wait_for_cs_task()` (retry loop cho `SystemInitError::InvalidRva` khi
+  `CSTaskImp::wait_for_instance` chưa sẵn sàng) - lặp lại y hệt ở
+  `regen.rs`, `multipliers.rs`, `drop_rate.rs`, `torrent_anywhere.rs`.
+- `wait_for_pattern`/`wait_for_anchor` (retry loop cho AOB scan) - lặp lại
+  giữa `multipliers.rs` (weight_multiplier) và `torrent_anywhere.rs`.
+
+Đồng thời `regen.rs` đang giữ 3 thứ **không phải riêng của Regen** mà các
+module khác lại phụ thuộc vào: `main_player_chr_ins_ptr()` (dùng bởi
+`rune_reward`, `drop_rate`), `RELOAD_GENERATION` (dùng bởi `drop_rate`), và
+việc theo dõi `General.ReloadKey` (chạy trong chính tick của Regen). Điều
+này biến Regen - vốn chỉ là 1 tính năng QoL độc lập - thành 1 dependency
+ngầm cho toàn bộ crate.
+
+**Đã đổi:**
+
+1. Tách 3 utility dùng chung ra khỏi `regen.rs` thành module riêng ở top
+   level (`src/`), không thuộc về feature nào:
+   - `src/player.rs`: `main_player_chr_ins_ptr()`.
+   - `src/reload.rs`: theo dõi `General.ReloadKey` + `RELOAD_GENERATION`,
+     chạy trên thread riêng của chính nó (spawn từ `lib.rs`), không còn
+     piggyback vào tick của Regen.
+   - `src/task.rs`: `wait_for_cs_task(tag: &str)`, tham số `tag` để log vẫn
+     phân biệt được module nào đang chờ.
+   - `common::memscan::wait_for_pattern_in_module()` (ở
+     [`shared`](../../shared), không phải `sometweaks`): gộp
+     `wait_for_pattern`/`wait_for_anchor`. Không đặt `player.rs`/`task.rs`/
+     `reload.rs` vào `shared` được vì crate đó cố tình **không** phụ thuộc
+     `eldenring` (xem comment đầu `shared/Cargo.toml`) để giữ tính
+     engine-agnostic - 3 module này cần `eldenring::cs::*` nên phải ở lại
+     trong `sometweaks`. Muốn dùng chung cho cả các mod khác trong workspace
+     (`autoregen`, `passiverunes`,...) thì cần 1 crate trung gian mới, chưa
+     làm vì ngoài phạm vi lần này.
+2. Tổ chức lại `src/` để mỗi section trong `SomeTweaks.ini` ứng với đúng 1
+   folder (có `mod.rs`):
+   - `src/regen/` (`mod.rs` + `attack_hook.rs`) - `[Regen Per Tick]`/
+     `[Regen Per Hit]`.
+   - `src/rune/` (`mod.rs`, `reward.rs`, `multiplier.rs`) - `[Rune Reward]`
+     (gồm cả `Rune.Multiplier`).
+   - `src/misc/` (`mod.rs`, `weight_multiplier.rs`, `torrent_anywhere.rs`) -
+     `[Misc]`. Gộp theo section ini, không phải theo code dùng chung - 2
+     module này vẫn không gọi vào nhau.
+   - `src/drop_rate/mod.rs` - `[Drop Rate]`, không có submodule con nhưng
+     đổi thành folder để đồng nhất quy ước với 3 nhóm trên.
+3. Xoá `src/multipliers.rs`, `src/rune_reward.rs`, `src/torrent_anywhere.rs`
+   (nội dung đã chuyển vào cấu trúc mới ở trên).
+
+Hành vi runtime không đổi - đây thuần là refactor tổ chức code, đã build
+lại toàn bộ workspace (`cargo build`) sạch, không warning.
 
 ## Thêm Misc.TorrentAnywhere, port từ CavaloLivre_V7_Cardoso.dll (2026-08-25)
 

@@ -1,13 +1,16 @@
 #![allow(non_snake_case)] // crate name is "SomeTweaks" to control the output DLL's filename
 
 mod drop_rate;
-mod multipliers;
+mod misc;
+mod player;
 mod regen;
-mod rune_reward;
-mod torrent_anywhere;
+mod reload;
+mod rune;
+mod task;
 
 use common::{config, dll_dir, logger};
-use multipliers::{rune_multiplier, weight_multiplier};
+use misc::{torrent_anywhere, weight_multiplier};
+use rune::{multiplier as rune_multiplier, reward as rune_reward};
 
 // SomeTweaks.ini is embedded verbatim into the binary at compile time via
 // include_str! - no resource compiler step needed. This is the single source
@@ -41,18 +44,20 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        // Rune Reward and RuneMultiplier each run on their own worker
-        // thread/task, independent of Regen's tick - they read the same
-        // shared config map, so they pick up a General.ReloadKey reload
-        // without needing to watch the key themselves. WeightMultiplier
-        // installs its hook once and returns - no tick/hotkey loop at all.
+        // `reload` owns General.ReloadKey watching for the whole DLL (see its
+        // module doc comment for why only one module may call
+        // eldenring::util::input::is_key_pressed for the same key) - every
+        // other feature below runs independently, on its own worker thread,
+        // reading the same shared config map.
+        std::thread::spawn(move || reload::run(ini_path));
+
         std::thread::spawn(rune_reward::run);
         std::thread::spawn(rune_multiplier::run);
         std::thread::spawn(weight_multiplier::run);
         std::thread::spawn(drop_rate::run);
         std::thread::spawn(torrent_anywhere::run);
 
-        regen::run(ini_path);
+        regen::run();
     });
 
     true

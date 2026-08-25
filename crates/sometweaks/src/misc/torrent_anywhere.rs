@@ -40,7 +40,7 @@
 
 use std::time::Duration;
 
-use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, ChrInsExt, WorldChrMan};
+use eldenring::cs::{CSTaskGroupIndex, ChrInsExt, WorldChrMan};
 use eldenring::fd4::FD4TaskData;
 use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
 
@@ -58,26 +58,6 @@ const APPLY_INTERVAL_MS: f64 = 1000.0;
 
 const SCAN_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// Retries an AOB scan every [SCAN_RETRY_INTERVAL] up to [SCAN_TIMEOUT] -
-/// same reasoning as `weight_multiplier`'s `wait_for_anchor`: these patches
-/// only ever run once at startup with no retry path of their own, so if the
-/// game's anti-tamper unpacking/relocation isn't finished yet on the first
-/// attempt, retrying instead of giving up immediately avoids losing the
-/// feature for the whole session over a one-off early poll.
-fn wait_for_pattern(pattern: &str) -> Option<*mut u8> {
-    let mut waited = Duration::ZERO;
-    loop {
-        if let Some(addr) = memscan::find_pattern_in_module(pattern) {
-            return Some(addr);
-        }
-        if waited >= SCAN_TIMEOUT {
-            return None;
-        }
-        std::thread::sleep(SCAN_RETRY_INTERVAL);
-        waited += SCAN_RETRY_INTERVAL;
-    }
-}
 
 /// Overwrites `patched.len()` bytes at `addr` with `patched` - a plain
 /// in-place replacement (no jump/stub), since both call sites below patch
@@ -131,7 +111,7 @@ const ABYSSAL_JMP_OPCODE: u8 = 0xEB;
 fn apply_code_patches() -> usize {
     let mut applied = 0;
 
-    match wait_for_pattern(AREA_LIST_CHECK_PATTERN) {
+    match memscan::wait_for_pattern_in_module(AREA_LIST_CHECK_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
         Some(addr) if unsafe { patch_bytes(addr, &AREA_LIST_CHECK_PATCHED) } => {
             logger::log(&format!("TorrentAnywhere: area_list_check patched at {addr:p}."));
             applied += 1;
@@ -139,7 +119,7 @@ fn apply_code_patches() -> usize {
         _ => logger::log("TorrentAnywhere: ERROR - area_list_check pattern not found/patch failed."),
     }
 
-    match wait_for_pattern(DIRECT_RIDE_CHECK_PATTERN) {
+    match memscan::wait_for_pattern_in_module(DIRECT_RIDE_CHECK_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
         Some(addr) if unsafe { patch_bytes(addr, &DIRECT_RIDE_CHECK_PATCHED) } => {
             logger::log(&format!("TorrentAnywhere: direct_ride_check patched at {addr:p}."));
             applied += 1;
@@ -147,7 +127,7 @@ fn apply_code_patches() -> usize {
         _ => logger::log("TorrentAnywhere: ERROR - direct_ride_check pattern not found/patch failed."),
     }
 
-    match wait_for_pattern(ABYSSAL_DISMOUNT_SKIP_PATTERN) {
+    match memscan::wait_for_pattern_in_module(ABYSSAL_DISMOUNT_SKIP_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
         Some(addr) if unsafe { patch_bytes(addr.add(ABYSSAL_JZ_OFFSET), &[ABYSSAL_JMP_OPCODE]) } => {
             logger::log(&format!("TorrentAnywhere: abyssal_forced_dismount_skip patched at {addr:p}."));
             applied += 1;
@@ -156,23 +136,6 @@ fn apply_code_patches() -> usize {
     }
 
     applied
-}
-
-/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
-/// immediately fatal and never retries it, even with `Duration::MAX` -
-/// retrying here rides out that race instead of permanently disabling the
-/// SpEffect-reapply tick for the session. Same fix as `regen::
-/// wait_for_cs_task`/`multipliers::rune_multiplier`'s (2026-08-24).
-fn wait_for_cs_task() -> &'static CSTaskImp {
-    loop {
-        match CSTaskImp::wait_for_instance(Duration::MAX) {
-            Ok(instance) => return instance,
-            Err(err) => {
-                logger::log(&format!("TorrentAnywhere: CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
-                std::thread::sleep(Duration::from_secs(1));
-            }
-        }
-    }
 }
 
 /// Patches the 2 area-restriction checks and the Abyssal Woods dismount
@@ -190,7 +153,7 @@ pub fn run() {
     let applied = apply_code_patches();
     logger::log(&format!("TorrentAnywhere: {applied}/3 code patch(es) applied."));
 
-    let cs_task = wait_for_cs_task();
+    let cs_task = crate::task::wait_for_cs_task("TorrentAnywhere");
     let mut elapsed_ms: f64 = 0.0;
 
     let _handle = cs_task.run_recurring(
