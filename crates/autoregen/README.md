@@ -146,6 +146,24 @@ hình `Regen.PerHit.FP` (để `HP`/`Stamina` = 0) và đặt `DamageType=1` ho�
 `matches_damage_type()`, nhận thêm tham số `damage_type` thay vì hard-code
 chỉ chấp nhận `sourceType==1`.
 
+## Fix bị vô hiệu hoá vĩnh viễn bởi `InvalidRva` (2026-08-26)
+
+Báo lỗi thật từ bình luận Nexus: `ERROR: CSTaskImp never became available
+(InvalidRva) - AutoRegen disabled for this session`. Nguyên nhân:
+`CSTaskImp::wait_for_instance` coi `SystemInitError::InvalidRva` là lỗi
+chết ngay, **không tự retry** dù truyền `Duration::MAX` (chỉ tự retry case
+`Null` bên trong nó) - `InvalidRva` xảy ra khi RVA lookup chạy trước lúc
+game giải nén/relocate xong (Arxan), tức là 1 cuộc đua timing với lúc
+thread của DLL này khởi động, không liên quan gì đến việc DLL đặt ở đâu
+hay máy người dùng yếu/mạnh.
+
+Cùng lỗi [`SomeTweaks`](../sometweaks) đã gặp và fix trước đó (xem README
+của nó, mục 2026-08-24) - port nguyên `wait_for_cs_task()` (retry sau 1s
+thay vì bỏ cuộc ngay) từ `src/task.rs` của SomeTweaks vào thẳng
+`src/regen.rs` (AutoRegen chỉ có 1 chỗ gọi `CSTaskImp::wait_for_instance`
+nên không cần tách module riêng như SomeTweaks - crate đó có nhiều feature
+module cùng cần dùng lại).
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
