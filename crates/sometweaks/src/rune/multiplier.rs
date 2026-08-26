@@ -32,7 +32,6 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
 use eldenring::cs::CSTaskGroupIndex;
-use fromsoftware_shared::SharedTaskImpExt;
 
 use common::config;
 use common::logger;
@@ -242,11 +241,13 @@ pub fn run() {
     }
 
     let cs_task = crate::task::wait_for_cs_task("RuneMultiplier");
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "RuneMultiplier",
+        CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
             apply_multiplier();
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     loop {

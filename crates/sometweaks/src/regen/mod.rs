@@ -11,7 +11,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use fromsoftware_shared::FromStatic;
 
 mod attack_hook;
 
@@ -131,7 +131,10 @@ pub fn run() {
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "Regen",
+        CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
             // Regen.PerTick.Trigger picks which side of combat the tick heal
             // below applies on: 0 = Always, 1 = out of combat only, 2 = in
@@ -204,7 +207,6 @@ pub fn run() {
             heal_main_player(HealField::Fp, fp_flat, fp_fraction);
             heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     logger::log("Regen tick registered on CSTaskGroupIndex::FrameBegin.");

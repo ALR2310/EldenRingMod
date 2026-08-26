@@ -33,7 +33,6 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use eldenring::cs::CSTaskGroupIndex;
-use fromsoftware_shared::SharedTaskImpExt;
 
 use common::codepatch;
 use common::config;
@@ -137,11 +136,13 @@ pub fn run() {
     logger::log("WeightMultiplier: hook active.");
 
     let cs_task = crate::task::wait_for_cs_task("WeightMultiplier");
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "WeightMultiplier",
+        CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
             apply_weight_factor();
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     loop {

@@ -23,7 +23,8 @@ use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, GameDataMan, WorldChrMan};
 use eldenring::util::input;
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use eldenring::util::system::wait_for_system_init;
+use fromsoftware_shared::{FromStatic, Program, RecurringTaskHandle, SharedTaskImpExt};
 
 use common::config;
 use common::input::parse_virtual_key;
@@ -86,6 +87,25 @@ fn add_runes(amount: u32) -> bool {
     true
 }
 
+/// Waits for the earliest reliable "the game process is actually alive"
+/// signal (`CSWindow`'s global hInstance, populated right after CRT init -
+/// see the crate's own doc comment on this function), retrying past
+/// `SystemInitError::InvalidRva`/`Timeout` instead of giving up. Ported
+/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
+/// (2026-08-26) - `fromsoftware-rs` already ships this helper for exactly
+/// this purpose, PassiveRunes just hadn't called it before, going straight
+/// for `CSTaskImp` instead.
+fn wait_for_system_init_until_ready() {
+    let program = Program::current();
+    loop {
+        if wait_for_system_init(&program, Duration::from_secs(5)).is_ok() {
+            return;
+        }
+        logger::log("System not initialized yet, retrying...");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
 /// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
 /// immediately fatal and never retries it, even with `Duration::MAX` - it
 /// only retries the `Null` case internally. `InvalidRva` fires whenever the
@@ -96,6 +116,8 @@ fn add_runes(amount: u32) -> bool {
 /// rides out that race instead of permanently disabling the mod for the
 /// session on a one-off early poll.
 fn wait_for_cs_task() -> &'static CSTaskImp {
+    wait_for_system_init_until_ready();
+
     loop {
         match CSTaskImp::wait_for_instance(Duration::MAX) {
             Ok(instance) => return instance,
@@ -105,6 +127,30 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
             }
         }
     }
+}
+
+/// Registers `f` as a recurring task the same way `cs_task.run_recurring`
+/// does, but catches any panic `f` raises for a given frame instead of
+/// letting it unwind into the game's own call stack. Ported from
+/// `.docs/UltimatePassiveRegeneration` via `sometweaks::task` (2026-08-26).
+/// Requires `[profile.release]`'s `panic = "abort"` to be off (see
+/// workspace `Cargo.toml`).
+fn run_recurring_safe<F>(
+    cs_task: &'static CSTaskImp,
+    group: CSTaskGroupIndex,
+    mut f: F,
+) -> RecurringTaskHandle<eldenring::fd4::FD4TaskData>
+where
+    F: FnMut(&eldenring::fd4::FD4TaskData) + 'static + Send,
+{
+    cs_task.run_recurring(
+        move |data: &eldenring::fd4::FD4TaskData| {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
+                logger::log("PassiveRunes tick panicked, skipped this frame.");
+            }
+        },
+        group,
+    )
 }
 
 /// Registers the passive-rune tick as a recurring task on the game's own
@@ -129,7 +175,9 @@ pub fn run(ini_path: String) {
     let mut session_elapsed_ms: f64 = 0.0;
     let mut interval_elapsed_ms: f64 = 0.0;
 
-    let _handle = cs_task.run_recurring(
+    let _handle = run_recurring_safe(
+        cs_task,
+        CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
             // General.ReloadKey - already debounced by eldenring::util::input,
             // so this fires once per physical press regardless of how many
@@ -194,7 +242,6 @@ pub fn run(ini_path: String) {
                 ));
             }
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     logger::log("PassiveRunes tick registered on CSTaskGroupIndex::FrameBegin.");

@@ -164,6 +164,33 @@ thay vì bỏ cuộc ngay) từ `src/task.rs` của SomeTweaks vào thẳng
 nên không cần tách module riêng như SomeTweaks - crate đó có nhiều feature
 module cùng cần dùng lại).
 
+## Pin fromsoftware-rs 0.14.0, thêm wait_for_system_init (2026-08-26)
+
+Áp dụng lại 2 trong 3 cải tiến ổn định đã làm cho `sometweaks` (xem README
+của nó cùng ngày) sang crate này - `Regen.PerHit` (panic-safety qua
+`run_recurring_safe`) đã có sẵn ở dạng khác từ trước (SEH quanh
+`AttackHook`), còn 2 việc dưới đây trước đó chưa có:
+
+- **Version pin**: `eldenring`/`fromsoftware-shared` giờ khai báo 1 lần ở
+  workspace `Cargo.toml` gốc, pin về bản crates.io `0.14.0` thay vì tracking
+  git HEAD - áp dụng chung cho toàn bộ workspace, không cần sửa gì riêng ở
+  crate này.
+- **`wait_for_system_init`**: `wait_for_cs_task()` trong `src/regen.rs` giờ
+  gọi `wait_for_system_init_until_ready()` (chờ `CSWindow` hInstance - tín
+  hiệu "process game còn sống" sớm nhất, ngay sau CRT init) **trước** vòng
+  lặp retry `CSTaskImp::wait_for_instance` đã có sẵn (fix `InvalidRva` ngày
+  2026-08-26 phía trên) - 2 bước riêng biệt, không thể thay thế cho nhau (xác
+  nhận qua đọc `.docs/UltimatePassiveRegeneration` - vẫn giữ cả 2 bước tuần
+  tự).
+- **Panic safety cho tick chính**: thêm `run_recurring_safe()` bọc quanh
+  `cs_task.run_recurring(...)` trong `regen.rs` - bắt panic mỗi frame, log
+  rồi bỏ qua thay vì crash cả game. Cần workspace `Cargo.toml` bỏ
+  `panic = "abort"` ở `[profile.release]` (mặc định về `"unwind"`) thì
+  `catch_unwind` mới có tác dụng trong bản release - đã sửa ở mức workspace.
+
+Không đụng đến ini/hành vi gameplay, chỉ cải thiện độ ổn định lúc khởi động
+và chống crash.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,

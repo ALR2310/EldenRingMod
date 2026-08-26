@@ -34,7 +34,8 @@ use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, CSTaskImp};
 use eldenring::util::input;
-use fromsoftware_shared::SharedTaskImpExt;
+use eldenring::util::system::wait_for_system_init;
+use fromsoftware_shared::{Program, RecurringTaskHandle, SharedTaskImpExt};
 
 use common::config;
 use common::input::parse_virtual_key;
@@ -225,6 +226,73 @@ fn install(debug_log: bool) -> bool {
     true
 }
 
+/// Waits for the earliest reliable "the game process is actually alive"
+/// signal (`CSWindow`'s global hInstance, populated right after CRT init -
+/// see the crate's own doc comment on this function), retrying past
+/// `SystemInitError::InvalidRva`/`Timeout` instead of giving up. Ported
+/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
+/// (2026-08-26) - `fromsoftware-rs` already ships this helper for exactly
+/// this purpose, RuneMultiplier just hadn't called it before, going
+/// straight for `CSTaskImp` instead.
+fn wait_for_system_init_until_ready() {
+    let program = Program::current();
+    loop {
+        if wait_for_system_init(&program, Duration::from_secs(5)).is_ok() {
+            return;
+        }
+        logger::log("System not initialized yet, retrying...");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
+/// immediately fatal and never retries it, even with `Duration::MAX` - it
+/// only retries the `Null` case internally. `InvalidRva` fires whenever the
+/// version-specific RVA lookup runs before the game executable has finished
+/// unpacking/relocating (e.g. Arxan), a timing race against how early this
+/// DLL's worker thread happens to start. Retrying here with a short delay
+/// rides out that race instead of permanently disabling hot-reload for the
+/// session on a one-off early poll (2026-08-26) - this used to give up
+/// immediately on the first `InvalidRva`, same bug class fixed elsewhere
+/// in this project (AutoRegen/PassiveRunes/SomeTweaks).
+fn wait_for_cs_task() -> &'static CSTaskImp {
+    wait_for_system_init_until_ready();
+
+    loop {
+        match CSTaskImp::wait_for_instance(Duration::MAX) {
+            Ok(instance) => return instance,
+            Err(err) => {
+                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        }
+    }
+}
+
+/// Registers `f` as a recurring task the same way `cs_task.run_recurring`
+/// does, but catches any panic `f` raises for a given frame instead of
+/// letting it unwind into the game's own call stack. Ported from
+/// `.docs/UltimatePassiveRegeneration` via `sometweaks::task` (2026-08-26).
+/// Requires `[profile.release]`'s `panic = "abort"` to be off (see
+/// workspace `Cargo.toml`).
+fn run_recurring_safe<F>(
+    cs_task: &'static CSTaskImp,
+    group: CSTaskGroupIndex,
+    mut f: F,
+) -> RecurringTaskHandle<eldenring::fd4::FD4TaskData>
+where
+    F: FnMut(&eldenring::fd4::FD4TaskData) + 'static + Send,
+{
+    cs_task.run_recurring(
+        move |data: &eldenring::fd4::FD4TaskData| {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
+                logger::log("RuneMultiplier tick panicked, skipped this frame.");
+            }
+        },
+        group,
+    )
+}
+
 /// Installs the hook, then watches `ReloadKey` on the game's own
 /// `FrameBegin` task group for the rest of the DLL's lifetime, reloading
 /// `RuneMultiplier.ini` on each press. Meant to run on its own worker thread
@@ -242,17 +310,11 @@ pub fn run(ini_path: String, dir: String) {
     let hotkey_name = config::get_string("ReloadKey", "F5");
     logger::log(&format!("Hook active. Press {hotkey_name} in-game to reload RuneMultiplier.ini."));
 
-    let cs_task = match CSTaskImp::wait_for_instance(Duration::MAX) {
-        Ok(instance) => instance,
-        Err(err) => {
-            logger::log(&format!("ERROR: CSTaskImp never became available ({err:?}) - hot-reload disabled, hook stays active with its startup config."));
-            loop {
-                std::thread::sleep(Duration::from_secs(60));
-            }
-        }
-    };
+    let cs_task = wait_for_cs_task();
 
-    let _handle = cs_task.run_recurring(
+    let _handle = run_recurring_safe(
+        cs_task,
+        CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
             let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
@@ -264,7 +326,6 @@ pub fn run(ini_path: String, dir: String) {
                 logger::log("Config reloaded (hotkey pressed).");
             }
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     loop {

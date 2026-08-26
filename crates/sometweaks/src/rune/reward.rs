@@ -15,7 +15,7 @@
 use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, GameDataMan};
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use fromsoftware_shared::FromStatic;
 
 use common::config;
 use common::logger;
@@ -93,7 +93,10 @@ pub fn run() {
     let mut session_elapsed_ms: f64 = 0.0;
     let mut interval_elapsed_ms: f64 = 0.0;
 
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "Rune Reward",
+        CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
             // Rune.Passive.Enabled=false turns off both the per-interval
             // grant and the milestone bonuses below - same "whole section"
@@ -147,7 +150,6 @@ pub fn run() {
                 ));
             }
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     logger::log("Rune Reward tick registered on CSTaskGroupIndex::FrameBegin.");

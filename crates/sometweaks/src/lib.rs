@@ -6,11 +6,16 @@ mod player;
 mod regen;
 mod reload;
 mod rune;
+mod spirit;
 mod task;
 
 use common::{config, dll_dir, logger};
 use misc::{torrent_anywhere, unlock_ashes_of_war, unlock_enchantments, weight_multiplier};
 use rune::{keep_on_death as rune_keep_on_death, multiplier as rune_multiplier, reward as rune_reward};
+use spirit::{
+    color as spirit_color, regen as spirit_regen, summon_anywhere as spirit_summon_anywhere,
+    summon_count as spirit_summon_count,
+};
 
 // SomeTweaks.ini is embedded verbatim into the binary at compile time via
 // include_str! - no resource compiler step needed. This is the single source
@@ -59,6 +64,10 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(torrent_anywhere::run);
         std::thread::spawn(unlock_ashes_of_war::run);
         std::thread::spawn(unlock_enchantments::run);
+        std::thread::spawn(spirit_color::run);
+        std::thread::spawn(spirit_regen::run);
+        std::thread::spawn(spirit_summon_anywhere::run);
+        std::thread::spawn(spirit_summon_count::run);
 
         regen::run();
     });
