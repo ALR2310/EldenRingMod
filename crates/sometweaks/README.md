@@ -70,9 +70,32 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
   (enchant) lên vũ khí bất kỳ, phép tạo hào quang gây thêm sát thương như
   Bloodflame Blade/Order's Blade/Scholar's Armament, KHÔNG phải
   affinity/thuộc tính vũ khí, tách riêng khỏi `UnlockAshesOfWar` vì 2 field
-  khác nhau trong param, xem mục nhật ký bên dưới - **chưa test, đang chờ
-  test**) — xem `src/misc/unlock_ashes_of_war.rs` +
+  khác nhau trong param, xem mục nhật ký bên dưới - **đã test trong game,
+  hoạt động đúng**) — xem `src/misc/unlock_ashes_of_war.rs` +
   `src/misc/unlock_enchantments.rs`.
+- `Spirit.Color` (`[Spirit]`, mặc định `false` - bỏ màu ma trên linh hồn
+  triệu hồi, port từ `.docs/x10_summon/er10x.dll` nhưng đơn giản hơn - đọc
+  trực tiếp SpEffect đang active trên `WorldChrMan.summon_buddy_chr_set`
+  thay vì tự dò `NpcParam` tĩnh - **đã test trong game, hoạt động đúng**)
+  — xem `src/spirit/color.rs`.
+- `Spirit.Regen` (`[Spirit]`, mặc định `1` = 1%/giây, `0` tắt - hồi máu
+  theo % HP tối đa mỗi giây cho linh hồn đang triệu hồi (đổi từ điểm cố
+  định sang %, xem mục nhật ký bên dưới), cùng pattern `regen.rs` - **đã
+  test trong game, hoạt động đúng**) — xem `src/spirit/regen.rs`.
+- `Spirit.Summon.Anywhere` (`[Spirit]`, mặc định `false` - cho phép triệu
+  hồi linh hồn không cần bia đá hồi sinh gần đó, port kỹ thuật gate-hook
+  từ `er10x.dll`, đã xác nhận đúng AOB thật trong `eldenring.exe` qua
+  Ghidra trước khi patch - **đã test trong game, hoạt động đúng**) — xem
+  `src/spirit/summon_anywhere.rs`.
+- `Spirit.Summon.Amount`/`Spirit.Summon.Multiplier` (`[Spirit]`, mặc định
+  `0`/`1` = không đổi - số lượng linh hồn 1 Ash triệu hồi, cap 10, port
+  "chain rebuild" của `er10x.dll` nhưng dùng thẳng
+  `fromsoftware-rs`'s `ChainingMap`/`ChainingMapBucketEntry` type thay vì
+  tự tính offset tay - `Spirit.Summon.Amount` **đã test, hoạt động đúng**;
+  `Spirit.Summon.Multiplier` **đã test và lúc đầu SAI** (nhân dồn lên tới
+  cap 10 thay vì đúng hệ số, do đọc "gốc" từ chain đã bị sửa ở lần rebuild
+  trước thay vì snapshot thật - đã sửa, xem mục nhật ký bên dưới, **chưa
+  test lại bản sửa**) — xem `src/spirit/summon_count.rs`.
 
 **Đã chốt kiến trúc:**
 
@@ -112,6 +135,180 @@ DLL trên cùng trang bộ nhớ). Hoá ra không cần bước debug đó - b�
 điều tra phức tạp. Đã xoá `dump_for_comparison()`/`hex_dump()`/key
 `Rune.KeepOnDeath.DumpOnly` khỏi `keep_on_death.rs` và `SomeTweaks.ini` -
 code hiện tại chỉ còn đúng phần patch chính thức.
+
+## Pin fromsoftware-rs bản 0.14.0, thêm wait_for_system_init + panic safety (2026-08-26)
+
+Áp dụng 3 cải thiện từ so sánh với `.docs/UltimatePassiveRegeneration`
+(mod tham khảo có source code, không cần Ghidra):
+
+1. **Đổi `eldenring`/`fromsoftware-shared` từ git HEAD sang version cố
+   định `0.14.0`** (crates.io, bản mới nhất) trong `Cargo.toml` workspace
+   gốc - build reproducible (ai build lại cũng ra cùng 1 mã nguồn upstream,
+   không phụ thuộc git HEAD lúc clone). Đã verify trước khi đổi: `0.14.0`
+   có đủ mọi struct `sometweaks` đang dùng (kể cả các field mới nhất như
+   `SummonBuddyManager`/`ChainingMap` vừa thêm cho `[Spirit]`) - build lại
+   toàn bộ workspace sạch, không phải sửa dòng code nào.
+
+2. **Thêm `wait_for_system_init`** (`src/task.rs`) làm bước chờ đầu tiên
+   trước `CSTaskImp::wait_for_instance` - hàm này đã có sẵn trong chính
+   crate `eldenring` (chờ tín hiệu "process game đã sống" sớm nhất,
+   `CSWindow`'s global hInstance, ngay sau CRT init), nhưng `sometweaks`
+   trước giờ chưa từng gọi tới, luôn nhảy thẳng vào chờ `CSTaskImp`.
+
+3. **Thêm `crate::task::run_recurring_safe`** - bọc mọi tick định kỳ bằng
+   `std::panic::catch_unwind`, nếu 1 frame panic thì chỉ bỏ qua frame đó
+   (log lại) thay vì crash cả DLL/game. Thay thế mọi lời gọi
+   `cs_task.run_recurring(...)` trực tiếp trong 9 file
+   (`regen/mod.rs`, `rune/reward.rs`, `rune/multiplier.rs`,
+   `drop_rate/mod.rs`, `misc/weight_multiplier.rs`,
+   `misc/torrent_anywhere.rs`, `spirit/color.rs`, `spirit/regen.rs`,
+   `spirit/summon_count.rs`, `reload.rs`) - gom logic panic-catch vào 1 chỗ
+   duy nhất thay vì lặp lại ở từng module.
+
+   **Phát hiện quan trọng khi làm bước 3:** `Cargo.toml` gốc đang set
+   `panic = "abort"` cho `[profile.release]` - với cấu hình này
+   `catch_unwind` **hoàn toàn vô dụng ở bản release** (panic abort thẳng
+   process, không unwind để catch). Đã bỏ dòng này (mặc định về
+   `"unwind"`) để bước 3 thật sự có tác dụng ở bản release, không chỉ lúc
+   `cargo build` (dev). Đánh đổi: binary release lớn hơn 1 chút (giữ lại
+   unwind table), không đáng kể so với an toàn đạt được.
+
+Build cả `cargo build` (workspace) và `cargo build --release -p sometweaks`
+đều sạch, không cần sửa code nào khác ngoài các thay đổi trên.
+
+## Thêm Spirit.Enabled - công tắc tổng cho [Spirit] (2026-08-26)
+
+Người dùng tự thêm `Spirit.Enabled=true` vào ini nhưng chưa có code nào
+đọc key này - 4 tính năng `[Spirit]` mỗi cái vẫn tự bật/tắt độc lập qua
+cờ riêng. Thêm check `Spirit.Enabled` vào cả 4 module
+(`color.rs`/`regen.rs`/`summon_anywhere.rs`/`summon_count.rs`) - `false`
+thì bỏ qua toàn bộ nhóm bất kể cờ riêng từng cái là gì. `color.rs`/
+`regen.rs`/`summon_count.rs` check lại mỗi tick (đổi được khi đang chơi,
+có hot-reload); `summon_anywhere.rs` chỉ check lúc khởi động vì bản chất
+là patch code 1 lần, không có tick riêng để re-check.
+
+## Sửa Spirit.Summon.Multiplier nhân dồn (2026-08-26)
+
+Test trong game: `Spirit.Color`, `Spirit.Regen`, `Spirit.Summon.Anywhere`,
+`Spirit.Summon.Amount` đều hoạt động đúng. Riêng `Spirit.Summon.Multiplier`
+sai: đặt `1 -> 2` (mong đợi x2 số lượng) nhưng ra 10 (kịch trần cap) thay
+vì chỉ nhân đôi.
+
+**Nguyên nhân:** `apply()` đọc "số lượng gốc" (`original_ids`) trực tiếp
+từ nội dung chain **hiện tại** (`head.iter()`) mỗi lần chạy - nếu chain đó
+đã bị rebuild ở lần trước, "hiện tại" đã là bản đã nhân rồi chứ không còn
+là bản gốc thật của game. Với `Multiplier`, việc này gây **nhân dồn theo
+cấp số nhân** mỗi khi tick chạy lại (1→2→4→8→10, dừng lại vì bị cap) - lý
+do `Amount` không bị: nó luôn ép về đúng 1 số cố định bất kể input, tự ổn
+định thay vì phóng đại. Đây là đúng loại lỗi `drop_rate.rs` đã gặp và sửa
+trước đó (2026-08-24) mà lần này quên áp dụng lại.
+
+**Đã sửa:** thêm `ORIGINAL_CHAIN_IDS` (`Mutex<HashMap<i32, Vec<i32>>>`,
+key = SpEffect id) - snapshot nội dung chain thật lần đầu tiên gặp mỗi id
+(trước khi có bất kỳ rebuild nào), mọi lần tính `target_count`/cycle ID
+sau đó đều đọc từ snapshot này, không bao giờ đọc lại từ chain hiện tại -
+cùng pattern `ORIGINAL_BASE_POINTS` của `drop_rate.rs`. **Chưa test lại
+bản sửa.**
+
+## Giải mã chain rebuild, thêm Spirit.Summon.Amount/Multiplier (2026-08-26)
+
+Điều tra tiếp phần "chain rebuild" của `er10x.dll` (trước đó bỏ lại vì
+chưa hiểu cơ chế). Trước khi bắt đầu, phát hiện file `er10x.dll` người
+dùng đang có đã được cập nhật (17/8, project Ghidra cũ phân tích từ
+14/8) - re-import sạch từ đầu, dump lại toàn bộ `Sig` struct để so sánh:
+byte pattern thật (phần code, bỏ qua con trỏ nội bộ do relink) của
+`kSigGate`/`kSigGateEntry` (dùng cho `Spirit.Summon.Anywhere`) **giống hệt
+bản cũ**, danh sách toàn bộ ini key cũng không đổi - chỉ có 1 thay đổi nội
+bộ: hàm `strip_ghost_colour` bị compiler inline thẳng vào `worker()`,
+không ảnh hưởng gì tới các phần đã port.
+
+**Đọc kỹ "chain rebuild"**: `er10x.dll` đọc `WorldChrMan+0x1e538` (con trỏ
+tới summon buddy manager) rồi tự dò 1 cây nhị phân (byte `+0x19` làm cờ
+"is nil" - đúng layout `_Tree_node` của MSVC `std::map`) để tìm entry ứng
+với 1 "trigger id" (SpEffect kích hoạt triệu hồi), đọc con trỏ tại
+node+0x28 rồi tự đi bộ 1 linked-list (`node.data` ở +0, `node.next` ở +8)
+gom các "creature id", tính số lượng đích theo `count`/`multiply`, cấp
+phát bộ nhớ riêng (không bao giờ free) rồi ghi đè con trỏ node+0x28 để
+trỏ sang chain mới dài hơn, lặp lại cùng id theo modulo để đạt đủ số
+lượng.
+
+**Phát hiện quan trọng:** `fromsoftware-rs` đã có sẵn đúng cấu trúc này ở
+dạng typed - `SummonBuddyManager.trigger_speffect_to_buddy_map:
+ChainingMap<i32, i32>` (doc comment gốc: "Maps SpEffect IDs to BuddyParam
+IDs... this is a chaining tree" - khớp 100% với những gì tự dò được thủ
+công). `ChainingMapBucketEntry<T> { pub data: T, pub next: Option<NonNull<Self>> }`
+đúng layout node 16-byte đã suy luận, và `iter_chains_mut()` cho thẳng
+`&mut ChainingMapBucketEntry` vào head node của mỗi chain - đủ để nối
+thêm node mới vào `head.next` mà **không cần tính offset tay hay đụng vào
+field private của cây RB-tree** như `er10x.dll` phải làm (nó không có
+type thật để dùng).
+
+Thêm `Spirit.Summon.Amount`/`Spirit.Summon.Multiplier`
+(`src/spirit/summon_count.rs`): với mỗi chain, đọc các id gốc qua
+`head.iter()`, tính số lượng đích (`Amount` ưu tiên nếu >0, không thì
+`Multiplier`, cap 10), nếu độ dài hiện tại đã đúng thì bỏ qua (idempotent),
+khác thì `Box::leak` 1 mảng node mới (lặp lại id gốc theo modulo) rồi gán
+vào `head.next` - giữ nguyên node đầu tiên của game, chỉ nối thêm phía
+sau. Chạy trên tick `FrameBegin` (khác `er10x.dll` dùng thread riêng
+độc lập + tự kiểm tra an toàn bằng `VirtualQuery`) để khớp quy ước cả
+crate: mọi thứ đụng vào `WorldChrMan` sống chỉ an toàn từ thread chính
+của game.
+
+**Rủi ro:** đây là tính năng rủi ro cao nhất đã port trong `sometweaks` -
+sửa trực tiếp con trỏ bên trong 1 cấu trúc dữ liệu sống (cây + linked-list)
+của chính game, không phải chỉnh param tĩnh hay patch code. Nếu sai có
+thể làm hỏng cấu trúc `SummonBuddyManager`, không chỉ riêng tính năng này
+mà ảnh hưởng luôn hệ thống triệu hồi nói chung. **Chưa test trong game.**
+
+## Triển khai [Spirit], giải mã er10x.dll (2026-08-25)
+
+Giải mã `.docs/x10_summon/er10x.dll` ("10x Spirit Summons") - mod tham
+khảo gốc cho phần `[Spirit]` đã để placeholder từ đầu. Khác các mod khác
+đã gặp, DLL này build bằng MinGW nên **còn giữ tên hàm gốc** (không bị
+strip), dễ đọc hơn hẳn - `hk_summon_gate`, `param_find_rows`,
+`world_chr_man`, `band_occupancy`, `buddy_mgr`, `strip_ghost_colour`,
+`sig_hit`... Kiến trúc rất chuyên nghiệp: tự tắt nếu phát hiện
+EasyAntiCheat, kiểm tra version qua `GetFileVersionInfoA`, quét nhiều
+signature trong 1 lượt duyệt `.text` (bitset-trie theo byte đầu), VEH bắt
+lỗi truy cập trong vùng code của chính nó, watchdog thread theo dõi
+worker có bị treo không.
+
+**Giải mã đúng struct `Sig`** (dùng để lưu byte pattern của từng chữ ký):
+đọc `sig_hit(Sig const&)`'s pseudocode xác định layout `pattern bytes ở
+offset+8, độ dài ở offset+0x28` - từ đó tách được 2 pattern thật:
+`kSigGate` (22 byte, kiểm tra "current slot count < max") và
+`kSigGateEntry` (21 byte, prologue hàm gate). Xác nhận cả 2 khớp thật
+trong `eldenring.exe` hiện tại qua Ghidra: `kSigGate` chỉ khớp đúng 1 chỗ
+(unique) tại RVA `0x4b6e0d`; entry hàm thật nằm ở đúng
+`match - 0x7D = 0x4b6d90` (khớp công thức `er10x.dll` tự dùng), và dùng
+đúng global `0x143d65f88` + offset `+0x1e508` đã xác nhận độc lập từ đợt
+điều tra `rune::keep_on_death` trước đó.
+
+**Đã triển khai:**
+- `Spirit.Summon.Anywhere` (`src/spirit/summon_anywhere.rs`): patch 15
+  byte đầu hàm gate (`mov [rsp+8],rbx; mov [rsp+0x10],rsi; push rdi; sub
+  rsp,0x20`, đúng độ dài `er10x.dll` tự cắt) bằng
+  `common::codepatch::install_jmp_hook` - stub chỉ check đúng 1 field
+  `er10x.dll` check (`*(i32*)(this+0x20) < 0`, "không có bia đá gần đó")
+  rồi trả về thành công ngay, ngược lại replay lại 4 lệnh gốc rồi nhảy về
+  code thật. Đơn giản hơn `er10x.dll` (không tự thay thế toàn bộ logic
+  hàm gate) - **bỏ qua check "band busy" (đủ 10 slot chưa)** của
+  `er10x.dll`, chấp nhận rủi ro nhỏ (request thừa bị driver engine tự bỏ
+  qua vì giới hạn cứng 10 slot vẫn còn, không phải lỗi crash).
+- `Spirit.Color` (`src/spirit/color.rs`): đơn giản hơn nhiều so với
+  `er10x.dll` (không cần dò qua tới 194 bảng `NpcParam`) - `fromsoftware-rs`
+  đã có sẵn `WorldChrMan.summon_buddy_chr_set.characters()` (linh hồn +
+  Torrent đang active) và `ChrIns.special_effect.entries()` (SpEffect
+  đang active) - chỉ cần lọc SpEffect trong khoảng `295000-295999` (dải
+  hiệu ứng màu ma theo `er10x.ini`) rồi gọi `remove_speffect` có sẵn.
+- `Spirit.Regen` (`src/spirit/regen.rs`): hồi máu theo % HP tối đa mỗi
+  giây cho mọi linh hồn trong `summon_buddy_chr_set`, cùng pattern tick
+  với `regen.rs`.
+
+**Chưa làm:** `Spirit.Summon.Amount`/`Multiplier` - `er10x.dll`'s "chain
+rebuild" (stage 3 trong `worker` thread của nó) không phải field param
+tĩnh mà là 1 linked-list được dựng lại trong RAM lúc summon, cơ chế này
+chưa được giải mã, cần điều tra riêng.
 
 ## Thêm hot-reload cho WeightMultiplier (2026-08-25)
 

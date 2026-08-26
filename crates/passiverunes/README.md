@@ -104,6 +104,26 @@ Phát hiện khi test thật với ModEngine2: log game (`modengine_2026-08-24.l
   bonus mốc đó bị bỏ lỡ vĩnh viễn - sửa thành chỉ tăng khi cộng rune thành
   công, còn không thì dừng vòng lặp để tick sau thử lại đúng mốc đó.
 
+## Pin fromsoftware-rs 0.14.0, thêm wait_for_system_init + panic safety (2026-08-26)
+
+Áp dụng lại 3 cải tiến ổn định đã làm cho `sometweaks` (xem README của nó
+cùng ngày, so sánh với `.docs/UltimatePassiveRegeneration`) sang crate này:
+
+- **Version pin**: `eldenring`/`fromsoftware-shared` giờ khai báo 1 lần ở
+  workspace `Cargo.toml` gốc, pin về bản crates.io `0.14.0` thay vì tracking
+  git HEAD - áp dụng chung cho toàn bộ workspace, không cần sửa gì riêng ở
+  crate này.
+- **`wait_for_system_init`**: `wait_for_cs_task()` trong `src/rune.rs` giờ
+  gọi `wait_for_system_init_until_ready()` (chờ `CSWindow` hInstance) trước
+  vòng lặp retry `CSTaskImp::wait_for_instance` đã có sẵn (fix bug 1 ngày
+  2026-08-24 phía trên) - 2 bước riêng biệt, không thể thay cho nhau.
+- **Panic safety**: thêm `run_recurring_safe()` bọc quanh tick chính trong
+  `rune.rs`, bắt panic mỗi frame thay vì crash cả game. Cần workspace
+  `Cargo.toml` bỏ `panic = "abort"` ở `[profile.release]` (mặc định về
+  `"unwind"`) thì `catch_unwind` mới có tác dụng ở bản release.
+
+Không đụng ini/hành vi gameplay, chỉ cải thiện độ ổn định.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Đã build và hoạt động (`bin/x64/Release/PassiveRunes.dll`) trước khi

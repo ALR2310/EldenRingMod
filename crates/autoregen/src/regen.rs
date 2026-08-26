@@ -22,7 +22,8 @@ use std::time::{Duration, Instant};
 
 use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, WorldChrMan};
 use eldenring::util::input;
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use eldenring::util::system::wait_for_system_init;
+use fromsoftware_shared::{FromStatic, Program, RecurringTaskHandle, SharedTaskImpExt};
 
 use crate::attack_hook;
 use common::config;
@@ -147,6 +148,25 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
         .map(|p| &p.chr_ins as *const _ as *const u8)
 }
 
+/// Waits for the earliest reliable "the game process is actually alive"
+/// signal (`CSWindow`'s global hInstance, populated right after CRT init -
+/// see the crate's own doc comment on this function), retrying past
+/// `SystemInitError::InvalidRva`/`Timeout` instead of giving up. Ported
+/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
+/// (2026-08-26) - `fromsoftware-rs` already ships this helper for exactly
+/// this purpose, AutoRegen just hadn't called it before, going straight
+/// for `CSTaskImp` instead.
+fn wait_for_system_init_until_ready() {
+    let program = Program::current();
+    loop {
+        if wait_for_system_init(&program, Duration::from_secs(5)).is_ok() {
+            return;
+        }
+        logger::log("System not initialized yet, retrying...");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
 /// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
 /// immediately fatal and never retries it, even with `Duration::MAX` - it
 /// only retries the `Null` case internally. `InvalidRva` fires whenever the
@@ -157,6 +177,8 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
 /// disabled itself for the whole session on a one-off early poll. Retrying
 /// here with a short delay rides out that race instead.
 fn wait_for_cs_task() -> &'static CSTaskImp {
+    wait_for_system_init_until_ready();
+
     loop {
         match CSTaskImp::wait_for_instance(Duration::MAX) {
             Ok(instance) => return instance,
@@ -166,6 +188,33 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
             }
         }
     }
+}
+
+/// Registers `f` as a recurring task the same way `cs_task.run_recurring`
+/// does, but catches any panic `f` raises for a given frame instead of
+/// letting it unwind into the game's own call stack - `f` just gets
+/// skipped for that one frame (logged), which is harmless here (no state
+/// this tick keeps is unsafe to leave stale for a single frame). Ported
+/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
+/// (2026-08-26). Requires `[profile.release]`'s `panic = "abort"` to be
+/// off (see workspace `Cargo.toml`) - `catch_unwind` cannot catch
+/// anything once a panic aborts the process outright.
+fn run_recurring_safe<F>(
+    cs_task: &'static CSTaskImp,
+    group: CSTaskGroupIndex,
+    mut f: F,
+) -> RecurringTaskHandle<eldenring::fd4::FD4TaskData>
+where
+    F: FnMut(&eldenring::fd4::FD4TaskData) + 'static + Send,
+{
+    cs_task.run_recurring(
+        move |data: &eldenring::fd4::FD4TaskData| {
+            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
+                logger::log("Regen tick panicked, skipped this frame.");
+            }
+        },
+        group,
+    )
 }
 
 /// Registers the Regen.* tick as a recurring task on the game's own
@@ -178,7 +227,9 @@ pub fn run(ini_path: String) {
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
-    let _handle = cs_task.run_recurring(
+    let _handle = run_recurring_safe(
+        cs_task,
+        CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
             // General.ReloadKey - already debounced by eldenring::util::input,
             // so this fires once per physical press regardless of how many
@@ -260,7 +311,6 @@ pub fn run(ini_path: String) {
             heal_main_player(HealField::Fp, fp_flat, fp_fraction);
             heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     logger::log("Regen tick registered on CSTaskGroupIndex::FrameBegin.");

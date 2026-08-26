@@ -68,7 +68,7 @@ use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, ItemLotParam_enemy, SoloParamRepository};
 use eldenring::param::ITEMLOT_PARAM_ST;
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use fromsoftware_shared::FromStatic;
 
 use common::config;
 use common::logger;
@@ -274,7 +274,10 @@ pub fn run() {
     }
 
     let cs_task = crate::task::wait_for_cs_task("DropRate");
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "DropRate",
+        CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
             // Poll `reload::RELOAD_GENERATION` instead of calling
             // `input::is_key_pressed(ReloadKey)` ourselves - see that
@@ -300,7 +303,6 @@ pub fn run() {
             let changed = apply(repo, &mode);
             log_mode(&mode, changed, " (hotkey pressed)");
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     loop {

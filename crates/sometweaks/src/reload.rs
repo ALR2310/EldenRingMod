@@ -24,7 +24,6 @@ use std::time::Duration;
 
 use eldenring::cs::CSTaskGroupIndex;
 use eldenring::util::input;
-use fromsoftware_shared::SharedTaskImpExt;
 
 use common::config;
 use common::input::parse_virtual_key;
@@ -41,7 +40,10 @@ pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 pub fn run(ini_path: String) {
     let cs_task = crate::task::wait_for_cs_task("Reload");
 
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "Reload",
+        CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
             let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
@@ -50,7 +52,6 @@ pub fn run(ini_path: String) {
                 logger::log("Config reloaded (hotkey pressed).");
             }
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     loop {

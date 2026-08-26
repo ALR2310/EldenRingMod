@@ -62,6 +62,36 @@ vẫn đúng nguyên bản), chỉ đổi cách redirect:
 Xem `src/hook.rs` cho code hiện tại; `RuneMultiplier.ini` cho toàn bộ key
 cấu hình.
 
+## Pin fromsoftware-rs 0.14.0, thêm wait_for_system_init + panic safety cho tick reload (2026-08-26)
+
+Áp dụng lại 3 cải tiến ổn định đã làm cho `sometweaks` (xem README của nó
+cùng ngày) sang crate này:
+
+- **Version pin**: `eldenring`/`fromsoftware-shared` giờ khai báo 1 lần ở
+  workspace `Cargo.toml` gốc, pin về bản crates.io `0.14.0` thay vì tracking
+  git HEAD.
+- **`wait_for_system_init` + retry đúng cách**: `src/hook.rs` trước đây gọi
+  `CSTaskImp::wait_for_instance(Duration::MAX)` **không có vòng lặp retry**
+  cho lỗi `InvalidRva` - nếu trúng đúng race đó, hot-reload bị tắt **vĩnh
+  viễn** cho cả session (chỉ log lỗi rồi `sleep` vô hạn, hook patch code vẫn
+  chạy với config lúc khởi động). Đây là điểm yếu hơn cả `autoregen`/
+  `passiverunes` (2 crate đó đã có vòng lặp retry từ trước, xem mục
+  "Sự cố khi test"/"Sửa 2 bug" tương ứng). Đã thay bằng `wait_for_cs_task()`
+  đúng pattern chuẩn của workspace: `wait_for_system_init_until_ready()`
+  (chờ `CSWindow` hInstance) rồi mới retry `CSTaskImp::wait_for_instance`
+  mỗi 1s thay vì bỏ cuộc.
+- **Panic safety cho tick reload**: thêm `run_recurring_safe()` bọc quanh
+  tick `ReloadKey`/`run_recurring` trong `hook.rs` - chỉ ảnh hưởng đến việc
+  đọc phím reload, **không** liên quan đến đoạn asm đã patch vào
+  `AddSoul_Call` (xem mục "Vì sao không cần try/catch quanh code assembly
+  đã inject" bên dưới - lý do đó vẫn đúng nguyên vẹn, panic safety ở đây chỉ
+  bảo vệ vòng lặp Rust bên ngoài). Cần workspace `Cargo.toml` bỏ
+  `panic = "abort"` ở `[profile.release]` (mặc định về `"unwind"`) thì
+  `catch_unwind` mới có tác dụng ở bản release.
+
+Không đụng ini/hành vi nhân rune, chỉ cải thiện độ ổn định khởi động và
+chống crash của vòng lặp reload.
+
 ## Lịch sử dịch ngược & quyết định kỹ thuật (bản C++ gốc, kỹ thuật RE vẫn đúng)
 
 **Đã test trong game (2026-08-14), hoạt động đúng, không crash** (trên bản

@@ -42,7 +42,7 @@ use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, ChrInsExt, WorldChrMan};
 use eldenring::fd4::FD4TaskData;
-use fromsoftware_shared::{FromStatic, SharedTaskImpExt};
+use fromsoftware_shared::FromStatic;
 
 use common::codepatch;
 use common::config;
@@ -133,7 +133,10 @@ pub fn run() {
     let cs_task = crate::task::wait_for_cs_task("TorrentAnywhere");
     let mut elapsed_ms: f64 = 0.0;
 
-    let _handle = cs_task.run_recurring(
+    let _handle = crate::task::run_recurring_safe(
+        cs_task,
+        "TorrentAnywhere",
+        CSTaskGroupIndex::FrameBegin,
         move |data: &FD4TaskData| {
             elapsed_ms += (data.delta_time.time as f64) * 1000.0;
             if elapsed_ms < APPLY_INTERVAL_MS {
@@ -149,7 +152,6 @@ pub fn run() {
             };
             main_player.chr_ins.apply_speffect(REMOVE_FORCED_DISMOUNT_SPEFFECT, true);
         },
-        CSTaskGroupIndex::FrameBegin,
     );
 
     logger::log("TorrentAnywhere: SpEffect reapply tick registered on CSTaskGroupIndex::FrameBegin.");
