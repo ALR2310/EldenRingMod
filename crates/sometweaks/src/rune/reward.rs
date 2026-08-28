@@ -118,7 +118,7 @@ pub fn run() {
                     if !add_runes(milestone.bonus) {
                         break;
                     }
-                    if config::get_bool("RuneLog", false) {
+                    if config::get_bool("DebugLog", false) {
                         logger::log(&format!(
                             "Rune.Passive: milestone bonus +{} at {}s.",
                             milestone.bonus,

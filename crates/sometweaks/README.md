@@ -1183,3 +1183,350 @@ không thuộc về tính năng nào cả - xem mục "Gate CSTaskImp 1 lần" p
 Không đổi tên hàm/biến trong code (`rune::multiplier`, `rune::reward` giữ
 nguyên tên module) - chỉ đổi **chuỗi hiển thị trong log**, nên không ảnh
 hưởng gì tới hành vi, chỉ tới nội dung `SomeTweaks.log`.
+
+## GraceMenu: tìm ra cách fix bug "đứng dậy" khi mở menu tuỳ biến ở Site of Grace (2026-08-28)
+
+Sau phiên điều tra trước (bị dồn vào `git stash@{0}`, xem mục README cũ ở
+trên) kết luận tạm "OpenEnhanceShop tự nó ép đứng dậy bất kể ngữ cảnh",
+lần này viết lại `crates/sometweaks/src/misc/grace_menu.rs` từ đầu (không
+tái dùng code cũ trong stash, cố tình không restore) để kiểm chứng riêng
+đúng 1 giả thuyết còn treo: chiếm dụng 1 state vanilla thật ("Tailoring
+Shop", bank1 id 142) ngay trong graph ESD đang sống của Site of Grace, chỉ
+đổi `entry_events` thành `OpenEnhanceShop` (y hệt `EldenConvenienceMod`),
+giữ nguyên 100% `transitions` gốc.
+
+**Vòng test 1** (chỉ đổi `entry_events`, giữ nguyên điều kiện transition
+gốc của Tailoring Shop): **vẫn đứng dậy**. Tưởng đây là bằng chứng cuối
+cùng khẳng định kết luận cũ.
+
+**Vòng test 2** - phát hiện mảnh ghép còn thiếu: `EldenConvenienceMod`
+không chỉ đổi `entry_events`, nó còn tự **ghi đè điều kiện chờ**
+(`transitions[0].evaluator`) của chính state đó thành
+`CheckSpecificPersonMenuIsOpen(9, 0) == 0 || CheckSpecificPersonGenericDialogIsOpen(0)`
+(`MenuCloseExpr(9)` trong `SoulsIds.ESDEdits`, `9` = loại menu riêng của
+`OpenEnhanceShop`) - điều kiện GỐC của Tailoring Shop được tinh chỉnh cho
+loại menu KHÁC (menu riêng của chính Tailoring Shop), nên rất có thể đánh
+giá "đã đóng" (hoặc pass qua) trong khi UI Enhance Shop còn đang khởi tạo,
+khiến ESD machine và hệ thống menu lệch pha - kích hoạt logic "hội thoại
+đã xong" của engine (đứng dậy).
+
+Đối chiếu byte-code: giải mã ngược `TALK_MENU_CLOSED_EXPRESSION` (biểu
+thức đã xác nhận hoạt động ở phiên trước, cho menu loại 1) theo đúng bảng
+opcode ESD trong `AST.cs` (`SoulsIds` mới clone) khớp CHÍNH XÁC với
+comment gốc của `ESDEdits.cs` cho `MenuCloseExpr(1)` - xác nhận bảng
+opcode đúng, từ đó tự mã hoá `MenuCloseExpr(9)` bằng tay
+(`MENU_CLOSED_TYPE_9_EXPRESSION`, chỉ khác 1 byte so với bản loại 1).
+Thêm luôn lệnh `c1_141(9)` (community đặt tên `Unknown141_PlaylogRelated`,
+chưa rõ chức năng thật) ngay trước `OpenEnhanceShop` cho khớp 100%
+`EldenConvenienceMod` - không tốn gì nếu hoá ra không quan trọng.
+
+**Test thật (2026-08-28): THÀNH CÔNG** - "Nâng cấp vũ khí" mở đúng menu,
+KHÔNG đứng dậy, cả 2 mục (mục mới chèn + đường quay lại sau khi đóng menu)
+hoạt động hoàn hảo.
+
+**Kết luận:** kết luận "airtight" của phiên trước là SAI - không phải bản
+thân lệnh ép đứng dậy, mà do thiếu đúng điều kiện chờ khớp loại menu.
+Công thức khái quát hoá được cho MỌI tính năng muốn thêm vào Site of Grace
+kiểu này (không cần sửa file ESD tĩnh, chạy hoàn toàn runtime từ DLL):
+
+1. Chiếm dụng 1 state vanilla ít dùng bất kỳ (tìm bằng
+   `find_state_by_first_command` - nội dung, không phải địa chỉ).
+2. Đổi `entry_events` của state đó thành chuỗi lệnh ESD mong muốn.
+3. Đổi `transitions[0].evaluator` thành `MenuCloseExpr(đúng loại menu của
+   lệnh đó)` - **KHÔNG đụng `target_state`** (đường quay lại thật của
+   chính state, luôn đúng vì là code gốc của game).
+
+`Bán đồ` (`OpenRegularShop`, loại menu 5) và các tính năng còn lại theo kế
+hoạch ban đầu giờ áp dụng được bằng đúng công thức trên, chỉ cần tìm 1
+state vanilla ít dùng khác làm "vật chiếm dụng" cho mỗi lệnh.
+
+## GraceMenu: bỏ "Nâng cấp vũ khí" (chỉ để test), thêm thật "Mua đồ (Twin Maiden Husks)" trên 1 slot khác (2026-08-28)
+
+Sau khi xác nhận công thức fix (mục trên) hoạt động đúng, "Nâng cấp vũ
+khí" hoàn thành nhiệm vụ của nó (chứng minh kỹ thuật) - không giữ lại làm
+tính năng thật. `"Tailoring Shop"` được **khôi phục hoàn toàn về vanilla**
+(module không còn đụng tới state này nữa).
+
+Thêm tính năng thật đầu tiên: **"Mua đồ (Twin Maiden Husks)"** -
+`OpenRegularShop` với range item lot 101800-101899 (nguyên từ
+`EldenConvenienceMod`). Chiếm dụng 1 slot vanilla KHÁC hoàn toàn -
+`"Dupe Shop"` (bank1 id 146, `open_dupe_shop` trong `elden-x`/ESDLang -
+tên gọi gợi ý đây là nội dung debug/nội bộ chưa từng dùng thật, tương tự
+`Tailoring Shop`) - áp dụng đúng công thức đã xác nhận: đổi
+`entry_events` thành `OpenRegularShop(101800, 101899)`, đổi
+`transitions[0].evaluator` thành `MenuCloseExpr(5)` (loại menu riêng của
+`OpenRegularShop`), giữ nguyên `target_state`.
+
+Bỏ luôn phần code specific cho Upgrade (`CombineMenuFlagAndEventFlag`
+x4 + lệnh `c1_141` chưa rõ chức năng) - `OpenRegularShop` không cần các
+lệnh phụ này, `EldenConvenienceMod` cũng chỉ gọi đúng 1 lệnh
+`OpenRegularShop` cho tính năng Purchase.
+
+**Chưa test thật trong game ở bước này** - cần xác nhận "Dupe Shop" cũng
+là slot chết an toàn giống Tailoring Shop trước khi coi đây là xong.
+
+## GraceMenu: bỏ hẳn việc chiếm dụng slot vanilla - dùng state hoàn toàn mới (2026-08-28)
+
+Người dùng đặt câu hỏi đúng trọng tâm: tại sao phải chiếm dụng 1 state
+vanilla có sẵn (rủi ro: nếu có Site of Grace đặc biệt nào thật sự dùng
+"Dupe Shop"/"Tailoring Shop", sẽ mất tính năng gốc của họ)? Lý do trước đó
+thuần tuý là bối cảnh phát hiện ra fix (so sánh trực tiếp với
+`EldenConvenienceMod` bằng cách chiếm dụng 1 state thật) - không có bằng
+chứng nào cho thấy `CheckSpecificPersonMenuIsOpen` bám theo `id`/vị trí
+của từng `EzState` cụ thể thay vì bám theo phiên hội thoại (machine
+instance) đang sống. Mọi lần thử THẤT BẠI trước đây dùng state mới tự tạo
+đều KHÔNG nhúng lệnh ESD thật vào `entry_events` của chính state đó (gọi
+qua kênh khác - `ezstate_event`/native - từ 1 thread riêng) và dùng
+transition "luôn đúng" thay vì `MenuCloseExpr` đúng loại - tức là công
+thức fix thật sự chưa từng được thử trên 1 state hoàn toàn mới.
+
+Đổi `rewrite_as_open_regular_shop` (chiếm dụng "Dupe Shop") thành
+`build_purchase_state` - dựng 1 `EzState` hoàn toàn mới (`Box::leak`) với
+`entry_events` = `OpenRegularShop(101800, 101899)`,
+`transitions[0].evaluator` = `MenuCloseExpr(5)`, `target_state` trỏ về
+đúng 1 state vanilla có sẵn KHÔNG BAO GIỜ bị sửa
+(`find_menu_rebuild_state` - state mà bản thân vanilla vốn đã coi là
+"menu đã đóng, làm mới danh sách", nhận diện bằng nội dung
+`entry_events` = đúng 1 lệnh `clear_talk_list_data` không tham số). Không
+còn state vanilla nào bị đụng tới - "Dupe Shop" cũng giữ nguyên vanilla y
+hệt "Tailoring Shop".
+
+**Test thật (2026-08-28): THÀNH CÔNG** - state hoàn toàn mới cũng tránh
+được bug "đứng dậy" y hệt state vanilla bị chiếm dụng trước đó.
+
+## GraceMenu: thêm lại "Nâng cấp vũ khí" bằng state mới (không hijack), cùng lúc với "Mua đồ" (2026-08-28)
+
+Sau khi xác nhận "Mua đồ" (Twin Maiden Husks) hoạt động đúng với kỹ thuật
+state hoàn toàn mới (mục trên), thêm lại "Nâng cấp vũ khí" (`OpenEnhanceShop`)
+bằng đúng kỹ thuật đó thay vì hijack "Tailoring Shop" như bản test đầu
+tiên - `build_upgrade_state` (song song `build_purchase_state`) dựng 1
+`EzState` hoàn toàn mới, `entry_events` = 4x `CombineMenuFlagAndEventFlag`
++ `c1_141(9)` + `OpenEnhanceShop(0)` (nguyên xi từ `EldenConvenienceMod`),
+`transitions[0].evaluator` = `MenuCloseExpr(9)`, quay về cùng 1 điểm an
+toàn `find_menu_rebuild_state` như "Mua đồ".
+
+`patch_state_group` được tổng quát hoá để nhận 1 danh sách insertion thay
+vì chỉ 1, chèn cả 2 mục trong cùng 1 lần quét anchor (không phải quét 2
+lần). Site of Grace giờ có 2 mục mới: "Mua đồ" và "Nâng cấp vũ khí",
+không tính năng vanilla nào bị đụng tới.
+
+**Test thật: THÀNH CÔNG** cho cả 2 mục cùng lúc.
+
+## GraceMenu: text tự soạn thật sự - hook thẳng hàm tra text của game (2026-08-28)
+
+Người dùng hỏi: có dùng được text tự viết (không mượn ID có sẵn) không?
+Kiểm tra thêm thì phát hiện `erdGameTools` (`.docs/Elden_Ring_game_tools`,
+mã nguồn mở, xác nhận đang chạy đúng bản game hiện tại qua
+`erdGameTools.dll` + `Resources/Lang/en-US.txt` cài sẵn trong
+`mod_test`) làm được việc này bằng cách **hook thẳng hàm tra bảng text**
+(`src/grace_test_messages.cpp`), không phải patch dữ liệu FMG.
+
+Thêm module mới `crates/sometweaks/src/misc/msg_hook.rs`, port lại đúng
+kỹ thuật đó:
+
+- Dò 2 AOB y hệt `erdGameTools` dùng để tìm hàm `get_message` thật (nhận
+  `(msg_repository, unknown, bnd_id, msg_id)`, trả `const wchar_t*`) -
+  xác nhận qua Ghidra (chạy headless bằng `analyzeHeadless` vào project
+  `D:/tmp/ghidra_eldenring` có sẵn, script mới
+  `.docs/reverse_engineering/DumpGetMessageFn.java`, output
+  `D:/tmp/get_message_dump.txt`) đúng trên bản game hiện tại - hàm là 1
+  leaf function, prologue 15 byte đầu là `cmp;jae;cmp;jae;mov`, không có
+  stack frame.
+- Hook bằng kỹ thuật "quan sát rồi tiếp tục" y hệt các hook khác trong
+  crate, nhưng có thêm nhánh rẽ: gọi 1 hàm Rust (`get_message_detour`)
+  trước - nếu `bnd_id==33` ("event text for talk") và `msg_id` khớp 1 ID
+  do module này tự đặt (dải `90000001+`, không đụng ID thật lẫn dải
+  `erdGameTools` tự dùng `69010000-69015000`), trả thẳng con trỏ chuỗi
+  UTF-16 tự soạn (`"Nâng cấp vũ khí"`/`"Mua đồ (Twin Maiden Husks)"`,
+  giữ vĩnh viễn qua `OnceLock<Vec<u16>>`); ngược lại, phát lại (replay)
+  đúng 5 byte instruction đầu của hàm gốc rồi nhảy tiếp vào phần còn lại
+  - hàm thật chạy hoàn toàn bình thường cho mọi ID khác.
+- Điểm khác các hook khác trong crate: 2 lệnh `jae` trong prologue gốc
+  **không thể copy nguyên byte** sang stub (địa chỉ đích tính tương đối,
+  sai nếu chạy ở vị trí khác) - phải tính lại đích tuyệt đối (đọc sống từ
+  byte thật, không hardcode), rồi phát lại dưới dạng `jb` đảo ngược +
+  nhảy tuyệt đối qua đích đó (kỹ thuật chuẩn khi relocate short jump ra
+  ngoài tầm rel8/rel32).
+
+`grace_menu.rs`'s `UPGRADE_MSG_ID`/`PURCHASE_MSG_ID` giờ trỏ tới
+`msg_hook::{UPGRADE_MSG_ID, PURCHASE_MSG_ID}` thay vì 2 ID mượn từ
+`EldenConvenienceMod`.
+
+**Test thật: THÀNH CÔNG** - text hiện đúng, không phát sinh crash/lỗi ở
+hàm `get_message` cho các lookup khác trong suốt phiên chơi.
+
+## GraceMenu: kết hợp text vanilla thật (đa ngôn ngữ) + hậu tố tự soạn (2026-08-28)
+
+Người dùng hỏi thêm: có ghép được text sẵn có của game (vd "Mua"/"Bán",
+tự động đúng ngôn ngữ game đang chạy) với text tự thêm không (vd "Mua"
++ "(Twin Maiden Husks)")? Có - vì hook đã chặn đúng hàm `get_message`,
+nên hoàn toàn gọi NGƯỢC LẠI chính hàm đó (qua `call_get_message`) để lấy
+text vanilla thật của 1 ID có sẵn (`VANILLA_UPGRADE_MSG_ID=22130001`,
+`VANILLA_PURCHASE_MSG_ID=26000010` - đúng 2 ID từng mượn trực tiếp trước
+khi có hook này), an toàn không đệ quy vô hạn (ID vanilla không trùng 2
+ID tự đặt của module, nên hook tự rơi xuống gọi hàm gốc bình thường).
+
+`combined_text()` build 1 lần duy nhất (cache vĩnh viễn qua `OnceLock`,
+vì 1 mục danh sách bị hỏi lại nhiều lần mỗi khi vẽ menu): lấy text
+vanilla + nối thêm hậu tố tự soạn. "Nâng cấp vũ khí" giữ nguyên text
+vanilla của ID 22130001 (không hậu tố, đã đủ nghĩa); "Mua đồ" đổi thành
+vanilla + `" (Twin Maiden Husks)"` - vừa tự đúng ngôn ngữ hiện tại của
+game, vừa rõ ràng shop nào.
+
+**Test thật: THÀNH CÔNG.**
+
+## GraceMenu: fix mất mục menu ở Grace khác/quay lại Grace cũ - cờ toàn cục sai (2026-08-28)
+
+Bug do người dùng phát hiện: mục menu mới chỉ xuất hiện ở đúng Grace ĐẦU
+TIÊN ngồi trong phiên chơi - Grace khác không có, và quay lại chính Grace
+đó sau khi rời đi cũng MẤT LUÔN. Nguyên nhân: `static PATCHED: AtomicBool`
+là cờ TOÀN CỤC - hễ patch xong 1 lần là mọi lần vào Grace sau (bất kỳ
+Grace nào, kể cả quay lại đúng Grace cũ) đều bị bỏ qua ở
+`on_enter_state`, vì bản thân mỗi Site of Grace dựng 1 BẢN COPY ESD graph
+MỚI trong bộ nhớ mỗi lần được vào (đúng như ghi trong doc comment của
+`is_grace_state_group` từ đầu, nhưng lúc code cờ `PATCHED` lại quên áp
+dụng đúng hệ quả của sự thật này).
+
+Bỏ hẳn `PATCHED`, thay bằng kiểm tra NỘI DUNG của đúng graph đang sống
+(`already_has_custom_items` - quét `entry_events` tìm sự kiện
+`add_talk_list_data` với message ID khớp 1 trong 2 ID tự đặt của module)
+- cùng triết lý "neo bằng nội dung, không phải địa chỉ/cờ toàn cục" mà
+mọi hàm neo khác trong file này (`is_sort_chest_event`,
+`targets_open_repository`, `find_menu_rebuild_state`) đã dùng từ đầu.
+Giờ mỗi graph MỚI (mỗi lần vào Grace, ở bất kỳ đâu) đều tự được patch
+đúng 1 lần, độc lập với mọi graph khác - không còn phụ thuộc "đã patch
+graph nào TRƯỚC ĐÓ trong phiên chơi" nữa.
+
+## GraceMenu: chuyển `msg_hook` vào làm submodule riêng của `grace_menu` (2026-08-28)
+
+Người dùng chỉ ra: `msg_hook` không phải 1 tính năng độc lập (không có
+ini key, không tự bật/tắt, chỉ tồn tại để phục vụ `grace_menu`) - để
+ngang hàng trong `misc/` (nơi mọi module con đều tương ứng 1 mục ini
+riêng) là sai chỗ. Chuyển `misc/msg_hook.rs` thành
+`misc/grace_menu/msg_hook.rs` (submodule riêng tư của `grace_menu`,
+`misc/grace_menu.rs` → `misc/grace_menu/mod.rs`) - đúng quy ước
+`regen/attack_hook.rs` đã dùng cho `regen`. Thuần tuý đổi cấu trúc, không
+đổi hành vi.
+
+## GraceMenu: mở rộng thành 3 mục (Nâng cấp/Mua tất cả/Bán) + ini key riêng từng mục (2026-08-28)
+
+Sau khi xác nhận công thức fix hoạt động và kỹ thuật "state hoàn toàn
+mới" an toàn, mở rộng theo yêu cầu: thay vì chỉ mua từ Twin Maiden Husks,
+tìm thấy bằng chứng cộng đồng trong `Elden-Ring-CT-TGA` (script
+`All Shops.cea`): `executeEzStateEvent(EzStateEvent.OpenRegularShop, {0, 9999999})`
+- gộp TOÀN BỘ vật phẩm bán được của MỌI thương nhân trong game vào 1
+range duy nhất. Đổi `ALL_SHOPS_LOT_START/END = 0/9999999` thay cho range
+hẹp của Twin Maiden Husks trước đó.
+
+Thêm tính năng 3 - "Bán" (`OpenSellShop`, bank1 id 46, args `(-1,-1)`
+nguyên từ `EldenConvenienceMod`), dùng đúng công thức đã xác nhận
+(`entry_events` + `MenuCloseExpr(6)` - loại menu riêng của
+`OpenSellShop`).
+
+Thêm `[Grace Menu]` trong `SomeTweaks.ini` với 5 key:
+- `GraceMenu.Enabled` - cờ tổng, tắt là bỏ hẳn hook.
+- `GraceMenu.Upgrade`/`GraceMenu.Shop`/`GraceMenu.Sell` - bật/tắt riêng
+  từng mục, đọc trong `on_enter_state` mỗi lần build insertion cho 1
+  instance graph mới.
+- `GraceMenu.UnlockShopInventory` - tính năng độc lập MỚI
+  (`misc/grace_menu/unlock_shop_inventory.rs`, submodule riêng của
+  `grace_menu` cùng `msg_hook`): patch `ShopLineupParam.event_flag_for_release=-1`
+  cho mọi dòng (nguyên từ script cộng đồng "Access all shop inventory.cea"),
+  để mega-shop hiện cả vật phẩm chưa mở khoá theo tiến trình quest. Tắt
+  mặc định - không đụng gì nếu không bật.
+
+Text hiển thị qua `msg_hook`: "Nâng cấp vũ khí" giữ nguyên vanilla (ID
+22130001, đủ rõ nghĩa); "Mua" = vanilla (ID 26000010) + hậu tố
+`" (tất cả)"` (làm rõ đây là gộp mọi thương nhân, không phải 1 người bán
+cụ thể); "Bán" giữ nguyên vanilla (ID 20000011).
+
+**Test thật: THÀNH CÔNG cho cả 5 key** (bao gồm `GraceMenu.UnlockShop`,
+đổi tên sau từ `UnlockShopInventory` - xem mục bên dưới).
+
+## GraceMenu: chuyển ra khỏi `misc/`, thành tính năng chính ngang hàng `regen`/`rune`/`spirit` (2026-08-28)
+
+`grace_menu` giờ đã là 1 tính năng đầy đủ (3 mục menu + section `[Grace
+Menu]` riêng trong ini), không còn là thử nghiệm nhỏ chia sẻ `[Misc]`
+nữa - chuyển `crates/sometweaks/src/misc/grace_menu/` (kèm 2 submodule
+`msg_hook`/`unlock_shop_inventory`) thành `crates/sometweaks/src/grace_menu/`,
+khai báo `mod grace_menu;` ở `lib.rs` ngang hàng `regen`/`rune`/`spirit`
+thay vì nằm trong `misc::`. Thuần tuý đổi cấu trúc, không đổi hành vi.
+
+## GraceMenu: đổi tên `unlock_shop_inventory` → `unlock_shop`, key ini `GraceMenu.UnlockShopInventory` → `GraceMenu.UnlockShop` (2026-08-28)
+
+Ngắn gọn hơn, đủ nghĩa. Đổi tên file/module/ini key, không đổi hành vi.
+
+## GraceMenu: review lại toàn bộ - fix doc-comment cũ, bỏ SHOP_SUFFIX (2026-08-28)
+
+Review theo yêu cầu người dùng. Sửa:
+- 3 chỗ doc comment còn trỏ tới `build_purchase_state` (đã đổi tên
+  `build_shop_state` từ trước, sót lại link cũ).
+- Bỏ hẳn `SHOP_SUFFIX`/tham số `suffix` của `combined_text` (đổi tên
+  `vanilla_text`) - không cần thiết, cả 3 mục giờ chỉ hiện đúng text
+  vanilla gốc.
+
+Không có bug chức năng nào phát hiện thêm. Các đặc điểm đã biết, chấp
+nhận được (không phải bug):
+- Mỗi lần vào 1 Grace instance chưa patch sẽ `Box::leak` vài trăm byte
+  (state/transition/buffer) - không thể free an toàn vì game có thể vẫn
+  giữ tham chiếu; đã là triết lý xuyên suốt file này. Tích luỹ theo số
+  LẦN vào Grace trong 1 phiên chơi (không chỉ số Grace vật lý), nhưng quá
+  nhỏ để đáng lo (~1KB/lần).
+- Nếu 1 biến thể Grace nào đó không có đủ 2 anchor (Sort Chest event /
+  OpenRepository transition), Grace đó sẽ leak nhỏ ở MỌI lần ghé thăm
+  (không bao giờ "đã patch") - chưa gặp trường hợp này trong test, chỉ là
+  khả năng lý thuyết.
+- `cargo clippy` hiện fail ngay ở crate `common`/`shared` (lỗi có sẵn từ
+  trước, không liên quan `sometweaks`/`grace_menu`) - ngoài phạm vi phiên
+  làm việc này.
+
+## Gộp RegenLog/RuneLog vào chung DebugLog (2026-08-28)
+
+Bỏ 2 key `RegenLog`/`RuneLog` - chỉ còn `DebugLog` kiểm soát toàn bộ log
+debug/verbose trong crate (đã đổi 3 chỗ gọi `config::get_bool` tương ứng
+trong `regen/attack_hook.rs`/`rune/reward.rs`). Ini cũ của người dùng (đã
+migrate trước đó) vẫn còn 2 key thừa `RegenLog=true`/`RuneLog=true` nằm
+im không dùng tới - không tự xoá (cơ chế migrate chỉ thêm key thiếu,
+không xoá key thừa) - có thể tự tay xoá nếu muốn dọn sạch.
+
+## GraceMenu: UnlockShop giờ hỗ trợ hot-reload (2026-08-28)
+
+Đổi `unlock_shop.rs` từ 1-shot (chỉ áp lúc khởi động) sang có
+`General.ReloadKey` hot-reload, đúng mẫu `drop_rate.rs` đang dùng: snapshot
+`event_flag_for_release` gốc của mọi `ShopLineupParam` row 1 lần (trước
+khi sửa bất kỳ gì), rồi mỗi lần `ReloadKey` được bấm, đọc lại
+`GraceMenu.UnlockShop` và áp `u32::MAX` (bật) hoặc phục hồi đúng giá trị
+gốc (tắt) - không còn bị kẹt vĩnh viễn ở "đã mở khoá" nếu tắt lại giữa
+chừng. Nếu `GraceMenu.UnlockShop=false` ngay từ đầu, bỏ qua hẳn việc chờ
+`SoloParamRepository` (như `DropRate.Enabled` đã làm) - chỉ chờ khi thật
+sự cần.
+
+## Rà soát chú thích hot-reload trong ini (2026-08-28)
+
+Đối chiếu từng key với code thật:
+- `Rune.KeepOnDeath` thiếu chú thích "Applied once at startup (no
+  hot-reload)" dù patch NOP chỉ chạy đúng 1 lần lúc khởi động, không có
+  tick/theo dõi reload nào (giống hệt `TorrentAnywhere`/`UnlockAshesOfWar`
+  đã có chú thích này) - đã thêm.
+- `GraceMenu.Upgrade`/`GraceMenu.Shop`/`GraceMenu.Sell` không phải "no
+  hot-reload" hoàn toàn (đọc lại config mỗi khi vào 1 Site of Grace mới)
+  cũng không phải hot-reload tức thời như `Regen.*` (Grace đang đứng
+  không đổi) - thêm ghi chú riêng cho đúng hành vi thật.
+
+Mọi key khác đã đối chiếu đều khớp đúng chú thích hiện có (hoặc đúng là
+hot-reload tức thời, không cần ghi chú).
+
+## Xác nhận test thật trong game: toàn bộ GraceMenu + Rune.KeepOnDeath (2026-08-28)
+
+Người dùng xác nhận đã test hết:
+- **`GraceMenu`**: cả 3 mục (Nâng cấp vũ khí/Mua tất cả/Bán) hoạt động
+  đúng, không đứng dậy, không mất mục khi đổi Grace, text hiển thị đúng
+  (kể cả sau khi bỏ hậu tố `(All)` khỏi "Mua"), `GraceMenu.UnlockShop`
+  hoạt động đúng (bật/tắt + hot-reload).
+- **`Rune.KeepOnDeath`**: đã hoạt động đúng (kỹ thuật AOB-scan-and-NOP
+  hiện tại trong `src/rune/keep_on_death.rs`, không phải cách tiếp cận
+  field `has_dropped_runes` cũ đã bị bỏ trước đó - xem mục README phía
+  trên "chưa test trong game" về cách cũ, đã lỗi thời, không áp dụng cho
+  code hiện tại nữa).
+
+Không còn tính năng nào của `GraceMenu` ở trạng thái "chưa test".
