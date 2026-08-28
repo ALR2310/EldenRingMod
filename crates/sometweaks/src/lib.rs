@@ -49,6 +49,18 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
+        // One single wait for the game engine, here, before any feature
+        // thread exists (2026-08-28). Every feature ultimately needs
+        // `CSTaskImp` (directly for a tick, or indirectly because its code
+        // patch targets memory the game hasn't finished relocating yet), and
+        // when each of them waited on its own they all raced the same
+        // `InvalidRva` window and each logged its own retry line. Waiting
+        // once here means the log reads "engine not ready -> engine ready ->
+        // features" instead of interleaving ten copies of the same fact.
+        // The features' own `task::wait_for_cs_task()` calls now return the
+        // cached instance immediately.
+        crate::task::wait_for_cs_task();
+
         // `reload` owns General.ReloadKey watching for the whole DLL (see its
         // module doc comment for why only one module may call
         // eldenring::util::input::is_key_pressed for the same key) - every

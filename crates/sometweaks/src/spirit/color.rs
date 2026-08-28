@@ -55,7 +55,7 @@ pub fn run() {
         return;
     }
 
-    let cs_task = crate::task::wait_for_cs_task("Spirit.Color");
+    let cs_task = crate::task::wait_for_cs_task();
 
     let _handle = crate::task::run_recurring_safe(
         cs_task,
@@ -74,7 +74,7 @@ pub fn run() {
         },
     );
 
-    logger::log("Spirit.Color tick registered on CSTaskGroupIndex::FrameBegin.");
+    logger::log("Spirit.Color: tick registered on CSTaskGroupIndex::FrameBegin.");
 
     loop {
         std::thread::sleep(Duration::from_secs(60));

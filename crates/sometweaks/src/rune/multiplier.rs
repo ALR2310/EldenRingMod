@@ -79,7 +79,7 @@ fn apply_multiplier() {
     let fixed = (multiplier * (1i64 << 20) as f64 + 0.5) as i64;
     let previous = FIXED_Q20.swap(fixed, Ordering::Relaxed);
     if previous != fixed {
-        logger::log(&format!("Rune.Multiplier={multiplier:.3}"));
+        logger::log(&format!("Rune.Multiplier={multiplier:.3}."));
     }
 }
 
@@ -162,37 +162,37 @@ fn hex_dump(bytes: &[u8]) -> String {
 /// untouched in that case.
 fn install(debug_log: bool) -> bool {
     let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) else {
-        logger::log("RuneMultiplier: ERROR - anchor pattern not found (used to locate AddSoul_Call). Game may have been updated - re-check ANCHOR_PATTERN.");
+        logger::error("Rune.Multiplier: anchor pattern not found (used to locate AddSoul_Call). Game may have been updated - re-check ANCHOR_PATTERN.");
         return false;
     };
-    logger::log(&format!("RuneMultiplier: anchor found at {anchor:p} (known-good offset is +0x630CB3)."));
+    logger::log(&format!("Rune.Multiplier: anchor found at {anchor:p} (known-good offset is +0x630CB3)."));
 
     let call_site = unsafe { anchor.add(ADDSOUL_CALL_SITE_OFFSET) };
     let Some(addsoul_entry) = resolve_call_target(call_site) else {
-        logger::log("RuneMultiplier: ERROR - couldn't resolve AddSoul_Call from the anchor - byte layout differs from expected.");
+        logger::error("Rune.Multiplier: couldn't resolve AddSoul_Call from the anchor - byte layout differs from expected.");
         return false;
     };
-    logger::log(&format!("RuneMultiplier: AddSoul_Call resolved at {addsoul_entry:p}."));
+    logger::log(&format!("Rune.Multiplier: AddSoul_Call resolved at {addsoul_entry:p}."));
 
     let original_prefix: [u8; ADDSOUL_PREFIX_LEN] =
         unsafe { std::slice::from_raw_parts(addsoul_entry, ADDSOUL_PREFIX_LEN) }
             .try_into()
             .unwrap();
     if debug_log {
-        logger::log(&format!("RuneMultiplier: AddSoul_Call original prefix bytes: {}", hex_dump(&original_prefix)));
+        logger::debug(&format!("Rune.Multiplier: AddSoul_Call original prefix bytes: {}", hex_dump(&original_prefix)));
     }
 
     let return_addr = unsafe { addsoul_entry.add(ADDSOUL_PREFIX_LEN) };
     let stub_body = build_stub(&original_prefix, return_addr);
     if debug_log {
-        logger::log(&format!("RuneMultiplier: AddSoul_Call stub body bytes: {}", hex_dump(&stub_body)));
+        logger::debug(&format!("Rune.Multiplier: AddSoul_Call stub body bytes: {}", hex_dump(&stub_body)));
     }
 
     let stub = unsafe {
         VirtualAlloc(std::ptr::null_mut(), stub_body.len(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     };
     if stub.is_null() {
-        logger::log("RuneMultiplier: ERROR - VirtualAlloc failed for the stub.");
+        logger::error("Rune.Multiplier: VirtualAlloc failed for the stub.");
         return false;
     }
     unsafe { std::ptr::copy_nonoverlapping(stub_body.as_ptr(), stub as *mut u8, stub_body.len()) };
@@ -209,7 +209,7 @@ fn install(debug_log: bool) -> bool {
     let mut old_protect: u32 = 0;
     let ok = unsafe { VirtualProtect(addsoul_entry as *mut c_void, ADDSOUL_PREFIX_LEN, PAGE_EXECUTE_READWRITE, &mut old_protect) };
     if ok == 0 {
-        logger::log("RuneMultiplier: ERROR - VirtualProtect failed, RuneMultiplier disabled.");
+        logger::error("Rune.Multiplier: VirtualProtect failed, disabled.");
         return false;
     }
     unsafe {
@@ -219,31 +219,31 @@ fn install(debug_log: bool) -> bool {
         FlushInstructionCache(GetCurrentProcess(), stub as *const c_void, stub_body.len());
     }
 
-    logger::log(&format!("RuneMultiplier: AddSoul_Call hook installed. stub={stub:p}"));
+    logger::log(&format!("Rune.Multiplier: AddSoul_Call hook installed. stub={stub:p}"));
     true
 }
 
-/// Installs the hook, then re-applies `RuneMultiplier` every tick on the
+/// Installs the hook, then re-applies `Rune.Multiplier` every tick on the
 /// game's own `FrameBegin` task group for the rest of the DLL's lifetime -
 /// hot reload doesn't need to re-patch anything, the stub always reads
 /// [FIXED_Q20] through a pointer, so just keeping that value current is
 /// enough. Meant to run on its own worker thread spawned from `DllMain`;
 /// never returns (except early, if the hook fails to install - the anchor
 /// pattern not being found doesn't affect any other module, so this only
-/// disables RuneMultiplier for the session rather than the whole DLL).
+/// disables Rune.Multiplier for the session rather than the whole DLL).
 pub fn run() {
     apply_multiplier();
 
     let debug_log = config::get_bool("DebugLog", false);
     if !install(debug_log) {
-        logger::log("RuneMultiplier disabled for this session (hook install failed).");
+        logger::warn("Rune.Multiplier: disabled for this session (hook install failed).");
         return;
     }
 
-    let cs_task = crate::task::wait_for_cs_task("RuneMultiplier");
+    let cs_task = crate::task::wait_for_cs_task();
     let _handle = crate::task::run_recurring_safe(
         cs_task,
-        "RuneMultiplier",
+        "Rune.Multiplier",
         CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
             apply_multiplier();

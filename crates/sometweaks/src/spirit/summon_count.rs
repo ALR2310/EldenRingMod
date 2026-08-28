@@ -176,7 +176,7 @@ fn apply(mode: &Mode) -> usize {
 /// approach. Meant to run on its own worker thread spawned from
 /// `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task("Spirit.Summon");
+    let cs_task = crate::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
 
@@ -202,7 +202,7 @@ pub fn run() {
         },
     );
 
-    logger::log("Spirit.Summon tick registered on CSTaskGroupIndex::FrameBegin.");
+    logger::log("Spirit.Summon: tick registered on CSTaskGroupIndex::FrameBegin.");
 
     loop {
         std::thread::sleep(Duration::from_secs(60));

@@ -48,16 +48,16 @@ const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 /// case.
 fn apply_patch() -> bool {
     let Some(addr) = memscan::wait_for_pattern_in_module(CALL_SITE_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) else {
-        logger::log("Rune.KeepOnDeath: ERROR - pattern not found within the timeout. Game may have been updated - re-check CALL_SITE_PATTERN.");
+        logger::error("Rune.KeepOnDeath: pattern not found within the timeout. Game may have been updated - re-check CALL_SITE_PATTERN.");
         return false;
     };
     let call_site = unsafe { addr.add(CALL_OFFSET) };
     if unsafe { *call_site } != CALL_OPCODE {
-        logger::log("Rune.KeepOnDeath: ERROR - byte at the expected CALL site isn't 0xE8 (layout differs from expected), disabled.");
+        logger::error("Rune.KeepOnDeath: byte at the expected CALL site isn't 0xE8 (layout differs from expected), disabled.");
         return false;
     }
     if !unsafe { codepatch::overwrite_bytes(call_site, &NOP5) } {
-        logger::log("Rune.KeepOnDeath: ERROR - VirtualProtect failed, disabled.");
+        logger::error("Rune.KeepOnDeath: VirtualProtect failed, disabled.");
         return false;
     }
     logger::log(&format!("Rune.KeepOnDeath: rune-loss-on-death CALL NOPed at {call_site:p}."));
@@ -74,6 +74,6 @@ pub fn run() {
     }
 
     if !apply_patch() {
-        logger::log("Rune.KeepOnDeath disabled for this session (patch failed).");
+        logger::warn("Rune.KeepOnDeath: disabled for this session (patch failed).");
     }
 }

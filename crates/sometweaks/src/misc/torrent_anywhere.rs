@@ -93,7 +93,7 @@ fn apply_code_patches() -> usize {
             logger::log(&format!("TorrentAnywhere: area_list_check patched at {addr:p}."));
             applied += 1;
         }
-        _ => logger::log("TorrentAnywhere: ERROR - area_list_check pattern not found/patch failed."),
+        _ => logger::error("TorrentAnywhere: area_list_check pattern not found/patch failed."),
     }
 
     match memscan::wait_for_pattern_in_module(DIRECT_RIDE_CHECK_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
@@ -101,7 +101,7 @@ fn apply_code_patches() -> usize {
             logger::log(&format!("TorrentAnywhere: direct_ride_check patched at {addr:p}."));
             applied += 1;
         }
-        _ => logger::log("TorrentAnywhere: ERROR - direct_ride_check pattern not found/patch failed."),
+        _ => logger::error("TorrentAnywhere: direct_ride_check pattern not found/patch failed."),
     }
 
     match memscan::wait_for_pattern_in_module(ABYSSAL_DISMOUNT_SKIP_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) {
@@ -109,7 +109,7 @@ fn apply_code_patches() -> usize {
             logger::log(&format!("TorrentAnywhere: abyssal_forced_dismount_skip patched at {addr:p}."));
             applied += 1;
         }
-        _ => logger::log("TorrentAnywhere: ERROR - abyssal_forced_dismount_skip pattern not found/patch failed."),
+        _ => logger::error("TorrentAnywhere: abyssal_forced_dismount_skip pattern not found/patch failed."),
     }
 
     applied
@@ -130,7 +130,7 @@ pub fn run() {
     let applied = apply_code_patches();
     logger::log(&format!("TorrentAnywhere: {applied}/3 code patch(es) applied."));
 
-    let cs_task = crate::task::wait_for_cs_task("TorrentAnywhere");
+    let cs_task = crate::task::wait_for_cs_task();
     let mut elapsed_ms: f64 = 0.0;
 
     let _handle = crate::task::run_recurring_safe(

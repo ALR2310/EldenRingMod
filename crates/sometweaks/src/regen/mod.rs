@@ -126,7 +126,7 @@ pub enum HealField {
 /// `FrameBegin` task group. Meant to run on its own worker thread spawned
 /// from `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task("Regen");
+    let cs_task = crate::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
@@ -209,7 +209,7 @@ pub fn run() {
         },
     );
 
-    logger::log("Regen tick registered on CSTaskGroupIndex::FrameBegin.");
+    logger::log("Regen: tick registered on CSTaskGroupIndex::FrameBegin.");
 
     // `_handle` cancels the recurring task if dropped - park this thread
     // forever so it stays alive for the lifetime of the DLL.

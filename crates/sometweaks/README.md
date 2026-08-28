@@ -1072,3 +1072,114 @@ là khả thi — build sạch, hook lên được, slider tương tác được
 ini + `ReloadKey` hot-reload. Đây mới là thử nghiệm — sẽ quay lại giải
 quyết các vấn đề trên nếu thật sự chốt chuyển sang cấu hình bằng menu
 trong game (không chỉ để vui).
+
+## Dọn log: level INFO/WARN/ERROR + gate CSTaskImp 1 lần (2026-08-28)
+
+Đọc lại `SomeTweaks.log` của 1 phiên chơi thật thì thấy 3 vấn đề, sửa cả 3
+trong lần này.
+
+**1. Mỗi tính năng tự chờ `CSTaskImp` → 10 dòng log nói cùng 1 chuyện.**
+Trước đây mỗi module (`Spirit.Summon`, `Spirit.Color`, `Regen`,
+`RuneMultiplier`, `Rune Reward`, `Reload`, `TorrentAnywhere`,
+`WeightMultiplier`, ...) đều gọi `task::wait_for_cs_task("<tên>")` trên
+thread riêng của nó, nên cả ~10 thread cùng đâm vào đúng 1 cửa sổ
+`InvalidRva` lúc game chưa unpack xong, và mỗi thread in ra 1 dòng
+`"<tên>: CSTaskImp not ready yet (InvalidRva), retrying in 1s..."`. Đó là
+thông tin **về game**, không phải về tính năng nào cả — nhân 10 lần là thừa.
+
+Giờ `task::wait_for_cs_task()` (bỏ tham số `tag`) chờ **đúng 1 lần cho cả
+DLL** qua `OnceLock`, và `lib.rs` gọi nó **trước khi spawn bất kỳ thread
+tính năng nào**. Log rút còn 2 dòng ở đầu file:
+
+```
+[...] [INFO ] Engine: waiting for CSTaskImp (game still initializing)...
+[...] [WARN ] Engine: CSTaskImp not ready yet (InvalidRva), retrying every 1s...
+[...] [INFO ] Engine: CSTaskImp ready after 1.0s (1 retry/retries) - starting features.
+```
+
+Các lần retry thứ 2 trở đi không log nữa (chỉ lần đầu mang thông tin: lỗi
+gì, tức game đang ở giai đoạn nào). Các module vẫn gọi
+`task::wait_for_cs_task()` như cũ nhưng giờ nhận ngay con trỏ đã cache.
+
+Lưu ý kỹ thuật: `CSTaskImp` chứa `DLPlainLightMutex` (bọc
+`CRITICAL_SECTION`) nên **không `Sync`**, không nhét thẳng
+`&'static CSTaskImp` vào `static` được. Cache bằng địa chỉ (`OnceLock<usize>`)
+rồi dựng lại reference khi trả về — không nới rộng phạm vi chia sẻ so với
+trước (mỗi module vốn đã giữ `&'static CSTaskImp` riêng trên thread của nó).
+
+Hệ quả phụ: các code patch chạy lúc khởi động (`WeightMultiplier` hook,
+`Rune.KeepOnDeath` NOP, `RuneMultiplier` hook, `TorrentAnywhere` patch) giờ
+áp muộn hơn ~1s so với trước, vì phải chờ engine. Vô hại — thậm chí an
+toàn hơn, vì lúc đó exe chắc chắn đã relocate xong.
+
+**2. Log có level.** `shared/src/logger.rs` thêm `warn`/`error`/`debug` bên
+cạnh `log` sẵn có; format 1 dòng giờ là
+`[YYYY-MM-DD HH:MM:SS] [LEVEL] message`, với `LEVEL` căn trái 5 ký tự để
+cột message của mọi dòng thẳng hàng, dễ lướt mắt. Giữ nguyên tên hàm `log`
+(= INFO) thay vì đổi thành `info` để **không phải sửa call site ở các crate
+khác** (`autoregen`, `passiverunes`, `runemultiplier`, `risearcher`,
+`weightmultiplier` cũng dùng chung logger này) — INFO đúng cho đại đa số
+lời gọi hiện có.
+
+Quy ước dùng level trong `sometweaks`:
+
+- `error` — tính năng hỏng hẳn và tắt cả phiên (không tìm thấy pattern,
+  `VirtualProtect`/`VirtualAlloc` fail, tick panic). Đã bỏ chuỗi
+  `"ERROR - "`/`"ERROR: "` viết tay bên trong message, vì cột level nói rồi.
+- `warn` — bất thường nhưng còn cứu được / còn đang retry (engine chưa sẵn
+  sàng, `DropRate` reload lúc chưa vào world, module tự tắt sau khi hook fail).
+- `debug` — chi tiết chỉ dùng khi soi 1 tính năng cụ thể (hex dump byte của
+  stub `RuneMultiplier`, damage từng đòn của `AttackHook`); những chỗ này
+  vốn đã nằm sau cờ ini riêng (`DebugLog`/`RegenLog`).
+
+**3. Bỏ log rune mỗi interval.** Dòng
+`"Rune Reward: +100 runes (interval tick, session 30s)"` bắn ra mỗi
+`Rune.Passive.Interval` ms suốt phiên chơi (~360 dòng/giờ ở mặc định 10s) và
+không nói gì mà người chơi không tự thấy trên thanh rune — chỉ làm phình
+file log. Đã bỏ hẳn (không phải đưa xuống `debug`, vì kể cả khi debug nó
+cũng không giúp gì). **Milestone bonus vẫn log** dưới cờ `RuneLog`: nó hiếm,
+1 lần/mốc, và dễ trôi qua mà không để ý trong game.
+
+## Đồng nhất format log giữa các tính năng (2026-08-28)
+
+Review lại toàn bộ `logger::` call site trong `sometweaks` (không đụng
+`autoregen`/`passiverunes`/`runemultiplier`/`risearcher`/`weightmultiplier` -
+các crate đó dùng chung `shared/src/logger.rs` nhưng là mod độc lập, không
+thuộc phạm vi "đồng nhất giữa các tính năng của SomeTweaks"). Trước khi sửa,
+mỗi tính năng tự đặt format hơi khác nhau dù cùng chung logger:
+
+- Tag không khớp ini key: log ghi `"RuneMultiplier: ..."` trong khi ini key
+  là `Rune.Multiplier`; log ghi `"Rune Reward: ..."` (có dấu cách) trong khi
+  mọi key của module này là `Rune.Passive.*`.
+- Dòng `"<Tag> tick registered on CSTaskGroupIndex::FrameBegin."` không có
+  dấu `:` sau tag ở 5/6 module (`Regen`, `Rune Reward`, `Spirit.Color`,
+  `Spirit.Regen`, `Spirit.Summon`), trong khi `TorrentAnywhere` lại có.
+- 3 dòng lỗi (`drop_rate`, `unlock_ashes_of_war`, `unlock_enchantments`) khi
+  `SoloParamRepository` không bao giờ sẵn sàng thì nhét tên tính năng ở
+  **cuối** câu thay vì ở đầu như mọi dòng lỗi khác trong cùng file.
+- Vài dòng "disabled for this session (...)" thiếu dấu `:` sau tag
+  (`WeightMultiplier`, `Rune.KeepOnDeath`, `RuneMultiplier`,
+  `Spirit.Summon.Anywhere`).
+
+Quy tắc chốt cho từ giờ: **mọi dòng log của 1 tính năng phải mở đầu bằng
+`<Tag>: `**, với `Tag` luôn khớp đúng tiền tố ini key của tính năng đó
+(`Spirit.Summon.Anywhere`, `Rune.KeepOnDeath`, `Rune.Multiplier`,
+`Rune.Passive`, ...) - trừ 2 kiểu ngoại lệ có chủ đích, áp dụng đồng nhất
+trên toàn bộ crate chứ không phải chỉ 1 module:
+
+1. Dòng "báo giá trị config vừa đổi" tự thân đã là `<IniKey>=<value>` (vd.
+   `WeightMultiplier=0.500.`, `Rune.Multiplier=3.000.`,
+   `DropRate.Multiplier=3.000 applied to ... row(s).`) - không cần thêm
+   `Tag:` phía trước vì chính `IniKey` đã là định danh.
+2. Dòng "tắt tại startup vì key=false" cũng ở dạng `<IniKey>=false -
+   skipping entirely at startup.` cùng lý do.
+
+`AttackHook` (bên trong `regen/attack_hook.rs`) và `Engine` (bên trong
+`task.rs`) là 2 tag không khớp trực tiếp 1 ini key - có chủ đích: `AttackHook`
+là 1 cơ chế con của `Regen.PerHit` (một hook code-patch riêng, khác hẳn tick
+của `Regen`), còn `Engine` là log về chính game engine (chờ `CSTaskImp`),
+không thuộc về tính năng nào cả - xem mục "Gate CSTaskImp 1 lần" phía trên.
+
+Không đổi tên hàm/biến trong code (`rune::multiplier`, `rune::reward` giữ
+nguyên tên module) - chỉ đổi **chuỗi hiển thị trong log**, nên không ảnh
+hưởng gì tới hành vi, chỉ tới nội dung `SomeTweaks.log`.
