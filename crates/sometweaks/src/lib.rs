@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "SomeTweaks" to control the output DLL's filename
 
 mod drop_rate;
+mod grace_menu;
 mod misc;
 mod player;
 mod regen;
@@ -38,9 +39,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\SomeTweaks.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // The log is always on (overwritten every run) so per-module flags
-        // like Regen.PerTick/PerHit's RegenLog have something to write to
-        // even with DebugLog=false - same convention as AutoRegen.
+        // The log is always on (overwritten every run) regardless of
+        // DebugLog - same convention as AutoRegen.
         logger::init(&dir, "SomeTweaks.log");
         logger::log("Activating SomeTweaks...");
         if migrated > 0 {
@@ -80,6 +80,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(spirit_regen::run);
         std::thread::spawn(spirit_summon_anywhere::run);
         std::thread::spawn(spirit_summon_count::run);
+        std::thread::spawn(grace_menu::run);
 
         regen::run();
     });

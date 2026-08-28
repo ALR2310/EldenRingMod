@@ -288,7 +288,7 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
         return; // not the player's own hit - no heal-on-hit to apply
     }
 
-    if config::get_bool("RegenLog", false) {
+    if config::get_bool("DebugLog", false) {
         if let Some(damage) = read_damage(hit_info) {
             logger::debug(&format!("AttackHook: player dealt {damage} damage."));
         }
@@ -344,7 +344,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
             source = "hit landed".to_string();
         }
     }
-    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("RegenLog", false) {
+    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("DebugLog", false) {
         return;
     }
     logger::log(&format!(
