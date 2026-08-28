@@ -65,7 +65,7 @@ fn apply_weight_factor() {
     let factor = (multiplier as f32).to_bits();
     let previous = WEIGHT_FACTOR.swap(factor, Ordering::Relaxed);
     if previous != factor {
-        logger::log(&format!("WeightMultiplier={multiplier:.3}"));
+        logger::log(&format!("WeightMultiplier={multiplier:.3}."));
     }
 }
 
@@ -101,7 +101,7 @@ const ANCHOR_SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn install() -> bool {
     let Some(anchor) = memscan::wait_for_pattern_in_module(ANCHOR_PATTERN, SCAN_RETRY_INTERVAL, ANCHOR_SCAN_TIMEOUT) else {
-        logger::log("WeightMultiplier: ERROR - weight-summing-loop anchor pattern not found within the timeout. Game may have been updated - re-check ANCHOR_PATTERN.");
+        logger::error("WeightMultiplier: weight-summing-loop anchor pattern not found within the timeout. Game may have been updated - re-check ANCHOR_PATTERN.");
         return false;
     };
     let target = unsafe { anchor.add(ANCHOR_TO_TARGET) };
@@ -111,7 +111,7 @@ fn install() -> bool {
     let stub_body = build_stub(factor_addr);
 
     let Some(stub) = codepatch::install_jmp_hook(target, TARGET_INSTRUCTION_LEN, &stub_body) else {
-        logger::log("WeightMultiplier: ERROR - failed to install hook (couldn't allocate stub or patch target).");
+        logger::error("WeightMultiplier: failed to install hook (couldn't allocate stub or patch target).");
         return false;
     };
 
@@ -129,13 +129,13 @@ pub fn run() {
     apply_weight_factor();
 
     if !install() {
-        logger::log("WeightMultiplier disabled for this session (hook install failed).");
+        logger::warn("WeightMultiplier: disabled for this session (hook install failed).");
         return;
     }
 
     logger::log("WeightMultiplier: hook active.");
 
-    let cs_task = crate::task::wait_for_cs_task("WeightMultiplier");
+    let cs_task = crate::task::wait_for_cs_task();
     let _handle = crate::task::run_recurring_safe(
         cs_task,
         "WeightMultiplier",

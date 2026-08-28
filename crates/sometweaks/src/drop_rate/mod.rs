@@ -266,14 +266,14 @@ pub fn run() {
                 log_mode(&mode, changed, "");
             }
             None => {
-                logger::log("ERROR: SoloParamRepository never became available - DropRate disabled for this session.");
+                logger::error("DropRate: SoloParamRepository never became available, disabled for this session.");
             }
         }
     } else {
-        logger::log("DropRate.Enabled=false - skipping ItemLotParam_enemy entirely at startup.");
+        logger::log("DropRate.Enabled=false - skipping entirely at startup.");
     }
 
-    let cs_task = crate::task::wait_for_cs_task("DropRate");
+    let cs_task = crate::task::wait_for_cs_task();
     let _handle = crate::task::run_recurring_safe(
         cs_task,
         "DropRate",
@@ -292,11 +292,11 @@ pub fn run() {
             last_seen_generation = generation;
 
             if crate::player::main_player_chr_ins_ptr().is_none() {
-                logger::log("DropRate: not in-world yet, reload skipped.");
+                logger::warn("DropRate: not in-world yet, reload skipped.");
                 return;
             }
             let Ok(repo) = (unsafe { SoloParamRepository::instance_mut() }) else {
-                logger::log("DropRate: SoloParamRepository not available on reload, skipped.");
+                logger::warn("DropRate: SoloParamRepository not available on reload, skipped.");
                 return;
             };
             let mode = build_mode();

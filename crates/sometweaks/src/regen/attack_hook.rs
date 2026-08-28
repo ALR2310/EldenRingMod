@@ -290,7 +290,7 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
 
     if config::get_bool("RegenLog", false) {
         if let Some(damage) = read_damage(hit_info) {
-            logger::log(&format!("AttackHook: player dealt {damage} damage."));
+            logger::debug(&format!("AttackHook: player dealt {damage} damage."));
         }
     }
 
@@ -375,7 +375,7 @@ pub fn install(params: OnHitParams) -> bool {
         // Also expected if another mod (e.g. Seamless Co-op) already hooked
         // this same call site first - fails closed rather than overwriting
         // whatever it installed.
-        logger::log("AttackHook: ERROR - OnAttack pattern not found (possibly patched by another mod), heal-on-hit disabled.");
+        logger::error("AttackHook: OnAttack pattern not found (possibly patched by another mod), heal-on-hit disabled.");
         return false;
     };
 
@@ -387,7 +387,7 @@ pub fn install(params: OnHitParams) -> bool {
     // can't drift from the actual instruction.
     let call_opcode = unsafe { *call_site };
     if call_opcode != 0xE8 {
-        logger::log("AttackHook: ERROR - byte at the expected CALL site isn't 0xE8 (layout differs from expected), heal-on-hit disabled.");
+        logger::error("AttackHook: byte at the expected CALL site isn't 0xE8 (layout differs from expected), heal-on-hit disabled.");
         return false;
     }
     let rel32 = unsafe { i32::from_le_bytes(*(call_site.add(1) as *const [u8; 4])) };
@@ -419,7 +419,7 @@ pub fn install(params: OnHitParams) -> bool {
         )
     };
     if ok == 0 {
-        logger::log("AttackHook: ERROR - VirtualProtect failed, heal-on-hit disabled.");
+        logger::error("AttackHook: VirtualProtect failed, heal-on-hit disabled.");
         return false;
     }
     unsafe {

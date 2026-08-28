@@ -32,10 +32,40 @@ pub fn init(log_dir: &str, file_name: &str) {
     }
 }
 
-pub fn log(message: &str) {
+/// Writes one line as `[timestamp] [LEVEL] message`. `level` is padded to a
+/// fixed 5 characters so every line's message column starts at the same
+/// offset, which is what makes a log skimmable at a glance (2026-08-28).
+fn write_line(level: &str, message: &str) {
     let mut guard = LOG_FILE.lock().unwrap();
     if let Some(file) = guard.as_mut() {
         let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-        let _ = writeln!(file, "[{now}] {message}");
+        let _ = writeln!(file, "[{now}] [{level:<5}] {message}");
     }
+}
+
+/// Plain informational line. Kept as `log` (rather than renamed to `info`)
+/// so every existing call site across all mod crates keeps working - INFO is
+/// the right level for the overwhelming majority of them.
+pub fn log(message: &str) {
+    write_line("INFO", message);
+}
+
+/// Something unexpected that the mod recovered from or is still retrying
+/// past - the feature is not (yet) lost.
+pub fn warn(message: &str) {
+    write_line("WARN", message);
+}
+
+/// A feature failed and stays disabled for the rest of the session. Do not
+/// repeat the word "ERROR" inside `message` - the level column already says
+/// it.
+pub fn error(message: &str) {
+    write_line("ERROR", message);
+}
+
+/// Verbose detail only useful when diagnosing a specific feature (byte
+/// dumps, per-tick values). Call sites are expected to already be behind
+/// their own ini flag (DebugLog/RegenLog/...).
+pub fn debug(message: &str) {
+    write_line("DEBUG", message);
 }

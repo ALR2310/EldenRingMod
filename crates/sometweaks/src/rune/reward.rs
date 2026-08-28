@@ -76,7 +76,7 @@ fn add_runes(amount: u32) -> bool {
 /// `FrameBegin` task group. Meant to run on its own worker thread spawned
 /// from `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task("Rune Reward");
+    let cs_task = crate::task::wait_for_cs_task();
 
     // Milestones are parsed once at startup rather than re-read every tick
     // like Enabled/Interval/Amount below - re-parsing would also require
@@ -95,7 +95,7 @@ pub fn run() {
 
     let _handle = crate::task::run_recurring_safe(
         cs_task,
-        "Rune Reward",
+        "Rune.Passive",
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
             // Rune.Passive.Enabled=false turns off both the per-interval
@@ -120,7 +120,7 @@ pub fn run() {
                     }
                     if config::get_bool("RuneLog", false) {
                         logger::log(&format!(
-                            "Rune Reward: milestone bonus +{} at {}s",
+                            "Rune.Passive: milestone bonus +{} at {}s.",
                             milestone.bonus,
                             milestone.at_ms / 1000.0
                         ));
@@ -142,17 +142,20 @@ pub fn run() {
             }
             interval_elapsed_ms = 0.0;
 
+            // Deliberately not logged (2026-08-28): the per-interval grant
+            // fires every `Rune.Passive.Interval` ms for the whole session
+            // (~360 lines/hour at the default 10s) and says nothing the
+            // player can't see on their own rune counter - it only inflated
+            // the log file. Milestone bonuses above stay logged: they are
+            // one-off, rare, and easy to miss in-game.
             let amount = config::get_int("Rune.Passive.Amount", 100).max(0) as u32;
-            if amount > 0 && add_runes(amount) && config::get_bool("RuneLog", false) {
-                logger::log(&format!(
-                    "Rune Reward: +{amount} runes (interval tick, session {:.0}s)",
-                    session_elapsed_ms / 1000.0
-                ));
+            if amount > 0 {
+                add_runes(amount);
             }
         },
     );
 
-    logger::log("Rune Reward tick registered on CSTaskGroupIndex::FrameBegin.");
+    logger::log("Rune.Passive: tick registered on CSTaskGroupIndex::FrameBegin.");
 
     // `_handle` cancels the recurring task if dropped - park this thread
     // forever so it stays alive for the lifetime of the DLL.

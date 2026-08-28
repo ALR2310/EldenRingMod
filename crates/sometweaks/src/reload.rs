@@ -38,7 +38,7 @@ pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// config map and bumping [RELOAD_GENERATION] on every press. Meant to run
 /// on its own worker thread spawned from `DllMain`; never returns.
 pub fn run(ini_path: String) {
-    let cs_task = crate::task::wait_for_cs_task("Reload");
+    let cs_task = crate::task::wait_for_cs_task();
 
     let _handle = crate::task::run_recurring_safe(
         cs_task,
@@ -49,7 +49,7 @@ pub fn run(ini_path: String) {
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
                 RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
-                logger::log("Config reloaded (hotkey pressed).");
+                logger::log("Reload: config reloaded (hotkey pressed).");
             }
         },
     );

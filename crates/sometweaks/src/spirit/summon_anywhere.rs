@@ -92,20 +92,20 @@ fn build_stub() -> Vec<u8> {
 
 fn install() -> bool {
     let Some(inner) = memscan::wait_for_pattern_in_module(GATE_INNER_PATTERN, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) else {
-        logger::log("Spirit.Summon.Anywhere: ERROR - gate pattern not found within the timeout. Game may have been updated - re-check GATE_INNER_PATTERN.");
+        logger::error("Spirit.Summon.Anywhere: gate pattern not found within the timeout. Game may have been updated - re-check GATE_INNER_PATTERN.");
         return false;
     };
     let entry = unsafe { inner.sub(ENTRY_OFFSET_FROM_INNER) };
 
     let actual_prefix = unsafe { std::slice::from_raw_parts(entry, ENTRY_PREFIX.len()) };
     if actual_prefix != ENTRY_PREFIX {
-        logger::log("Spirit.Summon.Anywhere: ERROR - function entry doesn't match the expected prologue (layout differs from expected), disabled.");
+        logger::error("Spirit.Summon.Anywhere: function entry doesn't match the expected prologue (layout differs from expected), disabled.");
         return false;
     }
 
     let stub = build_stub();
     let Some(stub_addr) = codepatch::install_jmp_hook(entry, ENTRY_PREFIX.len(), &stub) else {
-        logger::log("Spirit.Summon.Anywhere: ERROR - failed to install hook (couldn't allocate stub or patch target).");
+        logger::error("Spirit.Summon.Anywhere: failed to install hook (couldn't allocate stub or patch target).");
         return false;
     };
 
@@ -123,6 +123,6 @@ pub fn run() {
     }
 
     if !install() {
-        logger::log("Spirit.Summon.Anywhere disabled for this session (hook install failed).");
+        logger::warn("Spirit.Summon.Anywhere: disabled for this session (hook install failed).");
     }
 }
