@@ -142,6 +142,18 @@ fn build_extension(original_ids: &[i32], target_len: usize) -> Option<*mut Chain
 /// never from what the chain currently holds. Returns the number
 /// rebuilt, for logging.
 fn apply(mode: &Mode) -> usize {
+    // `WorldChrMan::instance_mut()` alone returns `Ok` as soon as the
+    // manager object exists (title/loading screen, mid-transition between
+    // Graces), well before `summon_buddy_manager`'s own storage is
+    // populated - touching it that early crashed with an access violation
+    // (2026-08-29, `SomeTweaks.dll+0xE30D`: null `trigger_speffect_to_buddy_map`
+    // storage pointer dereferenced while loading/transitioning). Same
+    // "is the player actually in the game world" gate every other feature
+    // in this crate already uses - see `player.rs`'s own doc comment.
+    if crate::player::main_player_chr_ins_ptr().is_none() {
+        return 0;
+    }
+
     let Ok(world_chr_man) = (unsafe { WorldChrMan::instance_mut() }) else {
         return 0;
     };

@@ -1530,3 +1530,69 @@ Người dùng xác nhận đã test hết:
   code hiện tại nữa).
 
 Không còn tính năng nào của `GraceMenu` ở trạng thái "chưa test".
+
+## Thêm module WarpAnywhere, port từ `.docs/FastTravel/Zibinha_FastTravel.dll` (2026-08-28)
+
+Người dùng đưa 2 tệp DLL tham khảo (`Zibinha_FastTravel.dll` và
+`Zibinha_MapInCombat.dll`, cùng thư mục `.docs/FastTravel/`) để giải mã và
+port. Cả 2 là C++ MSVC đơn giản (không phải Rust), không strip hết string
+nên đọc log message tiếng Bồ Đào Nha trực tiếp được (`MAP_CHECK:`,
+`WARP_BLOCK:`, `FIELD_AREA:`...). Dùng Ghidra `analyzeHeadless` decompile
+để lấy đúng byte AOB/patch thay vì đoán, cùng cách đã làm với
+`torrent_anywhere`/`msg_hook` trước đó.
+
+`Zibinha_MapInCombat.dll` là tập con byte-for-byte của
+`Zibinha_FastTravel.dll` (chỉ có 2 patch đầu). File `FastTravel` có thêm
+patch thứ 3 cho việc fast travel trong dungeon/hang. Port cả 3 vào
+`src/misc/warp_anywhere.rs`, module mới trong `misc/` (dùng chung
+`common::memscan`/`common::codepatch`, không có gì đặc thù game engine nên
+không cần thư viện `eldenring` cho phần patch chính - xem doc comment của
+module để biết vì sao):
+
+1. **`map_check`**: patch 5 byte đầu của 1 lệnh `call` (hàm kiểm tra map có
+   bị khoá khi đang combat) thành `xor rax,rax; nop; nop` - hàm không bao
+   giờ chạy nữa, kết quả luôn là "không bị khoá".
+2. **`warp_block`**: đổi 1 byte `je` (0x74) thành `jmp` (0xEB) - nhánh "cho
+   phép warp" luôn được chọn bất kể điều kiện gốc.
+3. **`field_area_unlock`**: resolve địa chỉ global slot của singleton
+   `FieldArea` 1 lần (từ lệnh `mov rcx,[rip+disp32]` đầu AOB, tính
+   `match_addr + 7 + disp32` theo chuẩn RIP-relative, không dùng công thức
+   suy ra từ pseudo-C của Ghidra vì nó sai do kiểu con trỏ giả tạo trong
+   bản decompile), sau đó mỗi tick (`CSTaskGroupIndex::FrameBegin`) đọc lại
+   slot và zero offset `+0xA0` của instance hiện tại - patch gốc dùng vòng
+   `Sleep(100)` từ thread riêng vì `FieldArea` chưa tồn tại lúc DLL load,
+   ở đây dùng tick trên `CSTaskImp` cho nhất quán với các module khác.
+
+Key ini mới: `WarpAnywhere=true` (mặc định bật, áp dụng 1 lần lúc khởi
+động, không hot-reload - giống `TorrentAnywhere`/`UnlockAshesOfWar`, vì
+patch code không có "giá trị gốc" để snapshot/restore).
+
+## Fix crash trong `Spirit.Summon` - thiếu gate "đã vào world" (2026-08-29)
+
+Người dùng báo game crash rất dễ (vào world, mở map dịch chuyển qua Grace
+khác, hoặc alt-tab), không có log nào in ra để biết nguyên nhân. Cả
+`WarpAnywhere` và `GraceMenu` đều đang tắt lúc test nên không phải do 2
+tính năng mới - phải tra ngược thật để tìm.
+
+Windows Event Log (`Get-WinEvent -FilterHashtable @{LogName='Application';
+Id=1000,1001}`) cho địa chỉ crash chính xác: exception `0xC0000005`
+(access violation) tại `SomeTweaks.dll+0xE30D`, lặp lại y hệt mọi lần -
+build lại DLL release, decompile bằng Ghidra `analyzeHeadless` (dùng
+`.pdb` sẵn có trong `target/release/`) để tra RVA đó ra đúng hàm và đúng
+lệnh asm gây crash: `mov rax,[rsi+0x1e538]; mov r8,[rax+8]` - trong
+`spirit/summon_count.rs`'s `apply()`.
+
+Nguyên nhân: `WorldChrMan::instance_mut()` trả `Ok` ngay khi object quản
+lý tồn tại (màn hình loading, đang chuyển giữa 2 Grace) - CHƯA có nghĩa
+`summon_buddy_manager.trigger_speffect_to_buddy_map`'s storage nội bộ đã
+được cấp phát. `apply()` đọc thẳng vào đó mà không qua gate "người chơi
+đã thực sự vào world chưa" như mọi module khác đã dùng
+(`crate::player::main_player_chr_ins_ptr()`, xem doc comment của
+`player.rs`) - lúc storage còn null, `iter_chains_mut()` dereference
+thẳng vào null pointer → crash im lặng (không phải Rust panic nên
+`run_recurring_safe`'s `catch_unwind` không bắt được).
+
+Fix: thêm đúng gate đó vào đầu `apply()`, trước khi chạm
+`summon_buddy_manager`. Đây cũng là bài học cho lần port tính năng sau:
+khi build ra 1 DLL mới rồi thấy crash không log, luôn tra Windows Event
+Log lấy offset trước, đừng đoán mò module nào gây ra.
