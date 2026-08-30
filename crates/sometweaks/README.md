@@ -1596,3 +1596,84 @@ Fix: thêm đúng gate đó vào đầu `apply()`, trước khi chạm
 `summon_buddy_manager`. Đây cũng là bài học cho lần port tính năng sau:
 khi build ra 1 DLL mới rồi thấy crash không log, luôn tra Windows Event
 Log lấy offset trước, đừng đoán mò module nào gây ra.
+
+## Thu hẹp range của "Mua" để giảm giật lúc mở menu (2026-08-29)
+
+Người dùng phản ánh: bấm "Mua" ở Grace menu bị đơ/giật khoảng 1-2s trước
+khi menu hiện ra, cảm giác khác hẳn so với game chạy bình thường rồi từ từ
+hiện menu.
+
+Đã thử giải mã `.docs/ermerchant.dll` ("Glorious Merchant", mod cộng đồng
+cũng cho phép mua mọi thứ) xem có kỹ thuật nào tốt hơn không - phát hiện
+nó **không** dùng `ShopLineupParam`/`OpenRegularShop` kiểu range như mình,
+mà hook thẳng vào 1 hàm nội bộ của UI shop để tự trả về danh sách item đã
+build sẵn (bỏ qua hẳn cơ chế scan range của game). Làm y hệt vậy đòi hỏi
+tìm và hook 1 hàm C++ chưa xác định trong game, rủi ro cao hơn nhiều so
+với các patch data/ESD đã làm từ trước đến giờ - người dùng chọn hoãn
+hướng đó lại, ưu tiên giải pháp an toàn hơn trước.
+
+Nguyên nhân giật: `CMD_OPEN_REGULAR_SHOP` được gọi với range cố định
+`0..9999999` (giống hệt "All Shops" của `Elden-Ring-CT-TGA`) - hàm gốc
+`OpenRegularShop` của game quét đồng bộ toàn bộ range đó để build danh
+sách hiển thị, nên yêu cầu nó quét ~10 triệu ID gần như trống rỗng mỗi lần
+bấm "Mua" chính là nguồn gốc độ giật.
+
+Fix: thêm `shop_lot_range()` - tính 1 lần (lần đầu "Mua" được build, tức
+lần đầu ngồi Grace trong phiên chơi) min/max ID THẬT có trong
+`ShopLineupParam` qua `SoloParamRepository::rows::<ShopLineupParam>()`,
+cache lại bằng `OnceLock`, dùng thay cho hằng số `0..9999999` cố định.
+Không xoá `ALL_SHOPS_LOT_START`/`ALL_SHOPS_LOT_END` - giữ làm fallback nếu
+`SoloParamRepository` chưa sẵn sàng hoặc không có row nào (không nên xảy
+ra thực tế, vì menu Grace chỉ tồn tại khi người chơi đã thực sự vào world).
+
+Chưa test lại trong game xem có thực sự hết giật không - range thật vẫn
+có thể còn khá rộng (tất cả thương nhân trong game), nên mức cải thiện
+cần đo thực tế, không chỉ suy luận lý thuyết.
+
+## Kết luận điều tra độ giật của "Mua": chấp nhận giới hạn hiện tại (2026-08-29)
+
+Người dùng test lại bản thu hẹp range ở trên: **vẫn giật y hệt**, mỗi lần
+bấm đều như nhau. Đo trực tiếp dữ liệu thật (`ShopLineupParam`, log tạm
+theo từng `equip_type`) xác nhận: các loại item (vũ khí/giáp/bùa/...)
+KHÔNG nằm gọn theo dải ID liên tục - chúng trải gần hết cả không gian
+`0..9999999` bất kể loại nào, nên thu hẹp range (dù theo loại hay toàn
+cục) không giảm được số dòng thật `OpenRegularShop` phải build. Số dòng
+thật đo được: 178 (vũ khí) + 453 (giáp) + 12 (bùa) + 498 (vật phẩm) + 135
++ 1 = ~1277 dòng - đây mới là con số quyết định độ giật, không phải độ
+rộng dải ID.
+
+Bằng chứng ủng hộ: bản đầu tiên của tính năng này (chỉ mở riêng shop Twin
+Maiden Husks, range hẹp 101800-101899, ~100 dòng thật) được xác nhận
+KHÔNG giật (xem mục "GraceMenu: bỏ 'Nâng cấp vũ khí'... thêm thật 'Mua đồ
+(Twin Maiden Husks)'" phía trên) - chỉ sau khi gộp thêm mọi thương nhân
+khác vào 1 range mới bắt đầu giật. Tỉ lệ thuận với số dòng thật, không
+phải độ rộng ID - khớp hoàn toàn với phép đo trên.
+
+Đã giải mã thêm `.docs/ermerchant.dll` ("Glorious Merchant") xem có kỹ
+thuật nào tránh được vấn đề này không - phát hiện nó **không hề dùng
+`OpenRegularShop` cho việc mua bán tổng hợp**: hàm "Hooking shops..." của
+nó chỉ build 1 bảng tra giá (`item_id -> giá`, phục vụ `all_items_free`),
+còn menu mua/bán theo từng loại (Vũ khí/Giáp/...) mà người dùng quan sát
+được trong game nhiều khả năng dựng từ chính cơ chế `AddTalkListData`
+(bank1 id19/id149 - tìm thấy y hệt trong dữ liệu tĩnh của nó) - tức là 1
+cây hội thoại dạng danh sách chữ (rẻ), mỗi dòng khi chọn chạy 1 lệnh ESD
+"đưa item vào túi + trừ rune" trực tiếp, không mở UI shop nào của game
+cả. Không xác định được chính xác lệnh ESD đó (bank/id, số tham số) vì nó
+ghi đè lên 1 state đã có sẵn trong đồ thị ESD SỐNG lúc chạy game, không
+nằm trong dữ liệu tĩnh của file `.dll` - cần debug runtime thật (gắn
+debugger vào tiến trình game) mới lần tiếp được, vượt quá phạm vi đọc
+tĩnh bằng Ghidra.
+
+**Quyết định cuối**: dừng điều tra thêm, chấp nhận độ giật ~1-2s hiện tại
+của "Mua" như 1 giới hạn đã biết của thiết kế "gộp mọi thương nhân vào 1
+range `OpenRegularShop`". Giữ nguyên bản thu hẹp range (`shop_lot_range`)
+vì vô hại và đúng về mặt kỹ thuật, dù không giải quyết được độ giật. Muốn
+hết giật thật sự sau này cần 1 trong 2 hướng, cả 2 đều tốn công lớn hơn
+nhiều so với các patch data/ESD đã làm trong repo này:
+- Bỏ qua `OpenRegularShop` hoàn toàn, tự dựng menu hội thoại +
+  "give item" trực tiếp như `ermerchant` (không cần hook native nguy
+  hiểm, chỉ cần thêm 1 lệnh ESD "cho item" mới vào bộ command đã dùng -
+  nhưng cần tìm ra lệnh đó là gì, quy mô hàng nghìn state cho hàng nghìn
+  item).
+- Giảm phạm vi merchant được gộp (chấp nhận không còn "mua hết mọi thứ
+  100%") để giảm số dòng thật cần build.

@@ -1,11 +1,10 @@
 //! Inserts up to 3 new items into the Site of Grace menu, each toggled by
 //! its own ini key: "Nâng cấp vũ khí" (`GraceMenu.Upgrade`, opens the
 //! smithing/enhance menu via `OpenEnhanceShop`), "Mua" (`GraceMenu.Shop`,
-//! opens `OpenRegularShop` with item lot range `0..9999999` - every
+//! opens `OpenRegularShop` with an item lot range covering every
 //! purchasable item from every merchant in the game, combined into one
-//! menu; the same range the community's own "All Shops" Cheat Engine
-//! table script uses), and "Bán" (`GraceMenu.Sell`, opens the sell-item
-//! menu via `OpenSellShop`).
+//! menu - see [shop_lot_range] for how that range is computed), and "Bán"
+//! (`GraceMenu.Sell`, opens the sell-item menu via `OpenSellShop`).
 //!
 //! ## Backstory: the "player stands up" bug, and how it got fixed
 //!
@@ -82,7 +81,11 @@
 //! rewrite has any reason to re-derive.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use std::time::Duration;
+
+use eldenring::cs::{ShopLineupParam, SoloParamRepository};
+use fromsoftware_shared::FromStatic;
 
 use common::codepatch;
 use common::config;
@@ -200,14 +203,63 @@ const CMD_UNKNOWN_141: EzCommand = EzCommand { bank: 1, id: 141 };
 // comment), independent of address.
 const SORT_CHEST_MSG_ID: i32 = 15000395;
 
-// Item lot range covering every purchasable item from every merchant in
-// the game, combined - the exact range the community's own "All Shops"
-// Cheat Engine table script uses (`executeEzStateEvent(EzStateEvent
-// .OpenRegularShop, {0, 9999999})`, `Elden-Ring-CT-TGA`'s cheat table).
-// An earlier version of this file used Twin Maiden Husks' own narrower
-// range (101800-101899, borrowed from `EldenConvenienceMod`) instead.
+// Fallback item lot range, only used if [shop_lot_range] can't read
+// `SoloParamRepository` for some reason - the exact range the community's
+// own "All Shops" Cheat Engine table script uses
+// (`executeEzStateEvent(EzStateEvent.OpenRegularShop, {0, 9999999})`,
+// `Elden-Ring-CT-TGA`'s cheat table). An earlier version of this file used
+// this fixed range unconditionally; see [shop_lot_range]'s own doc comment
+// for why that caused a visible hitch opening "Mua".
 const ALL_SHOPS_LOT_START: i32 = 0;
 const ALL_SHOPS_LOT_END: i32 = 9999999;
+
+/// Real min/max `ShopLineupParam` row IDs, computed once (the first time
+/// "Mua" is built, i.e. the first Site of Grace visited this session) and
+/// cached for the rest of the process's life - replaces the fixed
+/// `ALL_SHOPS_LOT_START..ALL_SHOPS_LOT_END` range every earlier version of
+/// this file passed to `OpenRegularShop` unconditionally.
+///
+/// This narrows the range but does NOT fix the ~1-2s hitch opening "Mua"
+/// (confirmed in-game, 2026-08-29) - a one-off diagnostic dump (per
+/// `equip_type` row-ID span) showed real rows are scattered across nearly
+/// the entire `0..9999999` space regardless of item category, so the
+/// actual cost is proportional to the ~1300 real rows `OpenRegularShop`
+/// has to build a lineup for, not to how wide a numeric range surrounds
+/// them - narrowing only trims dead air, which turned out to be
+/// negligible next to that real per-item cost. A genuinely hitch-free
+/// combined shop would need to bypass `OpenRegularShop` entirely (bespoke
+/// UI list construction, or ESD dialogue-list-based item selection like
+/// `ermerchant.dll` appears to use) - out of scope for now; kept as a
+/// harmless narrowing rather than reverted, and falls back to the full
+/// range if `SoloParamRepository` isn't available yet or somehow has zero
+/// rows (should not happen in practice - the Grace menu itself only
+/// exists once the player is in the game world, well after params load).
+fn shop_lot_range() -> (i32, i32) {
+    static RANGE: OnceLock<(i32, i32)> = OnceLock::new();
+    *RANGE.get_or_init(|| {
+        let Ok(repo) = (unsafe { SoloParamRepository::instance() }) else {
+            logger::warn("GraceMenu: SoloParamRepository not available, falling back to full shop lot range.");
+            return (ALL_SHOPS_LOT_START, ALL_SHOPS_LOT_END);
+        };
+
+        let (mut min, mut max) = (i32::MAX, i32::MIN);
+        for (id, _) in repo.rows::<ShopLineupParam>() {
+            let id = id as i32;
+            min = min.min(id);
+            max = max.max(id);
+        }
+
+        if min > max {
+            logger::warn("GraceMenu: ShopLineupParam has no rows, falling back to full shop lot range.");
+            return (ALL_SHOPS_LOT_START, ALL_SHOPS_LOT_END);
+        }
+
+        logger::log(&format!(
+            "GraceMenu: narrowed shop lot range to {min}..{max} (was {ALL_SHOPS_LOT_START}..{ALL_SHOPS_LOT_END})."
+        ));
+        (min, max)
+    })
+}
 
 // Message IDs for the new items' displayed text - `msg_hook` hooks the
 // game's own text lookup to return custom text for these specific IDs
@@ -395,10 +447,11 @@ fn build_action_state(commands: &[(EzCommand, &[i32])], menu_type: i32, return_t
     })) as *mut EzState
 }
 
-/// Opens `OpenRegularShop` against [ALL_SHOPS_LOT_START]`..`[ALL_SHOPS_LOT_END]
-/// (menu type 5). See [build_action_state].
+/// Opens `OpenRegularShop` against [shop_lot_range] (menu type 5). See
+/// [build_action_state].
 fn build_shop_state(return_target: *mut EzState) -> *mut EzState {
-    build_action_state(&[(CMD_OPEN_REGULAR_SHOP, &[ALL_SHOPS_LOT_START, ALL_SHOPS_LOT_END])], 5, return_target)
+    let (start, end) = shop_lot_range();
+    build_action_state(&[(CMD_OPEN_REGULAR_SHOP, &[start, end])], 5, return_target)
 }
 
 /// Opens `OpenSellShop` (menu type 6) - `(-1, -1)` copied verbatim from
