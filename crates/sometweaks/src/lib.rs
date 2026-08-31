@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "SomeTweaks" to control the output DLL's filename
 
 mod drop_rate;
+mod enemy_scaling;
 mod grace_menu;
 mod misc;
 mod player;
@@ -73,6 +74,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(rune_keep_on_death::run);
         std::thread::spawn(weight_multiplier::run);
         std::thread::spawn(drop_rate::run);
+        std::thread::spawn(enemy_scaling::run);
         std::thread::spawn(torrent_anywhere::run);
         std::thread::spawn(unlock_ashes_of_war::run);
         std::thread::spawn(unlock_enchantments::run);

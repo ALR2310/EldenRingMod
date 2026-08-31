@@ -1677,3 +1677,34 @@ nhiều so với các patch data/ESD đã làm trong repo này:
   item).
 - Giảm phạm vi merchant được gộp (chấp nhận không còn "mua hết mọi thứ
   100%") để giảm số dòng thật cần build.
+
+## Thêm module EnemyScaling: tăng máu + sát thương mọi kẻ thù (2026-08-30)
+
+Tính năng mới theo yêu cầu: tăng máu và sát thương của kẻ thù (không phân
+biệt boss/lính thường - người dùng chọn áp dụng cho MỌI kẻ thù, đơn giản
+hơn việc phải xác định đúng cờ "là boss" trong `NpcParam`).
+
+`src/enemy_scaling.rs` (module mới ở top-level, ngang hàng `drop_rate`),
+2 cơ chế độc lập, cùng gate `Enemy.Enabled`:
+
+- **`Enemy.Health.Multiplier`**: nhân `NpcParam.hp` cho MỌI row, hot-reload
+  được - dùng đúng công thức snapshot-gốc-rồi-tính-lại của `drop_rate`
+  (không compound qua nhiều lần reload).
+- **`Enemy.Damage.SpEffectId`**: không có field "hệ số sát thương" đơn
+  giản nào trong `NpcParam` (sát thương tính từ `AtkParam` + chỉ số của kẻ
+  tấn công lúc va chạm, không phải 1 con số cố định) - nên dùng cách áp
+  1 SpEffect có sẵn của game (tăng attack power) lên mọi kẻ thù mỗi giây,
+  qua `ChrInsExt::apply_speffect` (giống cách `torrent_anywhere` đang tự
+  áp lại SpEffect 19996 mỗi tick). Không đóng gói sẵn 1 ID mặc định nào -
+  chọn đại 1 row `SpEffectParam` có sẵn để tái sử dụng mà không kiểm tra
+  còn chỗ nào khác trong game cũng dùng row đó có thể vô tình đổi hành vi
+  chỗ khác luôn (đúng bài học từ lịch sử `grace_menu` - không bao giờ
+  hijack state có sẵn, luôn tạo state mới). Người dùng tự tìm ID hợp lý
+  bằng param editor (SmithBox/DSMapStudio) trước khi bật `!=0`.
+
+Kẻ thù được xác định qua `WorldChrMan.open_field_chr_set` (nhân vật theo
+map, loại trừ player/summon linh hồn/ghost) lọc `chr_type == Npc`
+(`is_enemy`) - không phân biệt boss/thường, khớp đúng lựa chọn "mọi kẻ
+thù" của người dùng.
+
+Chưa test trong game.
