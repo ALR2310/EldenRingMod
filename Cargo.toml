@@ -8,15 +8,21 @@ members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverun
 # rolled AOB scanning + manual offsets. Declared once here so every mod crate
 # builds against the exact same version.
 #
-# Pinned to a published crates.io release (2026-08-26) instead of tracking git
-# HEAD - reproducible builds (anyone building this repo gets the exact same
-# upstream code, not whatever the git repo happened to be at clone time), at
-# the cost of not automatically picking up upstream fixes/fields until the
-# version here is bumped by hand. Confirmed 0.14.0 already has every struct
-# `sometweaks` relies on (including the newest ones, like
-# `SummonBuddyManager`/`ChainingMap`) before switching.
-eldenring = "0.14.0"
-fromsoftware-shared = "0.14.0"
+# Pinned to an exact git commit (2026-08-31) rather than a crates.io release -
+# 0.14.0 (the latest published release) only recognizes Elden Ring 2.6.2.0/
+# 2.6.2.1 (`ERGameVersion`'s hardcoded version-string match in `rva.rs`
+# panics on anything else), so every mod in this workspace outright failed
+# to start once the game updated to 1.17.0 (2.7.0.0) - confirmed via
+# `RuneMultiplier`'s worker thread silently panicking in `rva::get()`. No
+# newer crates.io release exists yet, but upstream's git HEAD already
+# carries 1.17.0 support (`acb2a19c` "Update RVAs/versioning to ELDEN RING
+# 1.17.0", `eae96dfe` "Update some strucs for 1.17"), so this pins to that
+# exact commit - same reproducibility guarantee a version pin gives (anyone
+# building this repo gets this exact upstream code, not whatever HEAD
+# happens to be at clone time), just via `rev` instead of a version number
+# until a new crates.io release ships.
+eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "eae96dfec94fd9cf6f9d24813c8d08f72019f243" }
+fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "eae96dfec94fd9cf6f9d24813c8d08f72019f243" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 # Applies to every crate in the workspace when built from here (`cargo build

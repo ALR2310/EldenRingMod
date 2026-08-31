@@ -293,13 +293,29 @@ where
     )
 }
 
-/// Installs the hook, then watches `ReloadKey` on the game's own
-/// `FrameBegin` task group for the rest of the DLL's lifetime, reloading
-/// `RuneMultiplier.ini` on each press. Meant to run on its own worker thread
-/// spawned from `DllMain`; never returns (except early, if the hook fails to
-/// install).
+/// Waits for the game engine to actually finish initializing, THEN installs
+/// the hook, then watches `ReloadKey` on the game's own `FrameBegin` task
+/// group for the rest of the DLL's lifetime, reloading `RuneMultiplier.ini`
+/// on each press. Meant to run on its own worker thread spawned from
+/// `DllMain`; never returns (except early, if the hook fails to install).
+///
+/// `install()` used to run before this wait, scanning/patching
+/// `AddSoul_Call` as soon as the DLL loaded - the exact same "hooked too
+/// early" bug class this project has already hit and fixed elsewhere
+/// (`sometweaks::task::wait_for_cs_task`'s own doc comment): scanning before
+/// the executable has finished unpacking/relocating (Arxan) can find bytes
+/// that look valid but aren't fully settled yet, or patch a region an
+/// anti-tamper pass is still in the middle of protecting. Confirmed as the
+/// actual cause of a post-1.17-update crash (`0xC0000409`, stack-corruption
+/// style, at the same fault offset regardless of `Multiplier` value -
+/// ruling out the multiply math itself) even though the resolved
+/// `AddSoul_Call` target and its original bytes were independently verified
+/// byte-for-byte correct against the real 2.7.0.0 executable (2026-08-31) -
+/// the timing race, not the target, was the bug.
 pub fn run(ini_path: String, dir: String) {
     init_multiplier();
+
+    let cs_task = wait_for_cs_task();
 
     let debug_log = config::get_bool("DebugLog", false);
     if !install(debug_log) {
@@ -309,8 +325,6 @@ pub fn run(ini_path: String, dir: String) {
 
     let hotkey_name = config::get_string("ReloadKey", "F5");
     logger::log(&format!("Hook active. Press {hotkey_name} in-game to reload RuneMultiplier.ini."));
-
-    let cs_task = wait_for_cs_task();
 
     let _handle = run_recurring_safe(
         cs_task,
