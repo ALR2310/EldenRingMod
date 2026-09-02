@@ -137,6 +137,25 @@ trampoline (trước khi đụng `rsp`, vì patch bằng `jmp` nên `rsp` lúc �
 là giá trị code gốc vừa ghi), ghi lại đúng offset đó sau khi tạo shadow
 space riêng, trước khi gọi hàm thật.
 
+## Thêm `Regen.PerHit.ExcludeAow`, đổi key `Stamina` sang `SP` (2026-09-03)
+
+Port từ [`AutoRegen`](../autoregen) (xem README của nó, mục cùng ngày, có
+phân tích chi tiết) - cùng module `regen`:
+
+- **`Regen.PerHit.ExcludeAow`**: loại trừ đòn Weapon Art/Ash of War khỏi
+  Regen Per Hit (feature request từ Nexus: dùng phép/skill rẻ hồi FP cho
+  skill đắt hơn). Thử ngưỡng `atkId` trước, bỏ sau khi đối chiếu toàn bộ
+  ~11000 dòng `AtkParam` xuất từ SmithBox - không có field nào phân biệt
+  được AoW với đòn thường cho mọi vũ khí. Chuyển sang đọc input pad thật:
+  Elden Ring luôn kích hoạt Skill bằng `L2` bất kể tay nào đang chủ động -
+  `src/player.rs` thêm `main_player_new_action_presses()`
+  (`CSChrActionRequestModule.new_action_presses`), `regen/mod.rs` "chốt"
+  (latch) `LAST_ATTACK_WAS_SKILL` mỗi frame theo lần bấm mới nhất (không
+  đọc trạng thái tức thời, vì nút thường đã buông trước khi đòn muộn trong
+  combo skill trúng).
+- Đổi `Regen.PerTick.Stamina`/`Regen.PerHit.Stamina` → `.../SP` cho đồng bộ
+  2 chữ cái với `HP`/`FP` - không tương thích ngược với key cũ.
+
 ## Xác nhận Rune.KeepOnDeath hoạt động, dọn code debug (2026-08-25)
 
 Test lại bản AOB-scan-and-NOP (không phải bản `has_dropped_runes` cũ) -

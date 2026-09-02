@@ -6,7 +6,7 @@
 //! is only safe to mutate from the game's main thread, which is exactly where
 //! `CSTaskGroupIndex::FrameBegin` tasks run.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -49,6 +49,40 @@ pub fn mark_combat_activity() {
 pub fn is_in_combat() -> bool {
     let last = LAST_COMBAT_ACTIVITY_MS.load(Ordering::Relaxed);
     last != 0 && now_ms().saturating_sub(last) < COMBAT_TIMEOUT_MS
+}
+
+// Whether the last attack-starting button the player pressed was L2 (Skill/
+// Weapon Art), as opposed to R1/R2/L1 (a plain attack) - in Elden Ring, the
+// Skill button is L2 regardless of which hand is currently active/2-handed,
+// L1 is only ever a left-hand light attack or guard/parry, never a skill
+// trigger, so grouping it with R1/R2 is correct, not a gap. Confirmed
+// in-game (2026-09-03, ported from AutoRegen): a multi-hit Ash of War's
+// later hits land well after L2 is released, so checking the CURRENT l2 bit
+// only catches the earliest hit of a skill - this instead latches onto the
+// last actual button PRESS (new_*, not the held state) and keeps that
+// answer until a different attack button is pressed, so every hit in
+// between (however delayed) still reads correctly.
+static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
+
+/// Updates the `LAST_ATTACK_WAS_SKILL` latch from this frame's newly-pressed
+/// buttons, if any. No-op if nothing new was pressed this frame (preserves
+/// whatever the last press decided) or if the player isn't resolved yet.
+/// Called every frame, independent of any Regen.PerHit config.
+pub fn update_last_attack_input() {
+    let Some(presses) = crate::player::main_player_new_action_presses() else {
+        return;
+    };
+    if presses.r1 || presses.r2 || presses.l1 {
+        LAST_ATTACK_WAS_SKILL.store(false, Ordering::Relaxed);
+    } else if presses.l2 {
+        LAST_ATTACK_WAS_SKILL.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Whether the player's currently-playing attack was started by the L2
+/// (Skill/Weapon Art) button - see `LAST_ATTACK_WAS_SKILL`.
+pub fn is_last_attack_skill() -> bool {
+    LAST_ATTACK_WAS_SKILL.load(Ordering::Relaxed)
 }
 
 /// Splits a `Regen.PerTick.Unit`-tagged ini value into the `(flat_amount,
@@ -136,6 +170,12 @@ pub fn run() {
         "Regen",
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
+            // Latches "was the last attack button pressed L2 (Skill)?" so
+            // attack_hook can tell a skill hit from a plain one even several
+            // frames after the button was released - see
+            // LAST_ATTACK_WAS_SKILL. Unconditional every frame.
+            update_last_attack_input();
+
             // Regen.PerTick.Trigger picks which side of combat the tick heal
             // below applies on: 0 = Always, 1 = out of combat only, 2 = in
             // combat only. Read up front since it also decides whether the
@@ -154,9 +194,10 @@ pub fn run() {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
                 trigger: config::get_int("Regen.PerHit.Trigger", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
+                exclude_aow: config::get_bool("Regen.PerHit.ExcludeAow", false),
                 hp: config::get_double("Regen.PerHit.HP", 0.0),
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
-                stamina: config::get_double("Regen.PerHit.Stamina", 0.0),
+                stamina: config::get_double("Regen.PerHit.SP", 0.0),
             };
             let chr_resolved = crate::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
@@ -192,13 +233,13 @@ pub fn run() {
                 return;
             }
 
-            // Regen.PerTick.Unit picks what the HP/FP/Stamina values below
+            // Regen.PerTick.Unit picks what the HP/FP/SP values below
             // mean: 0 = flat points, 1 = percent of max stat (divided by 100
             // to get the fraction restored per tick).
             let unit = config::get_int("Regen.PerTick.Unit", 0);
             let hp_value = config::get_double("Regen.PerTick.HP", 0.0);
             let fp_value = config::get_double("Regen.PerTick.FP", 0.0);
-            let stamina_value = config::get_double("Regen.PerTick.Stamina", 0.0);
+            let stamina_value = config::get_double("Regen.PerTick.SP", 0.0);
             let (hp_flat, hp_fraction) = split_by_unit(unit, hp_value);
             let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
             let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);
