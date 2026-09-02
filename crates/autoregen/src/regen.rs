@@ -16,7 +16,7 @@
 //! both mods share the same config shape and code, rather than AutoRegen
 //! being stuck with the older design it started from.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -148,6 +148,67 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
         .map(|p| &p.chr_ins as *const _ as *const u8)
 }
 
+/// The newly-pressed-this-frame pad-input bits that decide
+/// `LAST_ATTACK_WAS_SKILL` below - which of R1/R2/L1/L2 the player just
+/// pressed, confirmed in-game (2026-09-03) to correlate with Ash of
+/// War/skill hits far more reliably than any `AtkParam` field does (see
+/// AutoRegen's README for the field-by-field comparison that ruled out
+/// `AtkParam`).
+struct NewActionPresses {
+    r1: bool,
+    r2: bool,
+    l1: bool,
+    l2: bool,
+}
+
+/// Reads the main player's `CSChrActionRequestModule.new_action_presses`
+/// bits for this frame. `None` if not resolved yet.
+fn main_player_new_action_presses() -> Option<NewActionPresses> {
+    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
+    let main_player = world_chr_man.main_player.as_ref()?;
+    let presses = &main_player.chr_ins.modules.action_request.new_action_presses;
+    Some(NewActionPresses {
+        r1: presses.r1(),
+        r2: presses.r2(),
+        l1: presses.l1(),
+        l2: presses.l2(),
+    })
+}
+
+// Whether the last attack-starting button the player pressed was L2 (Skill/
+// Weapon Art), as opposed to R1/R2/L1 (a plain attack) - in Elden Ring, the
+// Skill button is L2 regardless of which hand is currently active/2-handed,
+// L1 is only ever a left-hand light attack or guard/parry, never a skill
+// trigger, so grouping it with R1/R2 is correct, not a gap. Confirmed
+// in-game (2026-09-03): a multi-hit Ash of War's later hits land well after
+// L2 is released, so checking the CURRENT l2 bit only catches the earliest
+// hit of a skill - this instead latches onto the last actual button PRESS
+// (new_*, not the held state) and keeps that answer until a different
+// attack button is pressed, so every hit in between (however delayed)
+// still reads correctly.
+static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
+
+/// Updates the `LAST_ATTACK_WAS_SKILL` latch from this frame's newly-pressed
+/// buttons, if any. No-op if nothing new was pressed this frame (preserves
+/// whatever the last press decided) or if the player isn't resolved yet.
+/// Called every frame, independent of any Regen.PerHit config.
+pub fn update_last_attack_input() {
+    let Some(presses) = main_player_new_action_presses() else {
+        return;
+    };
+    if presses.r1 || presses.r2 || presses.l1 {
+        LAST_ATTACK_WAS_SKILL.store(false, Ordering::Relaxed);
+    } else if presses.l2 {
+        LAST_ATTACK_WAS_SKILL.store(true, Ordering::Relaxed);
+    }
+}
+
+/// Whether the player's currently-playing attack was started by the L2
+/// (Skill/Weapon Art) button - see `LAST_ATTACK_WAS_SKILL`.
+pub fn is_last_attack_skill() -> bool {
+    LAST_ATTACK_WAS_SKILL.load(Ordering::Relaxed)
+}
+
 /// Waits for the earliest reliable "the game process is actually alive"
 /// signal (`CSWindow`'s global hInstance, populated right after CRT init -
 /// see the crate's own doc comment on this function), retrying past
@@ -231,6 +292,17 @@ pub fn run(ini_path: String) {
         cs_task,
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
+            // Writes out any RegenLog lines the attack hook queued instead of
+            // writing directly - see attack_hook::flush_pending_logs. Always
+            // runs, every frame, regardless of what else below is enabled.
+            attack_hook::flush_pending_logs();
+
+            // Latches "was the last attack button pressed L2 (Skill)?" so
+            // attack_hook can tell a skill hit from a plain one even several
+            // frames after the button was released - see
+            // LAST_ATTACK_WAS_SKILL. Also unconditional every frame.
+            update_last_attack_input();
+
             // General.ReloadKey - already debounced by eldenring::util::input,
             // so this fires once per physical press regardless of how many
             // frames the key stays down.
@@ -258,9 +330,10 @@ pub fn run(ini_path: String) {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
                 trigger: config::get_int("Regen.PerHit.Trigger", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
+                exclude_aow: config::get_bool("Regen.PerHit.ExcludeAow", false),
                 hp: config::get_double("Regen.PerHit.HP", 0.0),
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
-                stamina: config::get_double("Regen.PerHit.Stamina", 0.0),
+                stamina: config::get_double("Regen.PerHit.SP", 0.0),
             };
             let chr_resolved = main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
@@ -296,13 +369,13 @@ pub fn run(ini_path: String) {
                 return;
             }
 
-            // Regen.PerTick.Unit picks what the HP/FP/Stamina values below
+            // Regen.PerTick.Unit picks what the HP/FP/SP values below
             // mean: 0 = flat points, 1 = percent of max stat (divided by 100
             // to get the fraction restored per tick).
             let unit = config::get_int("Regen.PerTick.Unit", 0);
             let hp_value = config::get_double("Regen.PerTick.HP", 0.0);
             let fp_value = config::get_double("Regen.PerTick.FP", 0.0);
-            let stamina_value = config::get_double("Regen.PerTick.Stamina", 0.0);
+            let stamina_value = config::get_double("Regen.PerTick.SP", 0.0);
             let (hp_flat, hp_fraction) = split_by_unit(unit, hp_value);
             let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
             let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);

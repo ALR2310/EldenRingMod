@@ -84,8 +84,9 @@ const HITINFO_DAMAGE_OFFSET: isize = 0x228;
 static ENABLED: AtomicI32 = AtomicI32::new(0);
 static TRIGGER: AtomicI32 = AtomicI32::new(0);
 static DAMAGE_TYPE: AtomicI32 = AtomicI32::new(0);
+static EXCLUDE_AOW: AtomicI32 = AtomicI32::new(0);
 
-// Raw Regen.PerHit.HP/FP/Stamina ini values, unscaled - what each means
+// Raw Regen.PerHit.HP/FP/SP ini values, unscaled - what each means
 // depends on TRIGGER (see OnHitParams below). Stored as raw f64 bits since
 // there's no AtomicF64 in std.
 static HP_BITS: AtomicU64 = AtomicU64::new(0);
@@ -101,22 +102,31 @@ fn load_f64(cell: &AtomicU64) -> f64 {
 }
 
 /// The `[Regen Per Hit]` ini values. `trigger` (the `Regen.PerHit.Trigger`
-/// key) picks what `hp`/`fp`/`stamina` (the raw `Regen.PerHit.HP/FP/Stamina`
+/// key) picks what `hp`/`fp`/`stamina` (the raw `Regen.PerHit.HP/FP/SP`
 /// values) mean - only one of the three modes ever applies per hit:
 /// - `0` (Fixed points): flat amount restored per hit, independent of max.
 /// - `1` (Percent of max stat): `1` = 1% of max, same "1 = 1%" convention as
-///   `Regen.PerTick.HP/FP/Stamina` under `Unit=1`.
+///   `Regen.PerTick.HP/FP/SP` under `Unit=1`.
 /// - `2` (Percent of damage dealt): `1` = 1% of the hit's own damage total
 ///   (true lifesteal, scales with how hard the hit landed).
 ///
 /// `damage_type` (the `Regen.PerHit.DamageType` key) picks which hits count
 /// at all, independent of `trigger`: `0` = melee only, `1` = ranged/spells
 /// only, `2` = both.
+///
+/// `exclude_aow` (the `Regen.PerHit.ExcludeAow` key): when true, skips hits
+/// landed while `regen::is_last_attack_skill()` says the player's last
+/// attack button was L2 (Skill/Weapon Art) rather than R1/R2/L1. An earlier
+/// attempt classified this from the hit's own AtkParam id instead - see
+/// AutoRegen's README for why that was abandoned (no `AtkParam` field
+/// reliably separates Ash of War hits from normal ones across every weapon
+/// in the game).
 #[derive(Clone, Copy)]
 pub struct OnHitParams {
     pub enabled: bool,
     pub trigger: i32,
     pub damage_type: i32,
+    pub exclude_aow: bool,
     pub hp: f64,
     pub fp: f64,
     pub stamina: f64,
@@ -155,12 +165,27 @@ std::arch::global_asm!(
     r#"
 .global attack_trampoline
 attack_trampoline:
+    # The real hit-resolution function actually takes a 5th argument, passed
+    # via the stack at [rsp+0x20] (not one of the 4 register args) - the
+    # ORIGINAL (untouched) caller code right before this call site writes
+    # 1 there if hit_info+0xd9==2, 0 otherwise, and the callee uses it to
+    # decide whether to even run its own critical-hit determination block
+    # (decompile: `.docs/reverse_engineering/AttackFn_decompiled.txt` in
+    # AutoRegen - same shared function, ported fix, 2026-09-03). We patch in
+    # with a JMP (not a CALL), so rsp here is still exactly what that caller
+    # code left it as - grab that byte now, before touching rsp at all, and
+    # forward it below. Without this, a backstab landed as a plain hit with
+    # no animation: the critical-hit block ran against whatever garbage was
+    # in our own shadow space instead.
+    movzx   r10d, byte ptr [rsp + 0x20]
+
     push    r12
     push    r13
     mov     r12, rsp
 
     and     rsp, -16
     sub     rsp, 0x20
+    mov     byte ptr [rsp + 0x20], r10b
 
     # Call the real hit-resolution function ourselves first, with the exact
     # same args the game's own (now-skipped) CALL would have used - this is
@@ -296,6 +321,7 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
 
     if ENABLED.load(Ordering::Relaxed) == 0
         || !matches_damage_type(hit_info, DAMAGE_TYPE.load(Ordering::Relaxed))
+        || (EXCLUDE_AOW.load(Ordering::Relaxed) != 0 && regen::is_last_attack_skill())
     {
         return;
     }
@@ -348,7 +374,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
         return;
     }
     logger::log(&format!(
-        "AttackHook: player {source} -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} Stamina"
+        "AttackHook: player {source} -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} SP"
     ));
 }
 
@@ -358,6 +384,7 @@ pub fn update_params(params: OnHitParams) {
     ENABLED.store(params.enabled as i32, Ordering::Relaxed);
     TRIGGER.store(params.trigger, Ordering::Relaxed);
     DAMAGE_TYPE.store(params.damage_type, Ordering::Relaxed);
+    EXCLUDE_AOW.store(params.exclude_aow as i32, Ordering::Relaxed);
     store_f64(&HP_BITS, params.hp);
     store_f64(&FP_BITS, params.fp);
     store_f64(&STAMINA_BITS, params.stamina);
@@ -427,6 +454,6 @@ pub fn install(params: OnHitParams) -> bool {
         VirtualProtect(on_attack as *mut c_void, patch.len(), old_protect, &mut old_protect);
     }
 
-    logger::log("AttackHook: installed - Regen.PerHit now applies only on the player's own confirmed weapon-source hits, and combat activity is tracked for Regen.PerTick's Trigger.");
+    logger::log("AttackHook: installed.");
     true
 }

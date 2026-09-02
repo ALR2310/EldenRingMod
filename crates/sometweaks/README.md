@@ -120,6 +120,42 @@ chỉ là placeholder). **Đã thử và bỏ:** cho phép dùng Site of Grace k
 Torrent - cần viết EMEVD event mới, ngoài phạm vi kiến trúc hiện tại (xem
 mục 2026-08-24 "Bỏ hẳn Misc.GraceOnTorrent").
 
+## Fix đâm lén mất animation khi bật Regen.PerHit (2026-09-03)
+
+Cùng bug và cùng fix vừa làm bên [`AutoRegen`](../autoregen) (xem README
+của nó, mục cùng ngày, có phân tích chi tiết) - `attack_trampoline` ở
+`src/regen/attack_hook.rs` dùng chung y hệt đoạn asm với AutoRegen, dính
+đúng lỗi tương tự: hàm xử lý va chạm nhận tham số thứ 5 qua stack
+(`[rsp+0x20]`, tính từ `hitInfo+0xd9==2`, quyết định có chạy khối xác định
+đòn chí mạng/đâm lén hay không), trampoline chỉ forward 4 tham số qua
+register nên `[rsp+0x20]` lúc gọi hàm thật là rác từ shadow space của chính
+mình. Đâm lén ra animation đòn thường, tắt `Regen.PerHit.Enabled` không hết
+lỗi (hook không gỡ patch), phải thoát game vào lại.
+
+Fix: đọc `byte ptr [rsp+0x20]` vào `r10b` làm lệnh đầu tiên trong
+trampoline (trước khi đụng `rsp`, vì patch bằng `jmp` nên `rsp` lúc đó vẫn
+là giá trị code gốc vừa ghi), ghi lại đúng offset đó sau khi tạo shadow
+space riêng, trước khi gọi hàm thật.
+
+## Thêm `Regen.PerHit.ExcludeAow`, đổi key `Stamina` sang `SP` (2026-09-03)
+
+Port từ [`AutoRegen`](../autoregen) (xem README của nó, mục cùng ngày, có
+phân tích chi tiết) - cùng module `regen`:
+
+- **`Regen.PerHit.ExcludeAow`**: loại trừ đòn Weapon Art/Ash of War khỏi
+  Regen Per Hit (feature request từ Nexus: dùng phép/skill rẻ hồi FP cho
+  skill đắt hơn). Thử ngưỡng `atkId` trước, bỏ sau khi đối chiếu toàn bộ
+  ~11000 dòng `AtkParam` xuất từ SmithBox - không có field nào phân biệt
+  được AoW với đòn thường cho mọi vũ khí. Chuyển sang đọc input pad thật:
+  Elden Ring luôn kích hoạt Skill bằng `L2` bất kể tay nào đang chủ động -
+  `src/player.rs` thêm `main_player_new_action_presses()`
+  (`CSChrActionRequestModule.new_action_presses`), `regen/mod.rs` "chốt"
+  (latch) `LAST_ATTACK_WAS_SKILL` mỗi frame theo lần bấm mới nhất (không
+  đọc trạng thái tức thời, vì nút thường đã buông trước khi đòn muộn trong
+  combo skill trúng).
+- Đổi `Regen.PerTick.Stamina`/`Regen.PerHit.Stamina` → `.../SP` cho đồng bộ
+  2 chữ cái với `HP`/`FP` - không tương thích ngược với key cũ.
+
 ## Xác nhận Rune.KeepOnDeath hoạt động, dọn code debug (2026-08-25)
 
 Test lại bản AOB-scan-and-NOP (không phải bản `has_dropped_runes` cũ) -
