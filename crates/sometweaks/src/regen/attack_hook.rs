@@ -155,12 +155,27 @@ std::arch::global_asm!(
     r#"
 .global attack_trampoline
 attack_trampoline:
+    # The real hit-resolution function actually takes a 5th argument, passed
+    # via the stack at [rsp+0x20] (not one of the 4 register args) - the
+    # ORIGINAL (untouched) caller code right before this call site writes
+    # 1 there if hit_info+0xd9==2, 0 otherwise, and the callee uses it to
+    # decide whether to even run its own critical-hit determination block
+    # (decompile: `.docs/reverse_engineering/AttackFn_decompiled.txt` in
+    # AutoRegen - same shared function, ported fix, 2026-09-03). We patch in
+    # with a JMP (not a CALL), so rsp here is still exactly what that caller
+    # code left it as - grab that byte now, before touching rsp at all, and
+    # forward it below. Without this, a backstab landed as a plain hit with
+    # no animation: the critical-hit block ran against whatever garbage was
+    # in our own shadow space instead.
+    movzx   r10d, byte ptr [rsp + 0x20]
+
     push    r12
     push    r13
     mov     r12, rsp
 
     and     rsp, -16
     sub     rsp, 0x20
+    mov     byte ptr [rsp + 0x20], r10b
 
     # Call the real hit-resolution function ourselves first, with the exact
     # same args the game's own (now-skipped) CALL would have used - this is
@@ -427,6 +442,6 @@ pub fn install(params: OnHitParams) -> bool {
         VirtualProtect(on_attack as *mut c_void, patch.len(), old_protect, &mut old_protect);
     }
 
-    logger::log("AttackHook: installed - Regen.PerHit now applies only on the player's own confirmed weapon-source hits, and combat activity is tracked for Regen.PerTick's Trigger.");
+    logger::log("AttackHook: installed.");
     true
 }
