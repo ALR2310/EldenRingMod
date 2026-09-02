@@ -231,6 +231,11 @@ pub fn run(ini_path: String) {
         cs_task,
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
+            // Writes out any RegenLog lines the attack hook queued instead of
+            // writing directly - see attack_hook::flush_pending_logs. Always
+            // runs, every frame, regardless of what else below is enabled.
+            attack_hook::flush_pending_logs();
+
             // General.ReloadKey - already debounced by eldenring::util::input,
             // so this fires once per physical press regardless of how many
             // frames the key stays down.

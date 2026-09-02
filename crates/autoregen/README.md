@@ -191,6 +191,53 @@ của nó cùng ngày) sang crate này - `Regen.PerHit` (panic-safety qua
 Không đụng đến ini/hành vi gameplay, chỉ cải thiện độ ổn định lúc khởi động
 và chống crash.
 
+## Fix đâm lén/đâm chí mạng mất animation khi bật `Regen.PerHit` (2026-09-03)
+
+Báo lỗi từ Nexus + tự test lại: bật `Regen.PerHit.Enabled=true` rồi đâm sau
+lưng địch → đòn chỉ ra như 1 nhát chém thường, không animation "đâm lén",
+tắt `Regen.PerHit.Enabled` trong ini **không** hết lỗi (vì hook vẫn còn cài
+trong bộ nhớ - `Enabled` chỉ gate phần heal, không gỡ patch), phải thoát
+game vào lại mới hết. Riposte sau khi parry thì luôn hoạt động bình thường
+- chỉ backstab bị.
+
+**Cách chẩn đoán**: thêm tạm log `atkCategory`/`atkId`/`sourceType` mỗi đòn
+trúng (đọc `HITINFO_ATK_PARAM_CATEGORY_OFFSET`/`_ID_OFFSET`, offset cũ đã bỏ
+lúc port sang thiết kế `SomeTweaks` - thêm lại). Log cho thấy đòn đâm lén bị
+lỗi bắn ra **2 dòng "dealt X damage" liên tiếp** (1 dòng 0 damage rồi 1 dòng
+damage thật) thay vì 1 dòng dealt + 1 dòng heal như riposte bình thường -
+dấu hiệu chuỗi animation script bị hủy giữa chừng, rơi về xử lý như đòn
+thường.
+
+Test cô lập xác nhận: chỉ cần **hook được cài** (`Regen.PerHit.Enabled=true`
+tại thời điểm vào game) là đủ gây lỗi - không liên quan tốc độ/ghi log
+(đã thử dời hết việc ghi `RegenLog` ra khỏi hook sang 1 hàng đợi, xả ở tick
+riêng mỗi frame thay vì ghi file đồng bộ giữa lúc xử lý va chạm - không ăn
+thua, chứng minh nguyên nhân không phải do độ trễ).
+
+**Nguyên nhân thật** (đọc lại `.docs/reverse_engineering/AttackFn_decompiled.txt`
+- bản decompile cũ của đúng hàm đang hook): hàm xử lý va chạm nhận **5 tham
+số**, không phải 4 như hook vẫn tưởng - tham số thứ 5 (1 byte) được truyền
+qua **stack** tại `[rsp+0x20]`, không qua register. Code gốc (đoạn ngay
+trước call site, không bị patch) tính giá trị này từ `hitInfo+0xd9==2` rồi
+ghi vào `[rsp+0x20]` trước khi gọi; bên trong hàm đích, giá trị đó quyết
+định **có chạy khối xác định đòn chí mạng/đâm lén hay bỏ qua**
+(`CMP byte ptr [RSP+0xc0],SIL; JNZ <bỏ qua>` - offset lệch do 2 hàm có
+size frame khác nhau, cùng trỏ về 1 chỗ). Trampoline của mình chỉ forward
+đúng 4 tham số qua `rcx/rdx/r8/r9`, rồi tự `sub rsp,0x20` tạo shadow space
+**mới** trước khi gọi - `[rsp+0x20]` lúc đó là rác trong shadow space của
+chính mình, không phải giá trị game đã tính.
+
+**Fix**: vì patch bằng `jmp` (không phải `call`), `rsp` lúc mới vào
+trampoline vẫn y hệt lúc code gốc (chưa bị patch) vừa ghi giá trị đó - chỉ
+cần đọc `byte ptr [rsp+0x20]` vào `r10b` (register volatile, không cần lưu)
+làm **lệnh đầu tiên trong trampoline, trước khi đụng gì vào rsp**, rồi ghi
+lại đúng offset đó sau khi tạo shadow space riêng, trước khi gọi hàm thật.
+Không cần sửa gì ở phía Rust (`on_attack_observed` không cần tham số thứ 5
+này) - chỉ sửa đúng đoạn `global_asm!` trong `src/attack_hook.rs`.
+
+Cùng 1 trampoline y hệt được dùng ở [`sometweaks`](../sometweaks) (port từ
+đây) - đã áp dụng fix tương tự bên đó luôn, không cần chờ báo lỗi riêng.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
