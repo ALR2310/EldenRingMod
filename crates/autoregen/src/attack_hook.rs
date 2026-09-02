@@ -30,11 +30,43 @@
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use crate::regen::{self, HealField};
 use common::config;
 use common::logger;
 use common::memscan;
+
+// RegenLog lines queued by the hook instead of written immediately - see
+// `flush_pending_logs`.
+static PENDING_LOGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+fn queue_log(message: String) {
+    if let Ok(mut queue) = PENDING_LOGS.lock() {
+        queue.push(message);
+    }
+}
+
+/// Writes out any RegenLog lines queued by the hook (see `queue_log`).
+/// Called once per frame from `regen.rs`'s tick, well outside the game's own
+/// hit-resolution call stack: `logger::log` does a synchronous file write
+/// (`Mutex<File>` + a raw `writeln!`, see `common::logger`), unpredictably
+/// slow (disk/AV latency) compared to the pointer arithmetic the rest of
+/// this hook does. Suspected (2026-09-03, see AutoRegen's README) of
+/// delaying the hooked call's return long enough to disrupt a backstab's
+/// tightly-timed critical-hit sequence when `RegenLog=true` - moved off the
+/// hot path entirely rather than left as a "don't leave this on" caveat.
+pub fn flush_pending_logs() {
+    let messages: Vec<String> = {
+        let Ok(mut queue) = PENDING_LOGS.lock() else {
+            return;
+        };
+        std::mem::take(&mut *queue)
+    };
+    for message in messages {
+        logger::log(&message);
+    }
+}
 
 unsafe extern "system" {
     fn VirtualProtect(
@@ -85,6 +117,15 @@ const HITINFO_SOURCE_OBJECT_OFFSET: isize = 0x1D8;
 // game's own (now-skipped) CALL instruction run after us - reading this
 // offset from a "peek before the real call" hook always returns 0.
 const HITINFO_DAMAGE_OFFSET: isize = 0x228;
+
+// Only used for the optional RegenLog dump below - AtkParam category/id of
+// the hit. Brought back (2026-09-03) to investigate two live reports: a
+// backstab landing as a plain hit with no animation while Regen Per Hit is
+// enabled (root cause not yet confirmed), and a request to exclude Ash of
+// War/weapon art hits from the heal - both need real atkCategory/atkId
+// values from actual hits to pin down, not guesswork.
+const HITINFO_ATK_PARAM_ID_OFFSET: isize = 0x40;
+const HITINFO_ATK_PARAM_CATEGORY_OFFSET: isize = 0x44;
 
 static ENABLED: AtomicI32 = AtomicI32::new(0);
 static TRIGGER: AtomicI32 = AtomicI32::new(0);
@@ -160,12 +201,26 @@ std::arch::global_asm!(
     r#"
 .global attack_trampoline
 attack_trampoline:
+    # The real hit-resolution function actually takes a 5th argument, passed
+    # via the stack at [rsp+0x20] (not one of the 4 register args) - the
+    # ORIGINAL (untouched) caller code right before this call site writes
+    # 1 there if hit_info+0xd9==2, 0 otherwise, and the callee uses it to
+    # decide whether to even run its own critical-hit determination block
+    # (decompile: `.docs/reverse_engineering/AttackFn_decompiled.txt`).
+    # We patch in with a JMP (not a CALL), so rsp here is still exactly what
+    # that caller code left it as - grab that byte now, before touching rsp
+    # at all, and forward it below. Without this, a backstab landed as a
+    # plain hit with no animation: the critical-hit block ran against
+    # whatever garbage was in our own shadow space instead (2026-09-03).
+    movzx   r10d, byte ptr [rsp + 0x20]
+
     push    r12
     push    r13
     mov     r12, rsp
 
     and     rsp, -16
     sub     rsp, 0x20
+    mov     byte ptr [rsp + 0x20], r10b
 
     # Call the real hit-resolution function ourselves first, with the exact
     # same args the game's own (now-skipped) CALL would have used - this is
@@ -236,6 +291,32 @@ fn read_target(ctx: *const c_void) -> Option<*const c_void> {
     unsafe { Some(*(ctx.byte_offset(CTX_TARGET_OFFSET) as *const *const c_void)) }
 }
 
+/// Reads the hit's `sourceType` via the same vtable call used elsewhere in
+/// the game's engine for this purpose. `-1` if `hit_info`/the vtable/the
+/// function pointer don't look valid.
+fn read_source_type(hit_info: *const c_void) -> i32 {
+    if !looks_like_pointer(hit_info) {
+        return -1;
+    }
+    unsafe {
+        let source_object = *(hit_info.byte_offset(HITINFO_SOURCE_OBJECT_OFFSET) as *const *const c_void);
+        get_source_object_type(source_object)
+    }
+}
+
+/// Reads the hit's AtkParam `(category, id)` from `hit_info`. `None` if
+/// `hit_info` itself doesn't look like a valid pointer.
+fn read_atk_param(hit_info: *const c_void) -> Option<(i32, i32)> {
+    if !looks_like_pointer(hit_info) {
+        return None;
+    }
+    unsafe {
+        let category = *(hit_info.byte_offset(HITINFO_ATK_PARAM_CATEGORY_OFFSET) as *const i32);
+        let id = *(hit_info.byte_offset(HITINFO_ATK_PARAM_ID_OFFSET) as *const i32);
+        Some((category, id))
+    }
+}
+
 /// Whether this hit's source type matches `damage_type` (the
 /// `Regen.PerHit.DamageType` ini value): `0` = melee only (`sourceType==1`),
 /// `1` = ranged/spells only (`sourceType==3`), `2` = either (no filtering).
@@ -243,17 +324,11 @@ fn matches_damage_type(hit_info: *const c_void, damage_type: i32) -> bool {
     if damage_type == 2 {
         return true;
     }
-    if !looks_like_pointer(hit_info) {
-        return false;
-    }
-    unsafe {
-        let source_object = *(hit_info.byte_offset(HITINFO_SOURCE_OBJECT_OFFSET) as *const *const c_void);
-        let source_type = get_source_object_type(source_object);
-        if damage_type == 1 {
-            source_type == 3 // bullet/projectile-style source (most spells)
-        } else {
-            source_type == 1 // direct/melee hit
-        }
+    let source_type = read_source_type(hit_info);
+    if damage_type == 1 {
+        source_type == 3 // bullet/projectile-style source (most spells)
+    } else {
+        source_type == 1 // direct/melee hit
     }
 }
 
@@ -295,7 +370,11 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
 
     if config::get_bool("RegenLog", false) {
         if let Some(damage) = read_damage(hit_info) {
-            logger::log(&format!("AttackHook: player dealt {damage} damage."));
+            let (atk_category, atk_id) = read_atk_param(hit_info).unwrap_or((-1, -1));
+            let source_type = read_source_type(hit_info);
+            queue_log(format!(
+                "AttackHook: player dealt {damage} damage (atkCategory={atk_category} atkId={atk_id} sourceType={source_type})."
+            ));
         }
     }
 
@@ -352,7 +431,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
     if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("RegenLog", false) {
         return;
     }
-    logger::log(&format!(
+    queue_log(format!(
         "AttackHook: player {source} -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} Stamina"
     ));
 }
@@ -431,6 +510,6 @@ pub fn install(params: OnHitParams) -> bool {
         VirtualProtect(on_attack as *mut c_void, patch.len(), old_protect, &mut old_protect);
     }
 
-    logger::log("AttackHook: installed - Regen Per Hit now applies only on the player's own confirmed weapon-source hits, and combat activity is tracked for Regen Per Tick's Trigger.");
+    logger::log("AttackHook: installed.");
     true
 }
