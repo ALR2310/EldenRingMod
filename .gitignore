@@ -1,6 +1,7 @@
 /.docs
 /target
 /build
+/.secrets
 
 # risearcher: Smithbox project cache (regenerable, machine-specific) and its
 # compiled regulation.bin (regenerated from csv/RiseArcher.MASSEDIT / csv/*.csv)
