@@ -11,15 +11,16 @@ Regen.PerTick.Interval=1000     ; how often (ms) HP/FP/Stamina are topped up
 Regen.PerTick.Unit=1            ; 0 = flat points, 1 = percent of max stat
 Regen.PerTick.HP=0.5
 Regen.PerTick.FP=1
-Regen.PerTick.Stamina=5
+Regen.PerTick.SP=5
 
 [Regen Per Hit]
 Regen.PerHit.Enabled=false
 Regen.PerHit.Trigger=0          ; 0 = flat points, 1 = percent of max stat, 2 = percent of damage dealt
 Regen.PerHit.DamageType=0       ; 0 = melee hits only, 1 = ranged/spell hits only, 2 = both
+Regen.PerHit.ExcludeAow=false   ; when true, Weapon Art/Ash of War hits don't restore anything
 Regen.PerHit.HP=0.5
 Regen.PerHit.FP=1
-Regen.PerHit.Stamina=5[/code]
+Regen.PerHit.SP=5[/code]
 
 [b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
 
@@ -46,6 +47,10 @@ Regen.PerHit.Stamina=5[/code]
 
 [size=4][b]Changelog[/b][/size]
 
+[b]2.1.3[/b]
+[list]
+[*]Added an option to exclude Weapon Art/Ash of War hits from on-hit regen, so it only rewards plain attacks.[/*]
+[/list]
 [b]2.1.2[/b]
 [list]
 [*]Fixed backstabs sometimes landing as a plain attack with no animation when on-hit regen was enabled.[/*]

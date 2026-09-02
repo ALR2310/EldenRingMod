@@ -118,20 +118,19 @@ const HITINFO_SOURCE_OBJECT_OFFSET: isize = 0x1D8;
 // offset from a "peek before the real call" hook always returns 0.
 const HITINFO_DAMAGE_OFFSET: isize = 0x228;
 
-// Only used for the optional RegenLog dump below - AtkParam category/id of
-// the hit. Brought back (2026-09-03) to investigate two live reports: a
-// backstab landing as a plain hit with no animation while Regen Per Hit is
-// enabled (root cause not yet confirmed), and a request to exclude Ash of
-// War/weapon art hits from the heal - both need real atkCategory/atkId
-// values from actual hits to pin down, not guesswork.
+// Only used for the optional RegenLog dump below - AtkParam id of the hit.
+// Once also read to try excluding Ash of War/weapon art hits from the heal
+// (`Regen.PerHit.ExcludeAow` uses player input instead now, see regen.rs) -
+// kept for troubleshooting since it's cheap, atkCategory dropped since
+// every hit observed had the same value (useless for anything).
 const HITINFO_ATK_PARAM_ID_OFFSET: isize = 0x40;
-const HITINFO_ATK_PARAM_CATEGORY_OFFSET: isize = 0x44;
 
 static ENABLED: AtomicI32 = AtomicI32::new(0);
 static TRIGGER: AtomicI32 = AtomicI32::new(0);
 static DAMAGE_TYPE: AtomicI32 = AtomicI32::new(0);
+static EXCLUDE_AOW: AtomicI32 = AtomicI32::new(0);
 
-// Raw Regen.PerHit.HP/FP/Stamina ini values, unscaled - what each means
+// Raw Regen.PerHit.HP/FP/SP ini values, unscaled - what each means
 // depends on TRIGGER (see OnHitParams below). Stored as raw f64 bits since
 // there's no AtomicF64 in std.
 static HP_BITS: AtomicU64 = AtomicU64::new(0);
@@ -147,22 +146,33 @@ fn load_f64(cell: &AtomicU64) -> f64 {
 }
 
 /// The `[Regen Per Hit]` ini values. `trigger` (the `Regen.PerHit.Trigger`
-/// key) picks what `hp`/`fp`/`stamina` (the raw `Regen.PerHit.HP/FP/Stamina`
+/// key) picks what `hp`/`fp`/`stamina` (the raw `Regen.PerHit.HP/FP/SP`
 /// values) mean - only one of the three modes ever applies per hit:
 /// - `0` (Fixed points): flat amount restored per hit, independent of max.
 /// - `1` (Percent of max stat): `1` = 1% of max, same "1 = 1%" convention as
-///   `Regen.PerTick.HP/FP/Stamina` under `Unit=1`.
+///   `Regen.PerTick.HP/FP/SP` under `Unit=1`.
 /// - `2` (Percent of damage dealt): `1` = 1% of the hit's own damage total
 ///   (true lifesteal, scales with how hard the hit landed).
 ///
 /// `damage_type` (the `Regen.PerHit.DamageType` key) picks which hits count
 /// at all, independent of `trigger`: `0` = melee only, `1` = ranged/spells
 /// only, `2` = both.
+///
+/// `exclude_aow` (the `Regen.PerHit.ExcludeAow` key): when true, skips hits
+/// landed while `regen::is_last_attack_skill()` says the player's last
+/// attack button was L2 (Skill/Weapon Art) rather than R1/R2/L1. An earlier
+/// attempt classified this from the hit's own AtkParam id instead
+/// (thresholds like "id >= 700 million") - abandoned after checking every
+/// field of every AtkParam row in the game (`.docs/AtkParam_Pc.csv`) turned
+/// up counterexamples for any id-based rule (e.g. Beast Claw's own default
+/// heavy-attack combo uses ids in the same range real Ashes of War do) -
+/// see AutoRegen's README for the full writeup.
 #[derive(Clone, Copy)]
 pub struct OnHitParams {
     pub enabled: bool,
     pub trigger: i32,
     pub damage_type: i32,
+    pub exclude_aow: bool,
     pub hp: f64,
     pub fp: f64,
     pub stamina: f64,
@@ -304,16 +314,15 @@ fn read_source_type(hit_info: *const c_void) -> i32 {
     }
 }
 
-/// Reads the hit's AtkParam `(category, id)` from `hit_info`. `None` if
-/// `hit_info` itself doesn't look like a valid pointer.
-fn read_atk_param(hit_info: *const c_void) -> Option<(i32, i32)> {
+/// Reads the hit's AtkParam id from `hit_info`. `None` if `hit_info` itself
+/// doesn't look like a valid pointer.
+fn read_atk_id(hit_info: *const c_void) -> Option<i32> {
     if !looks_like_pointer(hit_info) {
         return None;
     }
     unsafe {
-        let category = *(hit_info.byte_offset(HITINFO_ATK_PARAM_CATEGORY_OFFSET) as *const i32);
         let id = *(hit_info.byte_offset(HITINFO_ATK_PARAM_ID_OFFSET) as *const i32);
-        Some((category, id))
+        Some(id)
     }
 }
 
@@ -370,16 +379,18 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
 
     if config::get_bool("RegenLog", false) {
         if let Some(damage) = read_damage(hit_info) {
-            let (atk_category, atk_id) = read_atk_param(hit_info).unwrap_or((-1, -1));
+            let atk_id = read_atk_id(hit_info).unwrap_or(-1);
             let source_type = read_source_type(hit_info);
+            let is_skill = regen::is_last_attack_skill();
             queue_log(format!(
-                "AttackHook: player dealt {damage} damage (atkCategory={atk_category} atkId={atk_id} sourceType={source_type})."
+                "AttackHook: player dealt {damage} damage (atkId={atk_id} sourceType={source_type} isSkill={is_skill})."
             ));
         }
     }
 
     if ENABLED.load(Ordering::Relaxed) == 0
         || !matches_damage_type(hit_info, DAMAGE_TYPE.load(Ordering::Relaxed))
+        || (EXCLUDE_AOW.load(Ordering::Relaxed) != 0 && regen::is_last_attack_skill())
     {
         return;
     }
@@ -432,7 +443,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
         return;
     }
     queue_log(format!(
-        "AttackHook: player {source} -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} Stamina"
+        "AttackHook: player {source} -> +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} SP"
     ));
 }
 
@@ -442,6 +453,7 @@ pub fn update_params(params: OnHitParams) {
     ENABLED.store(params.enabled as i32, Ordering::Relaxed);
     TRIGGER.store(params.trigger, Ordering::Relaxed);
     DAMAGE_TYPE.store(params.damage_type, Ordering::Relaxed);
+    EXCLUDE_AOW.store(params.exclude_aow as i32, Ordering::Relaxed);
     store_f64(&HP_BITS, params.hp);
     store_f64(&FP_BITS, params.fp);
     store_f64(&STAMINA_BITS, params.stamina);

@@ -238,6 +238,57 @@ này) - chỉ sửa đúng đoạn `global_asm!` trong `src/attack_hook.rs`.
 Cùng 1 trampoline y hệt được dùng ở [`sometweaks`](../sometweaks) (port từ
 đây) - đã áp dụng fix tương tự bên đó luôn, không cần chờ báo lỗi riêng.
 
+## Thêm `Regen.PerHit.ExcludeAow` - loại trừ Weapon Art/Ash of War (2026-09-03)
+
+Feature request từ Nexus: muốn dùng phép/skill rẻ để hồi FP cho phép/skill
+đắt hơn, nên cần 1 tùy chọn loại trừ đòn Weapon Art khỏi Regen Per Hit. Thử
+2 hướng trước khi ra được bản dùng được:
+
+1. **Ngưỡng `atkId`** (thử đầu tiên, `atkId >= 700 triệu`): có vẻ đúng qua
+   vài mẫu test ban đầu, nhưng khi user tự export toàn bộ `AtkParam` từ
+   SmithBox ra `.docs/AtkParam_Pc.csv` (~11000 dòng) rồi đối chiếu, phát
+   hiện **không có ngưỡng số nào đúng cho mọi vũ khí** - vd đòn đánh nặng
+   *thường* (không phải AoW) của Beast Claw lại nằm chung dải ID với nhiều
+   Ash of War khác (`Beast Claw - Default: AttackBothHeavySpecial1End`,
+   atkId ~303 triệu). Viết script so sánh **toàn bộ ~200 field** của
+   `AtkParam` giữa nhóm tên `[AOW]` và nhóm tên `Default` (dựa theo tên
+   trong CSV) - field "tốt nhất" (`finalDamageRateId`) vẫn overlap tới
+   44.6%. Kết luận: `AtkParam` (tham số tính sát thương của cú đánh) không
+   mang đủ thông tin để phân biệt AoW - đây là thuộc tính của
+   *animation/action đang chạy*, không phải của riêng phép tính damage.
+2. **Input pad thật** (hướng dùng): `fromsoftware-rs` phản chiếu
+   `CSChrActionRequestModule` trên `ChrIns` - đọc trực tiếp bit nút bấm của
+   player (`action_requests`/`new_action_presses`, gồm cả `r1`/`r2`/`l1`/
+   `l2`). Trong Elden Ring, Weapon Art luôn kích hoạt bằng `L2` (bất kể tay
+   nào đang chủ động) - test thật xác nhận `l2=true` đúng lúc các đòn Ash of
+   War trúng.
+
+**Vấn đề khi test thật**: chỉ đọc trạng thái `l2` **tại đúng lúc** đòn trúng
+thì bị bỏ sót - 1 Ash of War nhiều nhịp, nút `L2` đã buông ra từ lâu (chỉ
+giữ trong khoảnh khắc bấm) nhưng animation/damage vẫn còn tiếp diễn vài
+giây sau, lúc đó `l2` đã về `false`. **Fix**: không đọc trạng thái tức
+thời, mà "chốt" (latch) theo **lần bấm mới nhất** - mỗi frame kiểm tra
+`new_action_presses` (bit chỉ bật đúng 1 frame lúc vừa bấm): nếu `R1`/`R2`/
+`L1` vừa bấm → chốt "đòn thường"; nếu `L2` vừa bấm → chốt "Weapon Art"; giữ
+nguyên trạng thái chốt cho tới lần bấm tiếp theo. Nhờ vậy mọi đòn trúng
+trong cùng 1 chuỗi Weapon Art đều được tính đúng, kể cả đòn đến muộn.
+
+`L1` cố tình gộp chung nhóm "đòn thường" (không tách riêng) vì trong Elden
+Ring `L1` chỉ dùng cho đánh nhẹ tay trái hoặc đỡ đòn/khiên, không bao giờ
+là nút kích hoạt Weapon Art - không phải thiếu sót, chỉ là gộp đúng.
+
+Implementation: `regen.rs` thêm `LAST_ATTACK_WAS_SKILL` (atomic, cập nhật
+mỗi frame qua `update_last_attack_input()`) + `is_last_attack_skill()`;
+`attack_hook.rs` dùng hàm đó thay cho ngưỡng `atkId` cũ (đã gỡ bỏ hoàn
+toàn, kể cả field `atkCategory` trong `RegenLog` - xác nhận qua CSV luôn
+bằng 1, vô dụng).
+
+Nhân tiện đổi key `Regen.PerTick.Stamina`/`Regen.PerHit.Stamina` →
+`Regen.PerTick.SP`/`Regen.PerHit.SP` cho đồng bộ 2 chữ cái với `HP`/`FP`
+(không breaking gì thêm ngoài phạm vi đã breaking sẵn từ đợt đổi sang
+`Regen.*` - key cũ đã nằm trong diện phải sửa tay theo README, xem mục
+"Đổi ini key sang cấu hình kiểu SomeTweaks" phía trên).
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
