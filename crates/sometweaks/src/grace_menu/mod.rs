@@ -265,7 +265,34 @@ fn shop_lot_range() -> (i32, i32) {
 // game's own text lookup to return custom text for these specific IDs
 // (never real FMG entries) instead of the borrowed vanilla IDs an
 // earlier version of this file used.
-use msg_hook::{SELL_MSG_ID, SHOP_MSG_ID, UPGRADE_MSG_ID};
+use msg_hook::{SELL_MSG_ID, SHOP_MSG_ID, UPGRADE_MSG_ID, VANILLA_SELL_MSG_ID, VANILLA_SHOP_MSG_ID, VANILLA_UPGRADE_MSG_ID};
+
+/// The 3 message ids actually used as `add_talk_list_data`'s argument this
+/// session - resolved once (first Grace ever entered) and reused for
+/// every Grace/re-entry after, so a session never mixes the 2 schemes.
+///
+/// Normally the reserved custom ids ([UPGRADE_MSG_ID]/[SHOP_MSG_ID]/
+/// [SELL_MSG_ID]), resolved by `msg_hook`'s hook into real vanilla text.
+/// If that hook failed to install (see `msg_hook::install`'s doc comment -
+/// e.g. a game update changed `get_message`'s own bytes and the safety
+/// check tripped), there is nothing left to resolve those ids into any
+/// text at all, so the items would render blank. Falls back instead to
+/// the REAL vanilla ids directly ([VANILLA_UPGRADE_MSG_ID] etc.) - the
+/// game's own `get_message` resolves a genuine FMG id on its own, no hook
+/// needed, so the items still show real, correctly-localized text
+/// (identical wording to what the hook would have fetched) instead of
+/// nothing.
+fn effective_msg_ids() -> (i32, i32, i32) {
+    static IDS: std::sync::OnceLock<(i32, i32, i32)> = std::sync::OnceLock::new();
+    *IDS.get_or_init(|| {
+        if msg_hook::is_installed() {
+            (UPGRADE_MSG_ID, SHOP_MSG_ID, SELL_MSG_ID)
+        } else {
+            logger::warn("GraceMenu: falling back to vanilla message ids for menu text.");
+            (VANILLA_UPGRADE_MSG_ID, VANILLA_SHOP_MSG_ID, VANILLA_SELL_MSG_ID)
+        }
+    })
+}
 
 // Talk-list indices for the new items - chosen not to collide with any
 // vanilla item (erdGameTools uses 70 for its own equivalent test item;
@@ -353,13 +380,14 @@ unsafe fn already_has_custom_items(group: *const EzStateGroup) -> bool {
     if group.is_null() {
         return false;
     }
+    let (upgrade_id, shop_id, sell_id) = effective_msg_ids();
     let states = unsafe { (*group).states.as_slice() };
     states.iter().any(|state| {
         unsafe { state.entry_events.as_slice() }.iter().any(|e| {
             e.command == CMD_ADD_TALK_LIST_DATA
-                && unsafe { e.args.as_slice() }.get(1).is_some_and(|a| {
-                    matches!(unsafe { get_ezstate_int_value(a) }, Some(UPGRADE_MSG_ID) | Some(SHOP_MSG_ID) | Some(SELL_MSG_ID))
-                })
+                && unsafe { e.args.as_slice() }
+                    .get(1)
+                    .is_some_and(|a| matches!(unsafe { get_ezstate_int_value(a) }, Some(id) if id == upgrade_id || id == shop_id || id == sell_id))
         })
     })
 }
@@ -606,18 +634,19 @@ unsafe fn on_enter_state(state: *mut EzState, machine: *mut EzMachine) {
         return;
     };
 
+    let (upgrade_id, shop_id, sell_id) = effective_msg_ids();
     let mut insertions = Vec::with_capacity(3);
     if config::get_bool("GraceMenu.Upgrade", true) {
         let upgrade_state = build_upgrade_state(return_target);
-        insertions.push(build_menu_item_insertion(UPGRADE_MSG_ID, UPGRADE_OPTION_INDEX, upgrade_state));
+        insertions.push(build_menu_item_insertion(upgrade_id, UPGRADE_OPTION_INDEX, upgrade_state));
     }
     if config::get_bool("GraceMenu.Shop", true) {
         let shop_state = build_shop_state(return_target);
-        insertions.push(build_menu_item_insertion(SHOP_MSG_ID, SHOP_OPTION_INDEX, shop_state));
+        insertions.push(build_menu_item_insertion(shop_id, SHOP_OPTION_INDEX, shop_state));
     }
     if config::get_bool("GraceMenu.Sell", true) {
         let sell_state = build_sell_state(return_target);
-        insertions.push(build_menu_item_insertion(SELL_MSG_ID, SELL_OPTION_INDEX, sell_state));
+        insertions.push(build_menu_item_insertion(sell_id, SELL_OPTION_INDEX, sell_state));
     }
     if insertions.is_empty() {
         return;
@@ -722,10 +751,10 @@ pub fn run() {
         return;
     }
 
-    // Not fatal if this fails (logged, custom text just falls back to
-    // whatever the real FMG entry for these IDs would be - none, so the
-    // items would show blank/placeholder text rather than break anything)
-    // - install the EnterState hook regardless.
+    // Not fatal if this fails (logged) - `effective_msg_ids()` falls back
+    // to real vanilla message ids directly in that case (see its doc
+    // comment), so the items still show real text instead of going blank.
+    // Install the EnterState hook regardless.
     msg_hook::install();
 
     // Independent param edit, own toggle (`GraceMenu.UnlockShop`)

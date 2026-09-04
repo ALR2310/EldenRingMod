@@ -85,8 +85,8 @@ riêng (không còn chỉ dựa vào giá trị `0` để tắt).
 - `Spirit.Summon.Anywhere` (`[Spirit]`, mặc định `false` - cho phép triệu
   hồi linh hồn không cần bia đá hồi sinh gần đó, port kỹ thuật gate-hook
   từ `er10x.dll`, đã xác nhận đúng AOB thật trong `eldenring.exe` qua
-  Ghidra trước khi patch - **đã test trong game, hoạt động đúng**) — xem
-  `src/spirit/summon_anywhere.rs`.
+  Ghidra trước khi patch - **chưa test trong game**, xem mục 2026-09-03)
+  — xem `src/spirit/summon_anywhere.rs`.
 - `Spirit.Summon.Amount`/`Spirit.Summon.Multiplier` (`[Spirit]`, mặc định
   `0`/`1` = không đổi - số lượng linh hồn 1 Ash triệu hồi, cap 10, port
   "chain rebuild" của `er10x.dll` nhưng dùng thẳng
@@ -1744,3 +1744,514 @@ map, loại trừ player/summon linh hồn/ghost) lọc `chr_type == Npc`
 thù" của người dùng.
 
 Chưa test trong game.
+
+## Xác nhận test: WarpAnywhere, WeightMultiplier, Drop Rate, Spirit.Summon.Multiplier (2026-09-03)
+
+Người dùng xác nhận trong game, tất cả hoạt động đúng:
+
+- **`WarpAnywhere`** (`map_check`/`warp_block`/`field_area_unlock`, thêm
+  2026-08-28) - **đã test trong game, hoạt động đúng**.
+- **`WeightMultiplier`** và **`Drop Rate`** (`DropRate.*`) - **đã test
+  trong game, hoạt động đúng** (dòng "chưa được test" ở mục 2026-08-24
+  phía trên đã lỗi thời).
+- **`Spirit.Summon.Multiplier`** (bản sửa lỗi nhân dồn ở mục 2026-08-26) -
+  **đã test lại, hoạt động đúng**, không còn nhân dồn lên cap 10 nữa.
+
+Tính năng còn ở trạng thái "chưa test" trong toàn bộ `sometweaks` hiện tại:
+**`EnemyScaling`** (`Enemy.Health.Multiplier`, `Enemy.Damage.SpEffectId`,
+mục phía trên). **`Spirit.Summon.Anywhere`** đã test (xem mục
+2026-09-03 "Test Spirit.Summon.Anywhere: linh hồn tự biến mất" phía dưới)
+và KHÔNG hoạt động đúng - dòng "đã test, hoạt động đúng" ghi ở mục
+"Triển khai [Spirit], giải mã er10x.dll" phía trên là nhầm, đã lỗi thời.
+
+## Thêm fallback cho GraceMenu khi hook `get_message` không cài được (2026-09-03)
+
+Log thật từ `mod_test` (chạy trên bản game đã cập nhật, xem nhánh
+`support/elden-ring-1.17`) cho thấy:
+
+```
+[ERROR] GraceMenu: get_message's own prologue doesn't match what Ghidra
+confirmed - layout differs from expected, custom menu text disabled.
+```
+
+Nguyên nhân: `msg_hook.rs`'s `install()` xác nhận AOB tìm đúng
+`get_message` (call-site pattern vẫn khớp), nhưng 15 byte prologue thật
+của hàm đó không còn khớp với byte đã xác nhận qua Ghidra lúc viết module
+(2026-08-28, trên bản game cũ) - game cập nhật đã đổi vài byte của hàm
+này. Cố tình "fail closed" (không đoán/patch liều) nên trước đây hậu quả
+là 3 mục `Nâng cấp`/`Mua`/`Bán` trong Grace Menu hiện chữ TRẮNG/rỗng (ID
+tuỳ biến `90000001+` không phải entry FMG thật, không còn ai intercept
+lookup để trả chữ thay).
+
+**Fix:** thêm `msg_hook::is_installed()` (đọc 1 `AtomicBool` được set
+`true` ở cuối `install()` nếu thành công) + `effective_msg_ids()`
+(`mod.rs`, cache 1 lần qua `OnceLock`) - khi hook cài được thì vẫn dùng 3
+ID tuỳ biến `UPGRADE_MSG_ID`/`SHOP_MSG_ID`/`SELL_MSG_ID` như cũ (hook dịch
+sang chữ vanilla thật); khi hook KHÔNG cài được, dùng thẳng 3 ID vanilla
+thật (`VANILLA_UPGRADE_MSG_ID`/`VANILLA_SHOP_MSG_ID`/`VANILLA_SELL_MSG_ID`,
+vốn đã có sẵn trong `msg_hook.rs` chỉ để hook tự fetch nội bộ) làm tham số
+`add_talk_list_data` trực tiếp - game tự tra được chữ thật (đúng ngôn ngữ
+đang hiển thị) mà không cần hook nào cả, vì đây là ID FMG có thật. Không
+phải fallback tiếng Anh cứng như dự tính ban đầu - dùng lại chữ vanilla
+thật của chính game luôn đúng ngôn ngữ hơn, không tốn công hardcode string.
+`already_has_custom_items()` cũng đổi sang so khớp bộ 3 ID "đang thật sự
+dùng" (`effective_msg_ids()`) thay vì luôn so cứng với ID tuỳ biến, để
+không chèn trùng mục mỗi lần vào lại Grace khi đang ở chế độ fallback.
+
+**Chưa test lại trong game** (cả trường hợp hook cài được bình thường lẫn
+trường hợp fallback) - cần vào lại Grace kiểm tra 3 mục hiện đúng chữ.
+
+## Test Spirit.Summon.Anywhere: linh hồn tự biến mất (2026-09-03)
+
+Người dùng test trong game (log xác nhận hook cài đúng: `Spirit.Summon.Anywhere:
+gate hook installed at 0x7ff6d20e72f0`). Kết quả: **triệu hồi được linh
+hồn xa bia đá** (đúng mục đích chính), nhưng bấm triệu hồi lại lần 2 thì
+linh hồn cũ biến mất và linh hồn mới được gọi ra như bình thường (hành vi
+này là vanilla, không phải bug - triệu hồi lại luôn thay thế linh hồn cũ
+dù có bia đá gần đó hay không) - **rồi sau 1 lúc, linh hồn MỚI cũng tự
+biến mất dù không thao tác gì thêm**. Đây mới là phần sai.
+
+**Phân tích:** patch hiện tại (`build_stub()`) chỉ bỏ qua **đúng 1 điểm
+kiểm tra** - cổng cho phép BẮT ĐẦU triệu hồi (`kSigGate`, chạy 1 lần lúc
+bấm phím). Việc linh hồn tự mất sau đó cho thấy có khả năng game còn 1 cơ
+chế kiểm tra khác chạy ĐỊNH KỲ (theo tick/thời gian), tự thu hồi linh hồn
+đã triệu hồi nếu vẫn không có bia đá gần đó - patch này không đụng tới cơ
+chế đó (nếu nó thật sự tồn tại, chưa xác nhận qua Ghidra). Khớp với đúng
+phần đã tự nhận trong doc comment của module (`src/spirit/
+summon_anywhere.rs`, mục "Simplification") - lúc đó chỉ dự đoán rủi ro là
+"request thừa bị bỏ qua", chưa tính tới khả năng linh hồn ĐÃ triệu hồi bị
+thu hồi lại sau.
+
+**Kết luận:** `Spirit.Summon.Anywhere` **chưa dùng được** ở trạng thái
+hiện tại - cần điều tra thêm (Ghidra) tìm cơ chế thu hồi định kỳ (nếu có)
+trước khi tính năng này thực sự hữu dụng. Giữ mặc định `false`.
+
+## Tìm ra + sửa nguyên nhân linh hồn tự biến mất: thiếu 3/4 sig của er10x.dll (2026-09-03)
+
+Người dùng nghi ngờ đúng: đào lại `.docs/x10_summon/er10x.dll` bằng dump
+Ghidra cũ (`D:/tmp/er10x_v2_dump.txt`/`er10x_v2_sigs.txt`, không cần phân
+tích lại) phát hiện bản port trước (`kSigGate`/`kSigGateEntry`) **chỉ là
+1/4 tổng số patch** `er10x.dll` áp dụng khi `summon_anywhere=1`. 3 sig còn
+lại chưa từng port: `kSigDespawn`, `kSigStoneReq`, `kSigPoolStore` (cùng 1
+mảng patch 4 phần tử trong `er10x.dll`, không phải thuộc
+`unlimited_resummon` như người dùng đặt câu hỏi ban đầu - `unlimited_resummon`
+dùng sig thứ 5 riêng, `kSigCooldown`, không liên quan gì tới việc linh hồn
+tự biến mất).
+
+**Đọc kỹ `worker()` (thread chạy mỗi giây của `er10x.dll`):** khi 1 trong 3
+sig patch còn thiếu (`kSigDespawn`/`kSigStoneReq`/`kSigPoolStore`) không
+áp dụng được, nó fallback sang 1 cách đơn giản hơn nhiều - đọc
+`buddy_mgr()+0x3c` ("id của buddy stone đang quản lý summon hiện tại"),
+nếu khác 0 thì set về 0, kèm log gốc: *"cleared it so the game stops
+running its leave-the-area sequence forever. Summons stay put."* Tức
+là: ngoài cổng kiểm tra lúc BẮT ĐẦU triệu hồi (`kSigGate`, đã port), game
+còn tự nhớ "summon hiện tại thuộc bia đá nào" và liên tục đo khoảng cách
+NGƯỢC LẠI bia đá đó - rời xa quá thì tự thu hồi linh hồn. Đây đúng là
+nguyên nhân linh hồn "tự biến mất sau 1 lúc" đã quan sát được.
+
+**Không cần port cả 3 sig byte-patch** (rủi ro cao hơn, dễ vỡ khi game
+update) - field `buddy_mgr()+0x3c` đã có sẵn dạng typed trong
+`fromsoftware-rs`: `SummonBuddyManager::active_summmon_buddy_stone_entity_id`
+(field thứ 6, `u32`) - xác nhận đúng offset `0x3c` bằng
+`std::mem::offset_of!` (viết 1 test tạm, xoá ngay sau khi xác nhận đúng,
+không giữ lại trong repo). Thêm tick mới trong
+`src/spirit/summon_anywhere.rs` (`clear_buddy_stone_link()`, đăng ký qua
+`crate::task::run_recurring_safe` trên `CSTaskGroupIndex::FrameBegin`,
+cùng gate "đã vào world" như mọi module khác) - set field này về 0 mỗi
+tick, không điều kiện gì thêm (đúng tinh thần `summon_anywhere`: bia đá
+không còn tham gia gì nữa, kể cả khi đang đứng ngay trên nó). Chỉ chạy
+tick này nếu `install()` (patch gate) thành công.
+
+**Chưa test lại trong game** - cần triệu hồi xa bia đá, chờ lâu hơn lần
+test trước để xác nhận linh hồn không còn tự biến mất.
+
+## Sửa thật: port 2 hook từ `.docs/SummonAnywhere` (`ER-EzMod`) (2026-09-03)
+
+Bản sửa `active_summmon_buddy_stone_entity_id` ở mục trên **không đủ** -
+người dùng test lại vẫn thấy y hệt lỗi cũ. Người dùng tự tìm và tải về 1
+mod tham khảo thứ 2, `.docs/SummonAnywhere/src/summon_anywhere.cpp` (gốc
+từ `soarqin/ER-EzMod`, MIT) - có sẵn source `.cpp` (không cần Ghidra decompile),
+đọc thẳng thấy đây là 2 hook HOÀN TOÀN KHÁC với `er10x.dll`, và không phải
+`unlimited_resummon`/`kSigCooldown` như nghi ngờ ban đầu (cái đó chỉ bỏ
+delay 1.3s giữa 2 lần triệu hồi, không liên quan gì tới việc linh hồn tự
+biến mất):
+
+- **Hook A (summon range)**: hàm gốc chỉ đọc thẳng `[rax+84]` (bán kính
+  "được đi xa bao nhiêu trước khi bị thu hồi", đọc từ 1 object tham chiếu
+  bia đá tại `[rdi+28]`) - không hề kiểm tra SpEffect nào cả. Patch của
+  `er10x.dll` (`kSigGate`, đã port) khiến game coi summon "triệu hồi bất
+  cứ đâu" như đang gắn với 1 bia đá "ảo" mang SpEffect id `0x7D0` (2000) -
+  nhưng field `+0x84` của bia đá ảo đó gần như chắc chắn là 0 (chưa từng
+  được cấu hình thật), nên bán kính đọc ra ~0 → ngay frame kế tiếp game đã
+  thấy "quá xa" → thu hồi ngay. **Đây mới là nguyên nhân thật**, không
+  phải field `SummonBuddyManager` ở mục trên. Patch thêm 1 nhánh: nếu
+  object đó có id `0x7D0` thì ép bán kính = 1000.0 (đơn vị), khác thì đọc
+  `[rax+84]` y như vanilla (bia đá thật không bị ảnh hưởng).
+- **Hook B (area eligibility)**: 1 check riêng, không liên quan tới
+  khoảng cách - 1 số khu vực (hầm ngục, vài đấu trường boss) cấm triệu hồi
+  hẳn qua 1 struct nhỏ tại `[rbp-0x68]`, field `+0x20`/`+0x1c`. Xoá 2
+  field đó bất cứ khi nào struct tồn tại → khu vực nào cũng cho triệu hồi.
+
+Cả 2 sig gốc trong `.cpp` ghi rõ chỉ xác nhận đúng tới ~giữa 2023 (trước
+DLC Shadow of the Erdtree) - **đã tự xác minh lại trên đúng bản
+`eldenring.exe` (2.7.0.0) của `mod_test`** trước khi port, bằng 1 script
+Python đọc thẳng section `.text` từ file PE (không cần Ghidra
+`analyzeHeadless` full-analysis, nhanh hơn nhiều): cả 2 sig khớp **đúng 1
+chỗ** (unique), y hệt byte, tại RVA `0xea1507` (Hook A) và `0xea5860`
+(Hook B).
+
+Port thủ công thành 2 stub Rust (`build_summon_range_stub`/
+`build_area_eligibility_stub`, dùng chung `common::codepatch::install_jmp_hook`
+như hook gate) thay vì gọi thẳng `.cpp` - đã tự viết 2 unit test tạm so
+khớp từng byte với cave gốc trong `.cpp` (bao gồm cả các giá trị rel8/rel32
+tính tay: `jne=0x0A`, `jmp=0x08` cho Hook A; `je=0x0D` cho Hook B - trùng
+khớp tuyệt đối với cave gốc, xác nhận dịch đúng cấu trúc), cả 2 test pass,
+đã xoá ngay sau khi xác nhận (không giữ lại trong repo). Bắt gặp và tự sửa
+1 lỗi tính sai địa chỉ RIP-relative (trỏ hằng số `1000.0f`) trong lúc viết
+test.
+
+Giữ nguyên `install_gate` + `clear_buddy_stone_link` (không hại gì, không
+gỡ), gọi thêm `install_summon_range`/`install_area_eligibility` độc lập -
+mỗi hook tự log riêng, không cái nào chặn cái khác nếu 1 trong số chúng
+không cài được.
+
+**Chưa test lại trong game** - đã build + copy `SomeTweaks.dll` vào
+`mod_test`, cần chờ người dùng khởi động lại game và triệu hồi xa bia đá,
+chờ lâu để xác nhận thật sự hết bị thu hồi.
+
+## Vẫn không hoạt động - tìm ra field then chốt nhờ 1 quan sát của người dùng (2026-09-03)
+
+2 hook port từ `.docs/SummonAnywhere` ở mục trên **vẫn không đủ** - người
+dùng test lại vẫn y hệt lỗi cũ. Người dùng thử cài thêm mod Seamless
+Co-op (`ersc.dll`, đã có sẵn trong `SeamlessCoop/`) và bật
+`allow_summons=1` trong `ersc_settings.ini` thì lại triệu hồi bình thường
+được ở khu vực vanilla cấm - nghi ngờ ban đầu đây có thể là tài liệu tham
+khảo tốt hơn, nhưng đọc kỹ comment trong chính file ini thì
+`allow_summons` thực ra nghĩa là *"Spirit summons can aid you in
+multiplayer"* (cho phép dùng linh hồn khi đang trong phiên co-op) - khác
+hẳn ý "summon anywhere" đang tìm, không liên quan trực tiếp. Thử scan
+string thô trong `ersc.dll` cũng không tìm thấy string nào hữu ích (bị
+strip/không lưu tên key dạng đọc được) - bỏ hướng này, không phải tài
+liệu tham khảo dùng được cho bug này.
+
+**Manh mối thật sự đến từ 1 quan sát của người dùng**: *"khi tôi triệu hồi
+mà góc trái không hiển thị tên + thanh máu của linh hồn là tôi biết ngay
+chúng sẽ biến mất ngay sau đó"*. Tra lại `fromsoftware-rs`'s
+`SummonBuddyManager` (`crates/eldenring/src/cs/world_chr_man.rs`) thấy
+đúng 2 field, tên khớp gần như chắc chắn với đúng cơ chế: `is_within_activation_range`/
+`is_within_warn_range` (+ 2 field `prev_is_within_activation_range`/
+`prev_is_within_warn_range`), comment gốc: *"Whether the player is within
+buddy stone activation/warn range"* - gần như chắc chắn đây là field
+quyết định CẢ việc hiện overlay tên/máu (game coi summon là "hợp lệ, đã
+đăng ký") LẪN việc có bị lệnh thu hồi hay không, độc lập với con số bán
+kính thô Hook A vừa sửa (2 hook A/B chỉnh input để tính ra các field này,
+nhưng nếu vẫn tính sai hoặc bị ghi đè bởi đường code khác thì overlay/thu
+hồi vẫn dựa thẳng vào các field boolean này).
+
+**Đã sửa**: đổi tên `clear_buddy_stone_link()` thành
+`force_summon_active_flags()` (`src/spirit/summon_anywhere.rs`), ép cả 4
+field trên = `true` mỗi tick (bên cạnh việc zero
+`active_summmon_buddy_stone_entity_id` như cũ) - an toàn (chỉ ghi field
+`bool`/`u32` qua API typed có sẵn, không AOB/code-patch), không phụ thuộc
+việc Hook A/B ở mục trên có còn khớp sau update game sau này hay không.
+
+**Chưa test lại trong game** - đã build + copy vào `mod_test`.
+
+## Thêm Spirit.Summon.Unlimited, giải mã 2 file DLL không đúng như tên (2026-09-04)
+
+Người dùng yêu cầu thêm tính năng "triệu hồi lại không cần nghỉ ở bia đá"
+(giống `unlimited_resummon` của `er10x.dll`), đưa 2 file tham khảo:
+
+- **`.docs/reverse_engineering/zibinha_infinite_summoning.dll`**: giải mã
+  bằng Ghidra headless (project mới `D:/tmp/zibinha_infinite_summon/`) -
+  toàn bộ log string bên trong ghi **"Friendly Invocation Range"** (PDB
+  gốc: `Zibinha_ID2000_Range1000`), code thực tế
+  (`FUN_180001bb0`) patch đúng y hệt kỹ thuật "ID SpEffect 2000 -> bán
+  kính 1000.0f" - **chính là Hook A đã port hôm trước**, không có dòng nào
+  liên quan `cooldown`/`resummon`/`dismiss`/`recall`/`rest` (đã grep toàn
+  bộ ~6900 dòng decompile để chắc chắn). Tên file gây hiểu lầm, không phải
+  tính năng người dùng mô tả.
+- **`.docs/SummonAnywhere.dll`** (68KB, khác hẳn
+  `SummonAnywhere/prebuilt/SummonAnywhere.dll` có source, hash khác): đọc
+  string literals thấy PDB gốc `AshesEverywhere.pdb`, chứa side-by-side cả
+  2 AOB pattern y hệt Hook A/B đã port (`48 8b 47 ? f3 0f 10 90 ...`,
+  `48 8B 45 98 48 85 C0 0F 84 ...`) - 1 mod độc lập KHÁC (`AshesEverywhere`)
+  dùng đúng cùng kỹ thuật, càng xác nhận Hook A/B đã port đúng chuẩn cộng
+  đồng, nhưng cũng không có gì mới cho tính năng resummon.
+
+**Tìm ra đúng cơ chế thật** bằng cách đọc lại `hk_summon_gate` trong dump
+cũ của `er10x.dll` (`D:/tmp/er10x_v2_dump.txt`) - `unlimited_resummon`
+không dùng sig riêng nào khác, chỉ là 1 flag (`g_drop_cooldown`) đọc NGAY
+TRONG hàm gate mà `kSigGate` đã patch vào: nếu tắt, hàm tự kiểm tra "band
+busy" (10 slot triệu hồi cố định của người chơi còn ai chưa dọn xong
+không, đọc mảng tại `WorldChrMan+0x10fa0`/`+0x10fa8` phiên bản game mà
+`er10x.dll` nhắm tới) trước khi quyết định ép thành công.
+
+**Xác nhận trên đúng bản `eldenring.exe` (2.7.0.0) hiện tại**: dùng
+Python + thư viện `capstone` disassemble trực tiếp (không cần Ghidra, đã
+biết sẵn địa chỉ hàm thật từ investigation Hook A/B hôm trước) - tìm thấy
+đúng logic tương đương ngay sau đoạn `kSigGate` đã port:
+
+```asm
+test   dil, dil
+jne    <check_occupancy>   ; dil != 0: gọi thêm 1 hàm kiểm tra "band busy"
+test   al, al               ; dil == 0: KHÔNG kiểm tra gì thêm cả
+je     <fail>
+<return SUCCESS>
+```
+
+`dil` là 1 tham số CALLER truyền vào (không phải thứ hook ở đầu hàm - nơi
+`summon_anywhere.rs` đang patch - có thể thấy/đổi được), quyết định có
+chạy check "band busy" hay không - đây chính là cơ chế "1.3s cooldown"
+thật, **độc lập hoàn toàn với khoảng cách bia đá** (khác Hook A/B, nên
+vẫn chặn resummon dù đã bật `Spirit.Summon.Anywhere`, kể cả đang đứng
+ngay tại bia đá thật).
+
+**Đã thêm `Spirit.Summon.Unlimited`** (`src/spirit/summon_unlimited.rs`,
+module mới): NOP 2 byte lệnh `jne` đó (`75 16` -> `90 90`) qua
+`common::codepatch::overwrite_bytes` - ép hàm LUÔN đi theo nhánh `dil==0`
+(bỏ qua hẳn check occupancy) bất kể caller truyền `dil` gì. Anchor AOB
+`40 84 FF 75 ?? 84 C0 74 ?? 33 C0` - đã xác nhận khớp đúng 1 chỗ trên bản
+exe hiện tại trước khi patch. Áp dụng 1 lần lúc khởi động (không
+hot-reload, giống `TorrentAnywhere`/`WarpAnywhere`), mặc định `false`.
+
+**Chưa test trong game** - đã build + copy `SomeTweaks.dll` vào
+`mod_test`.
+
+## Sửa Spirit.Summon.Unlimited: thu hồi rồi vẫn phải nghỉ mới triệu hồi lại được (2026-09-04)
+
+Test lại: bật `Spirit.Summon.Unlimited`, triệu hồi rồi bấm thu hồi - vẫn
+không triệu hồi lại được, phải ngồi Grace. Patch NOP jne ở mục trên nhắm
+sai chỗ cho đúng trường hợp này - nó chỉ bỏ qua check "10 slot cố định
+còn ai chưa dọn xong", trong khi *thu hồi chủ động* (khác với "chưa dọn
+xong") lại dùng 1 cơ chế khác: `SummonBuddyManager.item_use_cooldown_timer`
+("Cooldown after using a summon item... prevent quick spawn/despawn
+spam") - vanilla set field này khi thu hồi và chỉ dọn khi nghỉ ở Grace,
+không tự đếm ngược theo thời gian.
+
+Thêm tick mới trong `summon_unlimited.rs` (đăng ký qua
+`crate::task::run_recurring_safe` trên `CSTaskGroupIndex::FrameBegin`,
+cùng gate "đã vào world" như mọi module khác) - zero field này mỗi frame,
+độc lập với patch NOP (chạy dù patch NOP có cài được hay không). Giữ
+nguyên patch NOP vì vẫn đúng cho trường hợp gốc của nó (resummon khi
+summon cũ còn chưa kịp dọn).
+
+**Chưa test lại trong game.**
+
+## Gộp Spirit.Summon.Unlimited vào Spirit.Summon.Anywhere (2026-09-04)
+
+Người dùng test xong: `Spirit.Summon.Unlimited` hoạt động đúng (resummon
+tức thì). Vì 2 tính năng đằng nào cũng luôn đi cùng nhau về mặt hiệu ứng
+(cùng "cho triệu hồi thoải mái hơn", `Unlimited` còn tình cờ mở khoá vài
+khu vực cấm - xem mục ngay trên), người dùng yêu cầu gộp lại thành 1 ini
+key duy nhất cho gọn thay vì 2.
+
+Xoá hẳn `src/spirit/summon_unlimited.rs`, chuyển toàn bộ nội dung (patch
+NOP `jne` + tick zero `item_use_cooldown_timer`) vào thẳng
+`summon_anywhere.rs` - `install_unlimited_resummon()` được gọi cùng lúc
+với `install_gate`/`install_summon_range`/`install_area_eligibility`
+trong `run()`, và việc zero `item_use_cooldown_timer` gộp vào
+`force_summon_active_flags()` (tick đã có sẵn). Bỏ hẳn key
+`Spirit.Summon.Unlimited` khỏi ini, đổi comment của `Spirit.Summon.Anywhere`
+ghi rõ nó giờ làm cả 2 việc. **Lưu ý**: ai đã có `Spirit.Summon.Unlimited=true`
+trong file ini cũ (kể cả `mod_test`) thì dòng đó giờ vô hiệu (không có
+code nào đọc nữa) - không tự xoá khỏi file người dùng, chỉ không còn tác
+dụng, cần bật lại qua `Spirit.Summon.Anywhere=true`.
+
+**Chưa test lại trong game** sau khi gộp - đã build + copy vào `mod_test`.
+
+## Fix bug ở `common::config::migrate` - key thừa không được chuyển vào [Legacy] (2026-09-04)
+
+Người dùng phát hiện: sau khi gộp `Spirit.Summon.Unlimited` vào
+`Spirit.Summon.Anywhere`, khởi động lại game, key thừa
+`Spirit.Summon.Unlimited=true` trong `mod_test/SomeTweaks.ini` **không**
+được tự chuyển vào block `[Legacy]` như thiết kế ban đầu của
+`migrate()` (`shared/src/config.rs`) - dù cơ chế này đã có sẵn từ trước
+và có test riêng xác nhận hoạt động.
+
+**Nguyên nhân**: `migrate()` tính `missing_count` (số key mới template có
+mà file người dùng chưa có) TRƯỚC, rồi `return 0` ngay nếu
+`missing_count == 0` - **trước khi** kịp tính danh sách key thừa
+(`legacy`). Lần này không có key mới nào cần thêm (chỉ có key thừa cần
+dọn), nên hàm thoát sớm, không bao giờ chạm tới phần logic chuyển key
+thừa vào `[Legacy]`. Bug tồn tại từ đầu, chỉ chưa lộ ra vì test cũ
+(`migrate_moves_unknown_keys_to_legacy_section_instead_of_dropping_them`)
+luôn có ĐỒNG THỜI cả key thiếu lẫn key thừa, không test riêng trường hợp
+chỉ có key thừa.
+
+**Đã sửa**: tính `legacy` list lên trước, gộp điều kiện no-op thành
+`missing_count == 0 && legacy.is_empty()` - giờ chỉ thật sự không làm gì
+khi file người dùng vừa đủ khớp template vừa không có key thừa nào. Thêm
+test `migrate_moves_stale_key_to_legacy_even_with_nothing_missing` đúng
+case này. `cargo build --release` (toàn workspace) sạch - fix này ảnh
+hưởng MỌI mod dùng `common::config::load_or_create_default`
+(`autoregen`, `sometweaks`, `passiverunes`, `runemultiplier`,
+`weightmultiplier`, `risearcher`), không riêng `sometweaks`.
+
+## Tìm ra + sửa nguyên nhân thật của bug "mất tên/máu, tự biến mất" (2026-09-04)
+
+Toàn bộ kết luận "đã hoạt động" từ các mục 2026-09-03/04 trước đó (Hook A/B,
+`force_summon_active_flags`, `Spirit.Summon.Unlimited`) **bị nhiễu**: người
+dùng vô tình để `er10x.dll` (mod tham khảo, không phải bản port) đang bật
+song song trong ModEngine2 lúc test, nên các lần "test OK" trước đó thực
+ra là hành vi của `er10x.dll`, không phải code trong repo này. Sau khi tắt
+`er10x.dll` và test lại `sometweaks` một mình, `Spirit.Summon.Anywhere`
+**không hoạt động**: linh hồn triệu hồi ra không hiện tên/máu, biến mất
+sau vài giây - bất kể khu vực cho phép hay cấm.
+
+**Cô lập nguyên nhân theo từng bước** (người dùng tự test):
+1. Tắt hẳn `SomeTweaks.dll`, triệu hồi gần bia đá thật → bình thường
+   (vanilla sạch).
+2. Bật `SomeTweaks.dll` nhưng `Spirit.Summon.Anywhere=false` → vẫn bình
+   thường.
+3. Bật `Spirit.Summon.Anywhere=true` (bản đầy đủ 5 phần: gate + Hook A +
+   Hook B + patch NOP resummon-cooldown + tick `force_summon_active_flags`)
+   → bug xuất hiện, cả ở khu vực cho phép.
+
+→ Bug chỉ xảy ra khi `Anywhere=true`, tức nằm trong chính
+`summon_anywhere.rs`. Tạm comment out patch NOP resummon-cooldown + tick
+`force_summon_active_flags`, giữ nguyên gate + Hook A + Hook B, build lại
+cho test - **hết bug hoàn toàn**, hoạt động đúng ở cả 2 loại khu vực,
+không còn tự biến mất. Test thêm: bấm resummon vẫn ra ngay bộ mới tức thì
+dù đã bỏ patch NOP - xác nhận đúng suy đoán trước đó: gate hook
+(`kSigGate`) tự nó ĐÃ cho resummon miễn phí rồi, patch NOP + tick kia hoàn
+toàn dư thừa.
+
+**Kết luận**: xoá hẳn `install_unlimited_resummon()` (patch NOP `jne`) và
+`force_summon_active_flags()` (tick zero `active_summmon_buddy_stone_entity_id`/
+`is_within_activation_range`/`is_within_warn_range`/`item_use_cooldown_timer`)
+khỏi `summon_anywhere.rs` - nguyên nhân rất có thể là helper bị NOP bỏ qua
+không chỉ kiểm tra mà còn tự đăng ký/theo dõi summon (side effect), và
+việc zero `active_summmon_buddy_stone_entity_id` mỗi frame vô điều kiện đã
+phá luôn tracking hợp lệ của summon bình thường gần bia đá thật. Viết lại
+doc comment đầu file phản ánh đúng lịch sử điều tra + kết luận cuối (giữ
+lại lịch sử điều tra sai, chỉ đánh dấu rõ "dead end, reverted"). Build
+sạch, không còn warning dead-code. Đã copy `SomeTweaks.dll` vào `mod_test`.
+
+**Bài học ghi nhớ**: luôn kiểm tra KHÔNG có mod tham khảo nào (`er10x.dll`,
+`.docs/SummonAnywhere/prebuilt/*.dll`,...) đang bật song song trong
+`modengine2/config.toml` trước khi kết luận 1 tính năng của `sometweaks`
+"đã hoạt động" - nếu không, kết quả test hoàn toàn không đáng tin.
+
+**Chưa test lại trong game** sau khi dọn code - cần xác nhận lại lần cuối
+với bản đã xoá 2 phần dư thừa.
+
+## Điều tra tương thích Seamless Co-op: fix xung đột hook với `ersc.dll` (2026-09-04)
+
+Người dùng báo: bật `Spirit.Summon.Anywhere` cùng Seamless Co-op (`ersc.dll`
+thật sự BẬT trong `external_dlls`, không chỉ file mod trong `mods`) thì
+linh hồn triệu hồi ra không tấn công kẻ địch, và chỉ triệu hồi được đúng 1
+lần - bấm lại chỉ hiện thông báo thu hồi, phải ngồi Grace mới triệu hồi
+lại được.
+
+**Không cần RE mù `ersc.dll`** (13.7MB, bản release strip sạch string debug,
+chỉ có locale/CRT boilerplate, không thấy string gameplay nào cả qua cả
+2 lần quét ASCII lẫn UTF-16) - đọc thẳng `SomeTweaks.log` thấy ngay:
+
+```
+[ERROR] Spirit.Summon.Anywhere: function entry doesn't match the expected prologue (layout differs from expected), disabled.
+```
+
+Gate hook (`kSigGate`) không cài được: AOB bên trong hàm vẫn khớp (không
+báo "pattern not found"), nhưng byte tại ĐẦU hàm (entry - 0x7D, nơi
+`install_gate` cũ patch vào) đã khác - **`ersc.dll` cũng tự hook đúng
+chỗ đó** (hợp lý, Seamless Co-op cần kiểm soát quyền triệu hồi cho phiên
+co-op). 2 mod cùng patch 1 địa chỉ, ai patch sau thắng - fail-safe check
+byte trước khi patch của `sometweaks` phát hiện đúng và tự tắt an toàn.
+Hook A/B vẫn cài được (patch chỗ khác) nhưng vô nghĩa nếu gate không chạy,
+nên toàn bộ `Spirit.Summon.Anywhere` coi như vô hiệu khi có `ersc.dll` -
+khớp đúng cả 2 triệu chứng người dùng thấy (chỉ còn đúng luật vanilla).
+
+**Đã sửa bằng cách đổi điểm patch**, không đụng tới entry `ersc.dll` đã
+chiếm: `GATE_INNER_PATTERN` (22 byte `test al,al;...`) vẫn nguyên vẹn kể
+cả khi `ersc.dll` bật (cùng 1 log xác nhận AOB tìm thấy, chỉ có phần entry
+downstream mới sai) - patch thẳng vào khối 22 byte này thay vì đi vòng qua
+entry. Logic mới: `cmp dword[rbx+0x20],0; jl bypass; <replay nguyên 22
+byte gốc>; jmp resume; bypass: mov al,1` - `rbx` tại đúng vị trí này vẫn
+là `this` (chưa bị `ersc.dll` hay code nào đụng tới, vì nằm sau phần
+entry mà `ersc.dll` patch). Bỏ hẳn `ENTRY_OFFSET_FROM_INNER`/`ENTRY_PREFIX`
+- không cần đi tìm/verify entry nữa. Viết 1 unit test tạm so khớp từng
+byte + tính tay rel8 cho `jl`/`jmp` (24 và 2), pass, xoá ngay sau khi xác
+nhận. Build sạch. Đã copy `SomeTweaks.dll` vào `mod_test`.
+
+**Chưa test lại trong game với `ersc.dll` bật** - cần xác nhận cả 2 vấn
+đề (không tấn công + không resummon được) đã hết.
+
+## Fix bug "linh hồn đi về hướng Đông": Hook A sai bản chất, thay bằng `kSigDespawn` (2026-09-04)
+
+Test bản có gate hook mới (patch thẳng vào 22-byte `kSigGate` thay vì
+entry) cùng `ersc.dll`: gate hook cài được (log xác nhận), nhưng runtime
+vẫn xung đột (thu hồi xong không triệu hồi lại được) - mức xung đột này
+cần debugger sống mới điều tra tiếp được, tạm gác lại.
+
+Người dùng báo thêm 1 bug khác, **độc lập với Seamless Co-op** (xảy ra cả
+khi có/không `ersc.dll`): ở Grace "cổng bão", linh hồn triệu hồi ra tự đi
+về hướng Đông tới tận bìa rừng mới dừng và mới bắt đầu phản công. Không
+tái hiện ở vài khu vực khác đã thử.
+
+**Đào sâu và phát hiện Hook A (`SummonRange`) hiểu sai bản chất**: disassemble
+rộng quanh RVA `0xea1507` (dùng Python + `capstone`, không cần Ghidra) lộ
+ra `[rax+0x84]` mà Hook A patch **không phải "bán kính trước khi bị thu
+hồi"** như tài liệu `.docs/SummonAnywhere` mô tả, mà là
+`SummonBuddyWarpManager.trigger_dist_to_player` - ngưỡng khoảng cách để
+**dịch chuyển (warp) linh hồn bị bỏ xa lại gần người chơi** (cơ chế tiện
+ích chống kẹt, không phải cổng thu hồi). Object "bia đá ảo" (sentinel,
+id `0x7D0`) sinh ra bởi gate hook chưa từng được cấu hình field `+0x84`
+thật (mặc định gần như chắc chắn là 0) - trước khi có Hook A, giá trị 0
+này khiến nhánh code "warp" LUÔN bị bỏ qua (0 luôn thoả điều kiện "đã đủ
+gần, không cần làm gì"). Hook A ép giá trị này lên 1000.0 **vô tình MỞ
+RA** đúng nhánh code đó (vì 1000.0 hiếm khi thoả điều kiện "đã đủ gần"),
+và nhánh này gọi thêm 5 hàm con đọc dữ liệu VỊ TRÍ từ chính object bia đá
+ảo đó - vốn cũng chưa từng được khởi tạo (rất có thể mặc định về toạ độ
+gốc thế giới, khớp đúng hiện tượng "đi theo 1 hướng la bàn cố định, không
+theo hướng người chơi, chỉ khác nhau tuỳ bản đồ").
+
+**Người dùng hỏi đúng trọng tâm**: vì sao `er10x.dll` gốc không bị bug
+này? Vì nó **không hề dùng Hook A/B** - chỉ dùng `kSigGate` (đã port)
+cộng 3 patch riêng (`kSigDespawn`/`kSigStoneReq`/`kSigPoolStore`) mà
+trước đây mình tìm thấy nhưng chưa port thật (chỉ làm "software fallback"
+zero field, đã xoá vì không đủ).
+
+**Đã quay lại port đúng `kSigDespawn`** (bỏ `kSigStoneReq`/`kSigPoolStore`
+vì `kSigDespawn` một mình đã đủ, xem lý do bên dưới): giải mã lại từ dump
+cũ (`er10x_v2_sigs.txt`, layout `Sig` struct: pattern ở offset+8, độ dài ở
+offset+0x28) ra đúng 27 byte anchor, quét lại trên bản exe HIỆN TẠI
+(2.7.0.0, không dùng lại RVA cũ vì khác bản game) - khớp đúng 1 chỗ.
+Disassemble context quanh đó (Python + capstone) thấy ngay đúng logic
+mong đợi:
+
+```asm
+mov rcx, [rcx+0x1e508]     ; WorldChrMan.summon_buddy_manager
+...
+cmp dword [r15+0x20], 0
+mov byte [r15+0x28], 0     ; <- anchor bắt đầu ở đây
+jge skip                    ; >=0 thì bỏ qua hẳn khối thu hồi
+cmp byte [r15+0xb7], 0
+jne skip
+cmp byte [r15+0xb5], 0
+jne skip
+call cleanup(r15)            ; chỉ chạy khi cả 3 điều kiện đều đúng
+skip:
+```
+
+`[r15+0x20]<0` đọc như 1 bộ đếm/timer về âm, `+0xb7`/`+0xb5` rơi đúng
+vùng field `is_within_activation_range`/`is_within_warn_range` trong
+`SummonBuddyManager` theo layout `fromsoftware-rs` - đúng là điểm quyết
+định thu hồi thật, không liên quan gì tới field warp-distance Hook A đã
+patch nhầm. Hàm `cleanup` còn được gọi từ 2 nơi khác (không đụng tới) nên
+patch này **chỉ tắt đúng phần thu hồi do đo khoảng cách**, không ảnh
+hưởng cách thu hồi hợp lệ khác (người chơi tự bấm thu hồi vẫn hoạt động
+bình thường).
+
+**Patch**: đổi 1 byte opcode `jge` (`7D`) thành `jmp` (`EB`), giữ nguyên
+rel8 - `install_despawn_skip()` (`common::codepatch::overwrite_bytes`,
+không cần code cave, không rủi ro như Hook A). Xoá hẳn
+`install_summon_range`/`build_summon_range_stub`/`NO_MONUMENT_SPEFFECT_ID`/
+`FORCED_LEASH_RANGE` - Hook A không còn tồn tại trong code nữa, chỉ giữ
+lại Hook B (area eligibility, không liên quan gì tới bug này). Viết lại
+doc comment đầu file phản ánh đúng lịch sử + kết luận cuối. Build sạch.
+Đã copy `SomeTweaks.dll` vào `mod_test`.
+
+**Đã test, xác nhận (2026-09-04)**: hết bug "đi hướng Đông" ở Grace cổng
+bão - `kSigDespawn` (jge->jmp) đã thay thế đúng chức năng Hook A mà không
+còn side-effect đi lạc hướng.
