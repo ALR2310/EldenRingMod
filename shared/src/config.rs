@@ -81,8 +81,12 @@ fn migrate(ini_path: &str, default_ini: &str) -> usize {
         .keys()
         .filter(|k| !existing_values.contains_key(*k))
         .count();
-    if missing_count == 0 {
-        return 0; // already has every key the current template defines
+    let legacy: Vec<(&String, &String)> = existing_values
+        .iter()
+        .filter(|(k, _)| !template_values.contains_key(*k))
+        .collect();
+    if missing_count == 0 && legacy.is_empty() {
+        return 0; // already has every key the current template defines, nothing stale either
     }
 
     let mut merged = String::new();
@@ -107,10 +111,6 @@ fn migrate(ini_path: &str, default_ini: &str) -> usize {
         merged.push('\n');
     }
 
-    let legacy: Vec<(&String, &String)> = existing_values
-        .iter()
-        .filter(|(k, _)| !template_values.contains_key(*k))
-        .collect();
     if !legacy.is_empty() {
         merged.push_str(
             "\n[Legacy]\n\
@@ -267,6 +267,26 @@ Fp=0
 
         migrate(ini.path(), TEST_TEMPLATE);
 
+        let content = ini.read();
+        assert!(content.contains("[Legacy]"));
+        let merged = parse(&content);
+        assert_eq!(
+            merged.get("SomeRemovedFeature.Flag").map(String::as_str),
+            Some("true")
+        );
+    }
+
+    #[test]
+    fn migrate_moves_stale_key_to_legacy_even_with_nothing_missing() {
+        // Regression: the legacy check used to be short-circuited by the
+        // "nothing missing" no-op return, so a stale key sat there forever
+        // if the template itself hadn't gained any new keys since.
+        let with_stale_key = format!("{TEST_TEMPLATE}\nSomeRemovedFeature.Flag=true\n");
+        let ini = TempIni::new("stale_only", &with_stale_key);
+
+        let migrated = migrate(ini.path(), TEST_TEMPLATE);
+
+        assert_eq!(migrated, 0); // no new template key was merged
         let content = ini.read();
         assert!(content.contains("[Legacy]"));
         let merged = parse(&content);
