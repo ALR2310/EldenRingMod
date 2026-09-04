@@ -88,9 +88,13 @@ pub const SELL_MSG_ID: i32 = 90000003;
 // through the hooked function itself (see [call_get_message]) so the
 // text always matches whatever language the game is currently
 // displaying, instead of hardcoding one language's wording.
-const VANILLA_UPGRADE_MSG_ID: i32 = 22130001;
-const VANILLA_SHOP_MSG_ID: i32 = 26000010;
-const VANILLA_SELL_MSG_ID: i32 = 20000011;
+//
+// `pub` so `mod.rs` can use these directly as the `add_talk_list_data`
+// message id (bypassing [UPGRADE_MSG_ID]/[SHOP_MSG_ID]/[SELL_MSG_ID]
+// entirely) when [is_installed] is false - see its doc comment.
+pub const VANILLA_UPGRADE_MSG_ID: i32 = 22130001;
+pub const VANILLA_SHOP_MSG_ID: i32 = 26000010;
+pub const VANILLA_SELL_MSG_ID: i32 = 20000011;
 
 fn to_utf16_z(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -153,6 +157,20 @@ fn custom_text_ptr(msg_repository: usize, unknown: u32, bnd_id: u32, msg_id: i32
 }
 
 static GET_MESSAGE_ADDR: AtomicUsize = AtomicUsize::new(0);
+static HOOK_INSTALLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether [install] actually hooked `get_message` this session. `false`
+/// (anchor pattern not found, or the game's own prologue no longer
+/// matches what Ghidra confirmed - e.g. after a game update changes the
+/// function's exact bytes, as happened going from 1.16.2 to 1.17.0) means
+/// [UPGRADE_MSG_ID]/[SHOP_MSG_ID]/[SELL_MSG_ID] resolve to nothing (never
+/// real FMG entries, and nothing left to intercept the lookup for them) -
+/// `mod.rs` checks this to fall back to the REAL vanilla ids
+/// ([VANILLA_UPGRADE_MSG_ID] etc.) directly instead, so the menu items
+/// still show real, correctly-localized text rather than going blank.
+pub fn is_installed() -> bool {
+    HOOK_INSTALLED.load(Ordering::Relaxed)
+}
 
 /// Called from the stub (see [install]) with the exact same 4 arguments
 /// the real `get_message` receives. Returns 0 ("not handled - continue
@@ -264,7 +282,7 @@ pub fn install() -> bool {
         || prologue[9] != EXPECTED_JAE_OPCODE
         || prologue[11..15] != EXPECTED_MOV
     {
-        logger::error("GraceMenu: get_message's own prologue doesn't match what Ghidra confirmed - layout differs from expected, custom menu text disabled.");
+        logger::error("GraceMenu: get_message prologue changed, custom menu text disabled.");
         return false;
     }
     let rel8_1 = prologue[4] as i8;
@@ -308,6 +326,7 @@ pub fn install() -> bool {
         FlushInstructionCache(GetCurrentProcess(), stub as *const std::ffi::c_void, stub_body.len());
     }
 
+    HOOK_INSTALLED.store(true, Ordering::Relaxed);
     logger::log(&format!("GraceMenu: hooked get_message at {get_message:p} (stub={stub:p}) - custom menu text active."));
     true
 }
