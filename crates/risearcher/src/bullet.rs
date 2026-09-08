@@ -12,6 +12,9 @@
 //! encodes that structure once (`FAMILIES` below) instead of repeating it
 //! per weapon like the original Mass Edit file did.
 
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use eldenring::cs::{Bullet, SoloParamRepository};
 use eldenring::param::BULLET_PARAM_ST;
 
@@ -119,7 +122,7 @@ impl Config {
             range_multiplier: config::get_double("Bullet.RangeMultiplier", 2.0),
             spread_multiplier: config::get_double("Bullet.SpreadMultiplier", 2.0),
             rain_of_arrows_count: config::get_int("Bullet.RainOfArrowsCount", 6).clamp(0, u16::MAX as i32) as u16,
-            debug_log: config::get_bool("DebugLog", false),
+            debug_log: config::get_bool("LogFile", false),
         }
     }
 }
@@ -128,61 +131,108 @@ fn scale_f32(value: f32, factor: f64) -> f32 {
     (value as f64 * factor) as f32
 }
 
-fn apply_role(row: &mut BULLET_PARAM_ST, role: Role, cfg: &Config) {
+/// The game's own original values RiseArcher scales multiplicatively, keyed
+/// by row ID - captured once (lazily, on the first call to [apply]) before
+/// any edit, so every later `ReloadKey` press (see `crate::reload`) rescales
+/// from the true baseline instead of compounding - same reasoning as
+/// `weapon::Baseline`. `num_shoot` (used by [Role::RainOfArrowsCount]) is set
+/// to an absolute count rather than scaled, so it needs no baseline.
+#[derive(Clone, Copy)]
+struct Baseline {
+    init_vellocity: f32,
+    max_vellocity: f32,
+    dist: f32,
+    angle_y: f32,
+    angle_x: f32,
+}
+
+static ORIGINALS: Mutex<Option<HashMap<u32, Baseline>>> = Mutex::new(None);
+
+fn snapshot(row: &BULLET_PARAM_ST) -> Baseline {
+    Baseline {
+        init_vellocity: row.init_vellocity(),
+        max_vellocity: row.max_vellocity(),
+        dist: row.dist(),
+        angle_y: row.shoot_angle_y_max_random(),
+        angle_x: row.shoot_angle_x_max_random(),
+    }
+}
+
+fn apply_role(row: &mut BULLET_PARAM_ST, role: Role, baseline: &Baseline, cfg: &Config) {
     match role {
         Role::Speed => {
-            row.set_init_vellocity(scale_f32(row.init_vellocity(), cfg.speed_multiplier));
-            row.set_max_vellocity(scale_f32(row.max_vellocity(), cfg.speed_multiplier));
+            row.set_init_vellocity(scale_f32(baseline.init_vellocity, cfg.speed_multiplier));
+            row.set_max_vellocity(scale_f32(baseline.max_vellocity, cfg.speed_multiplier));
         }
         Role::RainOfArrowsRange => {
-            row.set_dist(scale_f32(row.dist(), cfg.range_multiplier));
+            row.set_dist(scale_f32(baseline.dist, cfg.range_multiplier));
         }
         Role::RainOfArrowsCount => {
             row.set_num_shoot(cfg.rain_of_arrows_count);
         }
         Role::RainOfArrowsSpread => {
-            row.set_shoot_angle_y_max_random(scale_f32(row.shoot_angle_y_max_random(), cfg.spread_multiplier));
-            row.set_shoot_angle_x_max_random(scale_f32(row.shoot_angle_x_max_random(), cfg.spread_multiplier));
+            row.set_shoot_angle_y_max_random(scale_f32(baseline.angle_y, cfg.spread_multiplier));
+            row.set_shoot_angle_x_max_random(scale_f32(baseline.angle_x, cfg.spread_multiplier));
         }
     }
 }
 
-/// Applies every RiseArcher bullet tuning to the live `Bullet` rows. Returns
-/// how many rows were actually found and touched, for logging - a lower
-/// count than expected is the signal that the ID layout has drifted (game
-/// update added/removed a variant) and [ARROW_BASES]/[GREAT_ARROW_BASES]/
-/// [BOLT_BASES] need re-checking against a fresh CSV export.
-pub fn apply(repo: &mut SoloParamRepository) -> usize {
-    let cfg = Config::load();
-    let mut changed = 0;
-    let mut missing = 0;
-
-    let mut apply_one = |repo: &mut SoloParamRepository, id: u32, role: Role| {
-        match repo.get_mut::<Bullet>(id) {
-            Some(row) => {
-                apply_role(row, role, &cfg);
-                changed += 1;
-            }
-            None => missing += 1,
-        }
-    };
-
+/// Every Bullet ID RiseArcher tunes, paired with which fields to touch
+/// there - the flattened combination of every family's bases and offsets.
+fn all_ids() -> Vec<(u32, Role)> {
+    let mut ids = Vec::new();
     for &base in ARROW_BASES {
         for &(offset, role) in ARROW_OFFSETS {
-            apply_one(repo, base + offset, role);
+            ids.push((base + offset, role));
         }
     }
     for &base in GREAT_ARROW_BASES {
         for &(offset, role) in GREAT_ARROW_OFFSETS {
-            apply_one(repo, base + offset, role);
+            ids.push((base + offset, role));
         }
     }
     for &(offset, role) in RADAHNS_SPEAR_OFFSETS {
-        apply_one(repo, RADAHNS_SPEAR_BASE + offset, role);
+        ids.push((RADAHNS_SPEAR_BASE + offset, role));
     }
     for &base in BOLT_BASES {
         for &(offset, role) in BOLT_OFFSETS {
-            apply_one(repo, base + offset, role);
+            ids.push((base + offset, role));
+        }
+    }
+    ids
+}
+
+/// Applies every RiseArcher bullet tuning to the live `Bullet` rows, always
+/// derived from each row's cached original values (see [Baseline]) so this
+/// is safe to call repeatedly (hot reload) without compounding. Returns how
+/// many rows were actually found and touched, for logging - a lower count
+/// than expected is the signal that the ID layout has drifted (game update
+/// added/removed a variant) and [ARROW_BASES]/[GREAT_ARROW_BASES]/
+/// [BOLT_BASES] need re-checking against a fresh CSV export.
+pub fn apply(repo: &mut SoloParamRepository) -> usize {
+    let cfg = Config::load();
+    let ids = all_ids();
+
+    let mut snapshot_guard = ORIGINALS.lock().unwrap();
+    let originals = snapshot_guard.get_or_insert_with(|| {
+        let mut map = HashMap::new();
+        for &(id, _role) in &ids {
+            if let Some(row) = repo.get_mut::<Bullet>(id) {
+                map.insert(id, snapshot(row));
+            }
+        }
+        map
+    });
+
+    let mut changed = 0;
+    let mut missing = 0;
+    for &(id, role) in &ids {
+        match (repo.get_mut::<Bullet>(id), originals.get(&id)) {
+            (Some(row), Some(baseline)) => {
+                apply_role(row, role, baseline, &cfg);
+                changed += 1;
+            }
+            _ => missing += 1,
         }
     }
 
