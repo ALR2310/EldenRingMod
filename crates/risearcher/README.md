@@ -61,10 +61,13 @@ Sống ở `crates/risearcher` trong workspace [`EldenRingMod`](../../README.md)
   4 bảng offset cố định (`ARROW_OFFSETS`/`GREAT_ARROW_OFFSETS`/
   `RADAHNS_SPEAR_OFFSETS`/`BOLT_OFFSETS`) — đúng cấu trúc đã RE ra trong
   README cũ, chỉ viết lại thành data + vòng lặp thay vì liệt kê tay.
-- **`src/lib.rs`** — không cần `CSTaskImp`/theo dõi tick như các mod khác:
-  param `regulation.bin` chỉ load 1 lần lúc game khởi động và không reload
-  lại giữa phiên chơi, nên chỉ cần chờ `SoloParamRepository::instance_mut()`
-  sẵn sàng (poll mỗi 200ms, timeout 60s) rồi patch đúng 1 lần.
+- **`src/lib.rs`** — chờ `SoloParamRepository::instance_mut()` sẵn sàng (poll
+  mỗi 200ms, timeout 60s) rồi patch lần đầu; sau đó đăng ký 1 task
+  `CSTaskImp::FrameBegin` (qua `src/task.rs`) chỉ để theo dõi
+  `reload::RELOAD_GENERATION` và patch lại mỗi khi người dùng nhấn
+  `General.ReloadKey` — xem mục "Hot reload" bên dưới.
+- **`src/reload.rs`** / **`src/task.rs`** — port nguyên khối từ
+  `sometweaks::reload`/`sometweaks::task` (xem mục "Hot reload" bên dưới).
 
 ### Ánh xạ field (MASSEDIT → Rust, không đổi ý nghĩa)
 
@@ -87,6 +90,93 @@ Sống ở `crates/risearcher` trong workspace [`EldenRingMod`](../../README.md)
 | `numShoot` | `num_shoot()` (u16) — **gán tuyệt đối** (`RainOfArrowsCount`), không nhân, vì giá trị gốc luôn = 1 |
 | `shootAngleYMaxRandom`/`shootAngleXMaxRandom` | `shoot_angle_y/x_max_random()` (f32) |
 
+## Hot reload (2026-09-08)
+
+Trước bản này, `RiseArcher.ini` chỉ đọc **đúng 1 lần** lúc DLL attach —
+lý do ghi trong code cũ: "regulation param rows chỉ load 1 lần lúc khởi
+động và không bao giờ reload giữa phiên chơi, nên 1 lần patch là đủ". Đúng
+với params tự nó, nhưng bỏ sót 1 điều: `SoloParamRepository` vẫn là bộ nhớ
+sống suốt phiên chơi, patch lại (ghi đè) hoàn toàn khả thi — chỉ là chưa có
+cơ chế trigger. Giờ thêm hot reload giống `sometweaks` (mặc định phím
+**F5**, đổi qua `General.ReloadKey`):
+
+- `src/reload.rs`/`src/task.rs` port gần như nguyên khối từ
+  `sometweaks::reload`/`sometweaks::task` — theo dõi `ReloadKey` trên task
+  `CSTaskImp::FrameBegin`, `config::load()` lại ini rồi tăng biến đếm
+  `RELOAD_GENERATION`.
+- `weapon::apply`/`bullet::apply` từng scale **trực tiếp trên giá trị đang
+  đọc từ row** (`row.attack_base_physics() * factor`) — gọi lại lần 2 sẽ
+  compound (`* 1.5` hai lần thành `* 2.25`, không phải vẫn `* 1.5`), y hệt
+  vấn đề `drop_rate` trong `sometweaks` đã gặp. Sửa bằng cách cache toàn bộ
+  giá trị gốc của từng row (`weapon::Baseline`/`bullet::Baseline`, khoá theo
+  row ID) ngay lần `apply` đầu tiên, và mọi lần sau — kể cả reload — luôn
+  scale từ baseline đó, không bao giờ từ giá trị đang có trên row.
+- Field không bị compound thì giữ nguyên cách gán tuyệt đối, không cần
+  baseline: `max_arrow_quantity` (Arrow/Bolt `MaxQuantity`), `num_shoot`
+  (`Bullet.RainOfArrowsCount`), `gem_mount_type` (luôn gán `2`).
+
+Đổi tên key debug log: `[Debug] DebugLog=true` → `[Logging] LogFile=true`
+(chỉ đổi tên, không đổi hành vi — vẫn gate việc tạo file `RiseArcher.log`).
+
+## Bug: `RiseArcher.ini` không hề có tác dụng trước bản này (2026-09-08)
+
+Phát hiện khi tổ chức lại section cho ini (theo yêu cầu người dùng, xem
+ngay dưới): `weapon.rs`/`bullet.rs` đọc key có tiền tố (`Bow.DamageMultiplier`,
+`Crossbow.DamageMultiplier`, `Arrow.MaxQuantity`, `Bullet.SpeedMultiplier`...)
+nhưng `RiseArcher.ini` (từ commit đầu tiên của bản DLL, 2026-08-18) lại ghi
+key **trần, không tiền tố** (`DamageMultiplier`, `MaxQuantity`...). Vì
+`common::config` là map phẳng, bỏ qua section header hoàn toàn (xem
+`shared/src/config.rs`), nên **không key nào trong số này từng khớp** —
+mọi giá trị nhân/gán luôn chạy bằng default hard-code trong Rust, chỉnh
+`RiseArcher.ini` trước bản này không có tác dụng gì. Chỉ `ReloadKey`/
+`LogFile` (2 key duy nhất code đọc không tiền tố) là hoạt động đúng.
+Đây cũng chính là lý do hợp lý cho mục "Test trong game: Chưa" — chưa ai
+kiểm chứng việc chỉnh ini có ăn không, nên bug tồn tại từ đầu mà không ai
+phát hiện.
+
+Sửa bằng cách viết lại `RiseArcher.ini` với đúng key có tiền tố khớp code
+(xem mục "Tổ chức lại section" ngay dưới). Người dùng nâng cấp từ bản cũ:
+`config::migrate` sẽ tự thêm mọi key tiền tố mới (giá trị mặc định) và dời
+key trần cũ (nếu người dùng từng chỉnh, dù không có tác dụng) vào
+`[Legacy]` — không mất dữ liệu, nhưng giá trị custom cũ (nếu có) cần chỉnh
+lại thủ công theo tên key mới.
+
+## Tổ chức lại section theo tính năng thay vì theo loại vũ khí (2026-09-08)
+
+Section cũ đặt tên theo loại vũ khí (`[Bow]`, `[Crossbow]`, `[Ballista]`...),
+mỗi section lại trộn nhiều loại tuỳ chỉnh khác nhau (damage, scaling, ash of
+war) - khó dò khi muốn sửa "mọi hệ số damage" hay "mọi giới hạn số lượng"
+cùng lúc. Đổi sang đặt tên section theo **loại tuỳ chỉnh**: `[General]`,
+`[Damage Multipliers]`, `[Common]` (scaling/Ash of War/weight/sell value),
+`[Bullet Tuning]` (gồm cả `MaxQuantity` của Arrow/Bolt), `[Logging]`. Mỗi
+dòng key vẫn giữ tiền tố (`Bow.`/`Crossbow.`/`Ballista.`/`Bullet.`) kèm 1
+dòng comment nói rõ áp dụng cho vũ khí nào - section header vẫn chỉ là nhãn
+hiển thị cho người dùng (bị `common::config` bỏ qua hoàn toàn), không ảnh
+hưởng logic đọc key.
+
+Cùng đợt, người dùng tự viết lại bộ key theo hướng chi tiết hơn bản đầu của
+Claude (không còn multiplier `BowCrossbowBallista.*` dùng chung cho cả 3):
+
+- `Bow.AllowAshOfWar` → **`Bow.UnlockAOW`** (đổi tên, không đổi hành vi -
+  vẫn gate `row.set_gem_mount_type(2)`).
+- `BowCrossbowBallista.WeightMultiplier`/`SellValueMultiplier` (1 cặp dùng
+  chung cho cả 3 loại) → tách riêng theo từng loại:
+  `Bow.WeightMultiplier`/`Bow.SellValueMultiplier`,
+  `Crossbow.WeightMultiplier`/`Crossbow.SellValueMultiplier`,
+  `Ballista.WeightMultiplier`/`Ballista.SellValueMultiplier` - cùng giá trị
+  mặc định `0.5`/`2` như cũ, nhưng giờ chỉnh riêng từng loại được.
+- `Arrow.MaxQuantity`/`Bolt.MaxQuantity` → **`Bullet.Arrow.MaxQuantity`**/
+  **`Bullet.Bolt.MaxQuantity`** (đổi tên cho khớp section `[Bullet Tuning]`
+  - field thật vẫn là `max_arrow_quantity` trên `EquipParamWeapon`, do
+    `weapon.rs` áp, không phải `bullet.rs`).
+- `weapon.rs` được viết lại theo `enum WeaponKind` (`Bow`/`Crossbow`/
+  `Ballista`/`Arrow`/`Bolt`) phân loại 1 lần từ `weaponCategory`/`wepType`,
+  dùng chung cho cả việc lọc row liên quan (`is_relevant`) lẫn chọn hệ số
+  áp dụng trong `apply` - tránh lặp lại cùng 1 khối `match` category/wepType
+  2 lần như bản đầu.
+- Người dùng gõ nhầm `ShellValueMultiplier` (thay vì `SellValueMultiplier`)
+  lúc soạn lại ini - đã xác nhận là gõ nhầm và sửa lại đúng chính tả.
+
 ## Config
 
 Xem `RiseArcher.ini` cho toàn bộ key + comment. Mọi giá trị dùng đúng quy
@@ -99,6 +189,7 @@ không có khái niệm "tắt" vì luôn cần 1 hệ số > 0).
 |---|---|
 | RE gốc (AOB/field/ID pattern qua CSV thật) | Xong (bản `.MASSEDIT`) |
 | Port sang Rust DLL (`weapon.rs` + `bullet.rs`) | Xong, build được, không warning |
+| Hot reload (`ReloadKey`, baseline chống compound) | Xong, build được |
 | Test trong game | **Chưa** |
 
 ## Rủi ro cần lưu ý khi test
