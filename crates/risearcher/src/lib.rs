@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "RiseArcher" to control the output DLL's filename
 
 mod bullet;
+mod player;
 mod reload;
 mod task;
 mod weapon;
@@ -57,11 +58,12 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
     true
 }
 
-/// Waits (up to `timeout`) for `SoloParamRepository` - the live in-memory
-/// regulation.bin - to become available, applies every weapon/bullet buff,
-/// then watches `reload::RELOAD_GENERATION` for the rest of the DLL's
-/// lifetime, reapplying from each row's cached original values (see
-/// `weapon::Baseline`/`bullet::Baseline`) on every `ReloadKey` press.
+/// Waits for the player to actually be in the game world (see
+/// `player::wait_for_solo_param_repository` for why that, not just
+/// `SoloParamRepository::instance_mut()`, is the right gate), applies every
+/// weapon/bullet buff, then watches `reload::RELOAD_GENERATION` for the rest
+/// of the DLL's lifetime, reapplying from each row's cached original values
+/// (see `weapon::Baseline`/`bullet::Baseline`) on every `ReloadKey` press.
 ///
 /// Unlike `autoregen`, this doesn't need to run on the game's own frame
 /// scheduler for the buff itself: regulation param rows are loaded once at
@@ -72,13 +74,19 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
 fn run() {
     let mut last_seen_generation = reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
-    let Some(repo) = wait_for_repository(Duration::from_secs(60)) else {
+    logger::log("RiseArcher: waiting for the player to be in the game world (regulation.bin)...");
+    let Some(repo) = player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
         logger::log("ERROR: SoloParamRepository never became available - RiseArcher disabled for this session.");
         return;
     };
+    logger::log("RiseArcher: SoloParamRepository ready, applying weapon buffs...");
 
-    let weapon_changed = weapon::apply(repo);
-    let bullet_changed = bullet::apply(repo);
+    let Some((weapon_changed, bullet_changed)) = apply_with_retry(repo, Duration::from_secs(30)) else {
+        logger::error(
+            "weapon/bullet apply kept panicking for 30s (regulation.bin param resource never finished loading) - RiseArcher disabled for this session.",
+        );
+        return;
+    };
     logger::log(&format!(
         "Applied to {weapon_changed} EquipParamWeapon row(s) and {bullet_changed} Bullet row(s)."
     ));
@@ -112,12 +120,22 @@ fn run() {
     }
 }
 
-fn wait_for_repository(timeout: Duration) -> Option<&'static mut SoloParamRepository> {
+/// Runs `weapon::apply`/`bullet::apply`, retrying (up to `timeout`) if either
+/// panics - see `run`'s doc comment for why they can: a param whose res_cap
+/// hasn't finished loading yet panics rather than returning an `Err`, so this
+/// is the only way to ride out that window instead of just crashing this
+/// thread once. Safe to retry: a panic here always happens before any row is
+/// actually mutated for that attempt (see `weapon::ORIGINALS`/
+/// `bullet::ORIGINALS`'s own doc comments for the accompanying mutex-poison
+/// recovery this relies on).
+fn apply_with_retry(repo: &mut SoloParamRepository, timeout: Duration) -> Option<(usize, usize)> {
     let step = Duration::from_millis(200);
     let mut waited = Duration::ZERO;
     loop {
-        if let Ok(repo) = unsafe { SoloParamRepository::instance_mut() } {
-            return Some(repo);
+        let attempt = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (weapon::apply(repo), bullet::apply(repo))));
+        match attempt {
+            Ok(counts) => return Some(counts),
+            Err(_) => logger::warn("RiseArcher: apply panicked (regulation.bin param not loaded yet?), retrying..."),
         }
         if waited >= timeout {
             return None;

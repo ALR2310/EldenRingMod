@@ -99,6 +99,13 @@ struct Baseline {
     sell_value: i32,
 }
 
+// Recovered with `unwrap_or_else(|poisoned| poisoned.into_inner())` at every
+// lock site rather than a plain `.unwrap()` - `lib.rs::apply_with_retry`
+// retries `apply` across a `catch_unwind` boundary (regulation.bin's param
+// resource files can still be loading when this first runs - see its doc
+// comment), and a panic while this mutex was held would otherwise poison it
+// permanently, turning every retry's own `.lock().unwrap()` into a second,
+// unrelated panic before it ever got a chance to try again.
 static ORIGINALS: Mutex<Option<HashMap<u32, Baseline>>> = Mutex::new(None);
 
 /// Whether `row` is one RiseArcher touches at all - excludes the NPC-only
@@ -174,7 +181,7 @@ fn apply_bow(row: &mut EQUIP_PARAM_WEAPON_ST, baseline: &Baseline, cfg: &Config)
 pub fn apply(repo: &mut SoloParamRepository) -> usize {
     let cfg = Config::load();
 
-    let mut snapshot_guard = ORIGINALS.lock().unwrap();
+    let mut snapshot_guard = ORIGINALS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let originals = snapshot_guard.get_or_insert_with(|| {
         repo.rows_mut::<EquipParamWeapon>()
             .filter(|(_, row)| is_relevant(row))
