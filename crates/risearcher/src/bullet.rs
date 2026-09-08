@@ -146,6 +146,11 @@ struct Baseline {
     angle_x: f32,
 }
 
+// Recovered with `unwrap_or_else(|poisoned| poisoned.into_inner())` at the
+// lock site below rather than a plain `.unwrap()` - see `weapon::ORIGINALS`'s
+// doc comment for why: `lib.rs::apply_with_retry` retries across a
+// `catch_unwind` boundary, and a panic while this mutex was held would
+// otherwise poison it permanently.
 static ORIGINALS: Mutex<Option<HashMap<u32, Baseline>>> = Mutex::new(None);
 
 fn snapshot(row: &BULLET_PARAM_ST) -> Baseline {
@@ -213,7 +218,7 @@ pub fn apply(repo: &mut SoloParamRepository) -> usize {
     let cfg = Config::load();
     let ids = all_ids();
 
-    let mut snapshot_guard = ORIGINALS.lock().unwrap();
+    let mut snapshot_guard = ORIGINALS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let originals = snapshot_guard.get_or_insert_with(|| {
         let mut map = HashMap::new();
         for &(id, _role) in &ids {

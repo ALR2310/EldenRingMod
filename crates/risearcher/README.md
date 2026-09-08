@@ -61,11 +61,15 @@ Sống ở `crates/risearcher` trong workspace [`EldenRingMod`](../../README.md)
   4 bảng offset cố định (`ARROW_OFFSETS`/`GREAT_ARROW_OFFSETS`/
   `RADAHNS_SPEAR_OFFSETS`/`BOLT_OFFSETS`) — đúng cấu trúc đã RE ra trong
   README cũ, chỉ viết lại thành data + vòng lặp thay vì liệt kê tay.
-- **`src/lib.rs`** — chờ `SoloParamRepository::instance_mut()` sẵn sàng (poll
-  mỗi 200ms, timeout 60s) rồi patch lần đầu; sau đó đăng ký 1 task
-  `CSTaskImp::FrameBegin` (qua `src/task.rs`) chỉ để theo dõi
-  `reload::RELOAD_GENERATION` và patch lại mỗi khi người dùng nhấn
-  `General.ReloadKey` — xem mục "Hot reload" bên dưới.
+- **`src/lib.rs`** — chờ `player::wait_for_solo_param_repository` sẵn sàng
+  (poll mỗi 200ms, timeout 300s) rồi patch lần đầu (bọc `apply_with_retry`,
+  tự thử lại nếu panic); sau đó đăng ký 1 task `CSTaskImp::FrameBegin` (qua
+  `src/task.rs`) chỉ để theo dõi `reload::RELOAD_GENERATION` và patch lại
+  mỗi khi người dùng nhấn `General.ReloadKey` — xem mục "Hot reload" bên
+  dưới.
+- **`src/player.rs`** — port từ `sometweaks::player`: chờ player thực sự vào
+  world (`WorldChrMan::main_player`) trước khi đụng `SoloParamRepository` -
+  xem mục "Bug: crash lặng lúc khởi động" bên dưới.
 - **`src/reload.rs`** / **`src/task.rs`** — port nguyên khối từ
   `sometweaks::reload`/`sometweaks::task` (xem mục "Hot reload" bên dưới).
 
@@ -117,6 +121,43 @@ cơ chế trigger. Giờ thêm hot reload giống `sometweaks` (mặc định ph
 
 Đổi tên key debug log: `[Debug] DebugLog=true` → `[Logging] LogFile=true`
 (chỉ đổi tên, không đổi hành vi — vẫn gate việc tạo file `RiseArcher.log`).
+
+## Bug: crash lặng lúc khởi động, `SoloParamRepository` ready quá sớm (2026-09-08)
+
+Test in-game đầu tiên (sau khi thêm hot reload ở trên) lộ ra: RiseArcher hoàn
+toàn không hoạt động — Black Bow không mở khoá được Ash of War, số lượng mũi
+tên vẫn 99 vanilla. `RiseArcher.log` dừng đột ngột ngay sau dòng
+`"SoloParamRepository ready, applying weapon buffs..."`, không có dòng
+`"Applied to..."` lẫn dòng lỗi nào - dấu hiệu đặc trưng của 1 thread Rust
+panic không ai bắt (dưới profile `panic = "unwind"` của workspace, panic ở
+1 thread `std::thread::spawn` tự chết trong im lặng, không crash game, không
+log gì - xem comment gốc trong `Cargo.toml`).
+
+Đọc thẳng source `fromsoftware-rs` xác nhận: `SoloParamRepository::
+instance_mut()` trả `Ok` ngay khi object tồn tại (đúng như code cũ giả định
+"regulation.bin chỉ load 1 lần lúc khởi động") - nhưng **sớm hơn** lúc các
+file resource của từng param cụ thể (`EquipParamWeapon`, `Bullet`...) load
+xong. Gọi `rows_mut::<EquipParamWeapon>()` lúc đó rơi vào
+`SoloParamRepository::get_param_file_mut`'s
+`.expect("Expected param holder to have exactly one res cap")` → panic,
+không phải trả `Err` để retry được.
+
+Y hệt bug đã gặp (và đã fix) trong `sometweaks::drop_rate`
+(2026-08-24/25, xem `sometweaks/src/player.rs`'s doc comment) -
+`unlock_ashes_of_war` (chính là tính năng tương đương `Bow.UnlockAOW` ở
+đây) chạy được trong `sometweaks` chính vì nó chờ qua
+`player::wait_for_solo_param_repository` (gate thêm điều kiện
+`WorldChrMan::main_player` đã tồn tại), không chỉ chờ
+`instance_mut().is_ok()` suông như RiseArcher đang làm.
+
+Sửa bằng cách port nguyên `sometweaks::player`'s 2 hàm
+(`main_player_chr_ins_ptr`/`wait_for_solo_param_repository`) sang
+`src/player.rs` của RiseArcher, dùng nó thay `wait_for_repository` cũ (bỏ
+hẳn hàm này). Thêm lớp phòng hờ thứ 2 (`apply_with_retry` trong `lib.rs`):
+bọc lần `apply` đầu bằng `catch_unwind`, tự thử lại tối đa 30s nếu vẫn
+panic - đi kèm sửa `weapon::ORIGINALS`/`bullet::ORIGINALS`'s
+`.lock().unwrap()` → phục hồi mutex bị "poison" sau 1 lần panic, để lần
+retry sau không panic dây chuyền ngay tại bước lock.
 
 ## Bug: `RiseArcher.ini` không hề có tác dụng trước bản này (2026-09-08)
 
@@ -190,7 +231,7 @@ không có khái niệm "tắt" vì luôn cần 1 hệ số > 0).
 | RE gốc (AOB/field/ID pattern qua CSV thật) | Xong (bản `.MASSEDIT`) |
 | Port sang Rust DLL (`weapon.rs` + `bullet.rs`) | Xong, build được, không warning |
 | Hot reload (`ReloadKey`, baseline chống compound) | Xong, build được |
-| Test trong game | **Chưa** |
+| Test trong game | **Đã test (2026-09-08)** - áp đúng 99 `EquipParamWeapon` + 352 `Bullet` row, xem "Bug: crash lặng lúc khởi động" |
 
 ## Rủi ro cần lưu ý khi test
 
