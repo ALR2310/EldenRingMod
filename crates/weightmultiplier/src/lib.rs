@@ -30,6 +30,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // the original ReductionWeight's unconditional Logger::Init(dir) -
         // there's no DebugLog/EnableLog key in this mod.
         logger::init(&dir, "WeightMultiplier.log");
+        logger::install_panic_hook();
         logger::log("Activating WeightMultiplier...");
         if migrated > 0 {
             logger::log(&format!(

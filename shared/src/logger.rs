@@ -1,8 +1,9 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, Once};
 
 static LOG_FILE: LazyLock<Mutex<Option<File>>> = LazyLock::new(|| Mutex::new(None));
+static PANIC_HOOK_INSTALLED: Once = Once::new();
 
 /// Opens `file_name` (e.g. "AutoRegen.log") in `log_dir`, truncating any
 /// previous run's log. No-op if already initialized (safe to call again
@@ -68,4 +69,39 @@ pub fn error(message: &str) {
 /// their own ini flag (DebugLog/RegenLog/...).
 pub fn debug(message: &str) {
     write_line("DEBUG", message);
+}
+
+/// Installs a process-wide panic hook that logs an ERROR line (thread name,
+/// source location, panic message) before falling through to the previous
+/// hook. Without this, a panic on any of the background threads these mods
+/// spawn (the `std::thread::spawn` in `DllMain`, hudhook's render/input
+/// hook threads) unwinds silently under this workspace's `panic = "unwind"`
+/// profile - the thread just dies and the mod's log stops dead with no
+/// error line, which is exactly how a fromsoftware-rs struct offset going
+/// stale after a game update has bitten this workspace before (see
+/// SoloParamRepository's `.expect()` panics). Call once, as early as
+/// possible in `DllMain`, right after `init`. Safe to call more than once
+/// (e.g. from a hot-reload path) - only the first call installs the hook.
+pub fn install_panic_hook() {
+    PANIC_HOOK_INSTALLED.call_once(|| {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let thread = std::thread::current();
+            let thread_name = thread.name().unwrap_or("<unnamed>");
+            let location = info
+                .location()
+                .map(|l| l.to_string())
+                .unwrap_or_else(|| "<unknown location>".to_string());
+            let payload = info.payload();
+            let message = if let Some(s) = payload.downcast_ref::<&str>() {
+                (*s).to_string()
+            } else if let Some(s) = payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "<non-string panic payload>".to_string()
+            };
+            error(&format!("PANIC on thread '{thread_name}' at {location}: {message}"));
+            default_hook(info);
+        }));
+    });
 }

@@ -28,6 +28,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // accumulation across play sessions. RegenLog only gates the extra
         // per-hit damage/heal dump in attack_hook, not this base log.
         logger::init(&dir, "AutoRegen.log");
+        logger::install_panic_hook();
         logger::log("Activating AutoRegen...");
         if migrated > 0 {
             logger::log(&format!(
