@@ -2255,3 +2255,15 @@ doc comment đầu file phản ánh đúng lịch sử + kết luận cuối. Bu
 **Đã test, xác nhận (2026-09-04)**: hết bug "đi hướng Đông" ở Grace cổng
 bão - `kSigDespawn` (jge->jmp) đã thay thế đúng chức năng Hook A mà không
 còn side-effect đi lạc hướng.
+
+## Bỏ hẳn tính năng Enemy Scaling (2026-09-06)
+
+Theo yêu cầu người dùng: xoá bỏ tính năng `Enemy.Enabled`/
+`Enemy.Health.Multiplier`/`Enemy.Damage.SpEffectId` (mục "chưa test" duy
+nhất còn tồn đọng từ đợt audit README ngày 2026-09-03) - xoá hẳn module
+`src/enemy_scaling.rs`, bỏ `mod enemy_scaling;` + dòng
+`std::thread::spawn(enemy_scaling::run)` khỏi `src/lib.rs`, xoá cả block
+`[Enemy Scaling]` khỏi `SomeTweaks.ini`. Không cần migrate thủ công gì
+thêm - ai đã có 3 key này trong file ini cũ sẽ tự được `migrate()` chuyển
+vào `[Legacy]` ở lần khởi động kế tiếp (đúng cơ chế vừa sửa ở mục
+2026-09-04 phía trên).
