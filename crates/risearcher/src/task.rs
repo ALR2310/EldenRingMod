@@ -49,7 +49,7 @@ pub fn wait_for_cs_task() -> &'static CSTaskImp {
     static CS_TASK_ADDR: OnceLock<usize> = OnceLock::new();
 
     let addr = *CS_TASK_ADDR.get_or_init(|| {
-        logger::log("Engine: waiting for CSTaskImp (game still initializing)...");
+        logger::log("Engine: waiting for CSTaskImp...");
         let started = Instant::now();
 
         wait_for_system_init_until_ready();
