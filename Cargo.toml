@@ -3,8 +3,8 @@ resolver = "2"
 members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverunes", "crates/runemultiplier", "crates/weightmultiplier", "crates/risearcher"]
 
 [workspace.dependencies]
-eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "e0948c8d64594b79785e9490877baacea5605a9d" }
-fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "e0948c8d64594b79785e9490877baacea5605a9d" }
+eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
+fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [profile.release]
