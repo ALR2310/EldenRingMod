@@ -29,6 +29,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // something to write to even when it's off by default - same
         // convention as SomeTweaks.
         logger::init(&dir, "PassiveRunes.log");
+        logger::install_panic_hook();
         logger::log("Activating PassiveRunes...");
         if migrated > 0 {
             logger::log(&format!(

@@ -42,6 +42,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // The log is always on (overwritten every run) regardless of
         // DebugLog - same convention as AutoRegen.
         logger::init(&dir, "SomeTweaks.log");
+        logger::install_panic_hook();
         logger::log("Activating SomeTweaks...");
         if migrated > 0 {
             logger::log(&format!(
