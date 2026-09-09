@@ -31,6 +31,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         if config::get_bool("DebugLog", false) {
             logger::init(&dir, "RuneMultiplier.log");
         }
+        logger::install_panic_hook();
         logger::log("Activating RuneMultiplier...");
         if migrated > 0 {
             logger::log(&format!(
