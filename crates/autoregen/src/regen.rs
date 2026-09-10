@@ -20,7 +20,9 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use eldenring::cs::{CSTaskGroupIndex, CSTaskImp, WorldChrMan};
+use eldenring::cs::{AnnounceNotification, CSMenuManImp, CSTaskGroupIndex, CSTaskImp, MenuString, WorldChrMan};
+use eldenring::dlkr::DLAllocator;
+use eldenring::dltx::DLString;
 use eldenring::util::input;
 use eldenring::util::system::wait_for_system_init;
 use fromsoftware_shared::{FromStatic, Program, RecurringTaskHandle, SharedTaskImpExt};
@@ -135,6 +137,30 @@ pub fn heal_main_player(field: HealField, flat_amount: i32, percent_fraction: f6
             apply_heal(&mut data.stamina, max, flat_amount, percent_fraction)
         }
     }
+}
+
+/// Shows `text` in the game's own top-of-screen system announcement banner
+/// (the same widget used for things like "Autosaving...") - queued onto
+/// `CSMenuMan`'s `FeSystemAnnounceViewModel`, so the game's existing
+/// fade-in/scroll/fade-out playback handles displaying and dismissing it, no
+/// timer of our own needed. No-op (silently) if `CSMenuMan` isn't resolved
+/// yet or the string fails to encode - a missed reload confirmation isn't
+/// worth a log line.
+fn show_announcement(text: &str) {
+    let Ok(menu_man) = (unsafe { CSMenuManImp::instance_mut() }) else {
+        return;
+    };
+    let allocator = DLAllocator::runtime_heap_allocator();
+    let Ok(allocated_string) = DLString::from_str(text, allocator) else {
+        return;
+    };
+    menu_man.system_announce_view_model.notifications.push_back(AnnounceNotification {
+        is_active: true,
+        message: MenuString {
+            static_string: std::ptr::null(),
+            allocated_string,
+        },
+    });
 }
 
 /// Returns the main player's `ChrIns` address, used by `attack_hook` to
@@ -436,6 +462,7 @@ pub fn run(ini_path: String) {
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
                 logger::log("Config reloaded (hotkey pressed).");
+                show_announcement("AutoRegen: config reloaded");
             }
 
             // Regen.PerTick.Trigger picks which player state the tick heal

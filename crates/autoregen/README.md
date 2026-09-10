@@ -383,6 +383,28 @@ tiếp (bất kể ID gì) chắc chắn là huỷ. Fix: `is_sit_gesture` giờ 
 nếu đang sitting từ trước, bất kể `requested_gesture` có khớp danh sách hay
 không.
 
+## Thông báo trong game khi bấm `ReloadKey` (2026-09-10)
+
+Yêu cầu người dùng: muốn có xác nhận trực quan trong game khi F5 reload
+xong, thay vì chỉ ghi vào `AutoRegen.log` (dòng "Config reloaded (hotkey
+pressed)." vẫn giữ nguyên). Tra `fromsoftware-rs` tìm được đúng widget game
+tự dùng cho các thông báo kiểu "Autosaving..." - banner cuộn chữ trên đầu
+màn hình (`CSMenuManImp::system_announce_view_model`, kiểu
+`FeSystemAnnounceViewModel`), khác với `CSMenuManImp::display_status_message`
+(chỉ nhận ID cố định như "You Died"/"Great Enemy Felled", không nhận text
+tuỳ ý).
+
+Cách hiện: tạo `AnnounceNotification { is_active: true, message: MenuString
+{ static_string: null, allocated_string: DLString::from_str(text,
+DLAllocator::runtime_heap_allocator()) } }` rồi `push_back` thẳng vào
+`notifications: DLDeque<AnnounceNotification>` của
+`system_announce_view_model` - không cần tự quản lý hiển thị/ẩn/animation gì
+cả, máy trạng thái phát lại banner có sẵn của game (`FeSystemAnnounceView`)
+tự nhận thấy hàng đợi không rỗng và tự chạy hết fade-in/scroll/fade-out.
+Build sạch trên lần thử đầu (không có môi trường game để tự test thật, dựa
+hoàn toàn vào đọc struct - cần người dùng xác nhận banner có thật sự hiện
+đúng chữ "AutoRegen: config reloaded" không).
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
