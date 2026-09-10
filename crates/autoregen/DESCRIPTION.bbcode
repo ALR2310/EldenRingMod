@@ -1,30 +1,19 @@
-Adds automatic HP, FP, and Stamina regeneration over time, with configurable rates - plus optional HP/FP/Stamina restore the instant your own weapon attack lands a hit, either a fixed amount/percent of your max stat, or a percent of the damage you just dealt (true lifesteal).
+Adds automatic HP, FP, and Stamina regeneration over time, with configurable rates - plus optional HP/FP/Stamina restore the instant your own weapon attack lands a hit, either a fixed amount/percent of your max stat, or a percent of the damage you just dealt (true lifesteal). Fully configurable via [b]AutoRegen.ini[/b] - see the comments in the file for every option.
 
-Default configuration ([b]AutoRegen.ini[/b]):
-[code][General]
-ReloadKey=F5                    ; hotkey that reloads this file while the game is running
-
-[Regen Per Tick]
-Regen.PerTick.Enabled=true
-Regen.PerTick.Trigger=0         ; 0 = always, 1 = out of combat only, 2 = in combat only
-Regen.PerTick.Interval=1000     ; how often (ms) HP/FP/Stamina are topped up
-Regen.PerTick.Unit=1            ; 0 = flat points, 1 = percent of max stat
-Regen.PerTick.HP=0.5
-Regen.PerTick.FP=1
-Regen.PerTick.SP=5
-
-[Regen Per Hit]
-Regen.PerHit.Enabled=false
-Regen.PerHit.Trigger=0          ; 0 = flat points, 1 = percent of max stat, 2 = percent of damage dealt
-Regen.PerHit.DamageType=0       ; 0 = melee hits only, 1 = ranged/spell hits only, 2 = both
-Regen.PerHit.ExcludeAow=false   ; when true, Weapon Art/Ash of War hits don't restore anything
-Regen.PerHit.HP=0.5
-Regen.PerHit.FP=1
-Regen.PerHit.SP=5[/code]
+[size=4][b]Features[/b][/size]
+[list]
+[*]Passive HP/FP/Stamina regen on a timer, as flat points or a percent of max.[/*]
+[*]Optionally restrict regen to: out of combat, in combat, idle (no input for a few seconds), or sitting via a gesture.[/*]
+[*]Optional restore-on-hit when your own attack lands - fixed amount, percent of max stat, or true lifesteal (percent of damage dealt).[/*]
+[*]Restore-on-hit can be limited to melee, ranged/spell hits, or both, and can exclude Ash of War/Weapon Art hits.[/*]
+[*]Hotkey to reload the ini without restarting the game.[/*]
+[/list]
 
 [b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
 
 [size=4][b]Installation[/b][/size]
+
+Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url], [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url], [url=https://github.com/garyttierney/me3/releases]Mod Engine 3[/url].
 
 [b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
 [list=1]
@@ -47,6 +36,14 @@ Regen.PerHit.SP=5[/code]
 
 [size=4][b]Changelog[/b][/size]
 
+[b]2.5.0[/b]
+[list]
+[*]Added idle and sitting (via gesture) conditions for Regen Per Tick.[/*]
+[/list]
+[b]2.4.0[/b]
+[list]
+[*]Updated for ER 1.17.1.[/*]
+[/list]
 [b]2.3.0[/b]
 [list]
 [*]Added an option to exclude Ash of War hits from on-hit regen.[/*]
