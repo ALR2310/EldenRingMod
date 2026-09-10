@@ -148,30 +148,58 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
         .map(|p| &p.chr_ins as *const _ as *const u8)
 }
 
-/// The newly-pressed-this-frame pad-input bits that decide
-/// `LAST_ATTACK_WAS_SKILL` below - which of R1/R2/L1/L2 the player just
-/// pressed, confirmed in-game (2026-09-03) to correlate with Ash of
-/// War/skill hits far more reliably than any `AtkParam` field does (see
-/// AutoRegen's README for the field-by-field comparison that ruled out
-/// `AtkParam`).
-struct NewActionPresses {
+/// The pad-input bits read each frame to decide `LAST_ATTACK_WAS_SKILL`,
+/// `IS_SITTING` and `is_idle()` below.
+///
+/// `r1`/`r2`/`l1`/`l2`/`new_gesture` come from `new_action_presses` (fires
+/// exactly 1 frame, on the press) - confirmed in-game (2026-09-03) to
+/// correlate with Ash of War/skill hits far more reliably than any
+/// `AtkParam` field does (see AutoRegen's README). `requested_gesture` is a
+/// plain value (not a bit), only meaningful the same frame `new_gesture` is
+/// set. `busy` covers every other way the player can be "not idle" - held
+/// (not just newly-pressed) actions from `action_requests`, plus actual
+/// movement input - read from the same module so idle detection doesn't
+/// need yet another `WorldChrMan::instance()` call of its own.
+struct ActionSnapshot {
     r1: bool,
     r2: bool,
     l1: bool,
     l2: bool,
+    new_gesture: bool,
+    requested_gesture: i32,
+    busy: bool,
 }
 
-/// Reads the main player's `CSChrActionRequestModule.new_action_presses`
-/// bits for this frame. `None` if not resolved yet.
-fn main_player_new_action_presses() -> Option<NewActionPresses> {
+/// Reads this frame's action-input snapshot (see [`ActionSnapshot`]) off the
+/// main player's `CSChrActionRequestModule`. `None` if not resolved yet.
+fn main_player_action_snapshot() -> Option<ActionSnapshot> {
     let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
     let main_player = world_chr_man.main_player.as_ref()?;
-    let presses = &main_player.chr_ins.modules.action_request.new_action_presses;
-    Some(NewActionPresses {
-        r1: presses.r1(),
-        r2: presses.r2(),
-        l1: presses.l1(),
-        l2: presses.l2(),
+    let action_request = &main_player.chr_ins.modules.action_request;
+    let new_presses = &action_request.new_action_presses;
+    let held = &action_request.action_requests;
+    let busy = action_request.movement_request_flags.raw_input()
+        || held.r1()
+        || held.r2()
+        || held.l1()
+        || held.l2()
+        || held.sp_move()
+        || held.jump()
+        || held.use_item()
+        || held.action()
+        || held.guard()
+        || held.rideon()
+        || held.rideoff()
+        || held.ladderup()
+        || held.ladderdown();
+    Some(ActionSnapshot {
+        r1: new_presses.r1(),
+        r2: new_presses.r2(),
+        l1: new_presses.l1(),
+        l2: new_presses.l2(),
+        new_gesture: new_presses.gesture(),
+        requested_gesture: action_request.requested_gesture,
+        busy,
     })
 }
 
@@ -188,19 +216,117 @@ fn main_player_new_action_presses() -> Option<NewActionPresses> {
 // still reads correctly.
 static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
 
-/// Updates the `LAST_ATTACK_WAS_SKILL` latch from this frame's newly-pressed
-/// buttons, if any. No-op if nothing new was pressed this frame (preserves
-/// whatever the last press decided) or if the player isn't resolved yet.
-/// Called every frame, independent of any Regen.PerHit config.
+// Default `Gesture.SittingId` for every "sitting" gesture: Prayer, Desperate
+// Prayer, Dejection, Patches' Crouch, Crossed Legs, Rest, Sitting Sideways,
+// Dozing Cross-Legged, Spread Out, Balled Up.
+//
+// These are HALF the GESTURE_ID values shown in the public GESTURE_ID
+// dropdown in The Grand Archives' Elden Ring Cheat Engine table
+// (github.com/The-Grand-Archives/Elden-Ring-CT-TGA) - e.g. that table lists
+// Dejection as 160, but `requested_gesture` reads back 80 in-game (confirmed
+// 2026-09-10 via the `RegenLog` debug line below: Dejection=80, Rest=92,
+// Sitting Sideways=93, each exactly that table's ID / 2). fromsoftware-rs
+// doesn't ship a named enum for these, and no public source documents this
+// /2 factor - it was reverse-engineered from live log output, not read off
+// any reference, so treat any ID from that table as needing /2 first, not
+// as a literal `requested_gesture` value. Deliberately excludes "Fetal
+// Position" (192 in that table, 96 here) - a separate, visually similar
+// gesture Kolagon's request (see README) didn't list. Kept editable via ini
+// rather than hard-coded so users can add/remove entries themselves - e.g.
+// after a future game update adds a new gesture this list hasn't been
+// updated for yet - without needing a new DLL build.
+const DEFAULT_SIT_GESTURE_IDS: &str = "80,90,91,92,93,94,95,97,100,101";
+
+/// Parses `Gesture.SittingId` (comma-separated GESTURE_ID values, see
+/// `DEFAULT_SIT_GESTURE_IDS`) fresh from config - only called the 1 frame a
+/// gesture is newly requested (see `update_last_attack_input`), not every
+/// frame, so re-parsing instead of caching is cheap. Unparseable entries
+/// (typos, stray commas) are silently skipped rather than failing the whole
+/// list.
+fn sit_gesture_ids() -> Vec<i32> {
+    config::get_string("Gesture.SittingId", DEFAULT_SIT_GESTURE_IDS)
+        .split(',')
+        .filter_map(|id| id.trim().parse::<i32>().ok())
+        .collect()
+}
+
+// Whether the player's currently-latched gesture is one of `SIT_GESTURE_IDS`
+// - same latch approach as `LAST_ATTACK_WAS_SKILL`, since `requested_gesture`
+// is only valid the 1 frame `new_action_presses.gesture()` fires, not for as
+// long as the sit animation keeps playing. Cleared the moment `busy` is true
+// (movement or any other held action) rather than waiting for a specific
+// "gesture ended" signal - fromsoftware-rs exposes no such signal, and any
+// of those inputs already cancels the sit animation in-game anyway.
+static IS_SITTING: AtomicBool = AtomicBool::new(false);
+
+// Timestamp (`now_ms()`) the player became idle (`busy` went false), or 0
+// while currently busy - backs `is_idle()`'s `IDLE_GRACE_MS` delay below.
+// 0 doubles as "currently busy" since `now_ms()` is relative to process
+// start and never 0 again after the first frame.
+static IDLE_SINCE_MS: AtomicU64 = AtomicU64::new(0);
+
+// How long the player must stand completely still before Regen.PerTick.
+// Trigger=3 (idle) starts applying - avoids topping off on every brief pause
+// between actions (e.g. mid-fight positioning) being treated as "idle".
+// Requested (2026-09-10) after testing Trigger=3 with no delay at all.
+const IDLE_GRACE_MS: u64 = 5000;
+
+/// Updates `LAST_ATTACK_WAS_SKILL`, `IS_SITTING` and `IDLE_SINCE_MS` from
+/// this frame's action input. No-op if the player isn't resolved yet. Called
+/// every frame, independent of any Regen.PerHit/PerTick config.
 pub fn update_last_attack_input() {
-    let Some(presses) = main_player_new_action_presses() else {
+    let Some(snapshot) = main_player_action_snapshot() else {
         return;
     };
-    if presses.r1 || presses.r2 || presses.l1 {
+    if snapshot.r1 || snapshot.r2 || snapshot.l1 {
         LAST_ATTACK_WAS_SKILL.store(false, Ordering::Relaxed);
-    } else if presses.l2 {
+    } else if snapshot.l2 {
         LAST_ATTACK_WAS_SKILL.store(true, Ordering::Relaxed);
     }
+
+    if snapshot.new_gesture {
+        // A 2nd gesture request while already sitting always cancels/stands
+        // up in-game first, whether it's the same gesture or a different one
+        // - it never switches straight into the newly-selected gesture.
+        // Since this cancel fires the exact same signal (new_action_presses.
+        // gesture() + requested_gesture=<id>) as starting one, the only way
+        // to tell them apart is context: already sitting means this press
+        // must be the cancel. Confirmed as a real bug in-game (2026-09-10):
+        // without this check, re-pressing a gesture stands the player up but
+        // IS_SITTING stayed true, so PerTick kept healing after they'd
+        // already gotten up.
+        let is_sit_gesture = !IS_SITTING.load(Ordering::Relaxed) && sit_gesture_ids().contains(&snapshot.requested_gesture);
+        IS_SITTING.store(is_sit_gesture, Ordering::Relaxed);
+        if config::get_bool("RegenLog", false) {
+            logger::log(&format!(
+                "Gesture: requested_gesture={} -> is_sitting={is_sit_gesture}",
+                snapshot.requested_gesture
+            ));
+        }
+    } else if snapshot.busy {
+        IS_SITTING.store(false, Ordering::Relaxed);
+    }
+
+    if snapshot.busy {
+        IDLE_SINCE_MS.store(0, Ordering::Relaxed);
+    } else if IDLE_SINCE_MS.load(Ordering::Relaxed) == 0 {
+        IDLE_SINCE_MS.store(now_ms(), Ordering::Relaxed);
+    }
+}
+
+/// Whether the player has been doing nothing at all - no movement input, no
+/// held attack/item/guard/mount action - for at least `IDLE_GRACE_MS`.
+/// `false` before the player has ever been resolved (matches
+/// `is_in_combat()`'s "assume active" default).
+pub fn is_idle() -> bool {
+    let since = IDLE_SINCE_MS.load(Ordering::Relaxed);
+    since != 0 && now_ms().saturating_sub(since) >= IDLE_GRACE_MS
+}
+
+/// Whether the player's last-requested gesture is a sitting one and hasn't
+/// been interrupted since (see `IS_SITTING`).
+pub fn is_sitting() -> bool {
+    IS_SITTING.load(Ordering::Relaxed)
 }
 
 /// Whether the player's currently-playing attack was started by the L2
@@ -312,11 +438,12 @@ pub fn run(ini_path: String) {
                 logger::log("Config reloaded (hotkey pressed).");
             }
 
-            // Regen.PerTick.Trigger picks which side of combat the tick heal
+            // Regen.PerTick.Trigger picks which player state the tick heal
             // below applies on: 0 = Always, 1 = out of combat only, 2 = in
-            // combat only. Read up front since it also decides whether the
-            // attack hook needs to be installed purely to track combat
-            // activity, even if Regen Per Hit itself is disabled.
+            // combat only, 3 = idle only, 4 = sitting (via gesture) only.
+            // Read up front since it also decides whether the attack hook
+            // needs to be installed purely to track combat activity, even if
+            // Regen Per Hit itself is disabled.
             let per_tick_enabled = config::get_bool("Regen.PerTick.Enabled", true);
             let condition = config::get_int("Regen.PerTick.Trigger", 0);
             let needs_combat_tracking = per_tick_enabled && (condition == 1 || condition == 2);
@@ -363,8 +490,18 @@ pub fn run(ini_path: String) {
             let condition_met = match condition {
                 1 => !is_in_combat(),
                 2 => is_in_combat(),
+                3 => is_idle(),
+                4 => is_sitting(),
                 _ => true,
             };
+            if config::get_bool("RegenLog", false) && condition != 0 {
+                logger::log(&format!(
+                    "Regen.PerTick: trigger={condition} -> condition_met={condition_met} (in_combat={}, idle={}, sitting={})",
+                    is_in_combat(),
+                    is_idle(),
+                    is_sitting()
+                ));
+            }
             if !condition_met {
                 return;
             }
@@ -380,9 +517,14 @@ pub fn run(ini_path: String) {
             let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
             let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);
 
-            heal_main_player(HealField::Hp, hp_flat, hp_fraction);
-            heal_main_player(HealField::Fp, fp_flat, fp_fraction);
-            heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
+            let hp_healed = heal_main_player(HealField::Hp, hp_flat, hp_fraction);
+            let fp_healed = heal_main_player(HealField::Fp, fp_flat, fp_fraction);
+            let stamina_healed = heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
+            if config::get_bool("RegenLog", false) {
+                logger::log(&format!(
+                    "Regen.PerTick: +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} SP"
+                ));
+            }
         },
     );
 

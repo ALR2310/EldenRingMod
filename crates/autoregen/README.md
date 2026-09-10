@@ -289,6 +289,100 @@ Nhân tiện đổi key `Regen.PerTick.Stamina`/`Regen.PerHit.Stamina` →
 `Regen.*` - key cũ đã nằm trong diện phải sửa tay theo README, xem mục
 "Đổi ini key sang cấu hình kiểu SomeTweaks" phía trên).
 
+## Thêm `Regen.PerTick.Trigger=3` (Idle) và `=4` (Sitting) (2026-09-10)
+
+Feature request từ Kolagon trên Nexus: muốn thêm điều kiện "chỉ hồi khi đứng
+yên không làm gì" (idle) và "chỉ hồi khi đang ngồi qua gesture" (sitting: cầu
+nguyện, tuyệt vọng, ngồi khoanh chân, ngủ gật khoanh chân, nghỉ ngơi, ngồi
+nghiêng, ủ rũ, cuộn tròn, nằm dang, tư thế ngồi xổm Patches). Trước khi làm,
+kiểm tra `fromsoftware-rs` xem có field "đang gesture gì"/animation ID nào
+lộ sẵn không - không có (`CSChrTimeActModule.anim_queue` có animation TAE
+đang chạy thật, nhưng TAE id không trùng số với GESTURE_ID nên vẫn cần 1
+bảng map riêng chưa dò được, không dùng đường này). Tra ra bảng tên↔ID chính
+xác (`GESTURE_ID` dropdown) từ CE table công khai của The Grand Archives
+(github.com/The-Grand-Archives/Elden-Ring-CT-TGA) - không mod Nexus nào có
+sẵn tính năng tương tự để tham khảo code.
+
+**Idle** (`Trigger=3`): đọc thẳng `CSChrActionRequestModule` - không di
+chuyển (`movement_request_flags.raw_input`) và không giữ bất kỳ action nào
+(`action_requests`: r1/r2/l1/l2/sp_move/jump/use_item/action/guard/rideon/
+rideoff/ladderup/ladderdown) - không cần thêm state gì, đọc trực tiếp mỗi
+frame.
+
+**Sitting** (`Trigger=4`): dùng lại đúng kỹ thuật latch của
+`LAST_ATTACK_WAS_SKILL` (mục "Regen.PerHit.ExcludeAow" phía dưới) vì
+`requested_gesture` (Param ID gesture) chỉ có giá trị đúng **1 frame** lúc
+`new_action_presses.gesture()` bắn (không phải "đang ngồi suốt animation").
+Chốt `IS_SITTING=true` nếu `requested_gesture` khớp 1 trong 10 ID ngồi lúc
+gesture mới được bấm, huỷ chốt ngay khi có input "busy" khác (di chuyển/tấn
+công/dùng đồ/đỡ đòn/cưỡi ngựa) - không cần tín hiệu "gesture đã kết thúc"
+riêng vì mọi input đó đều tự huỷ animation ngồi trong game rồi.
+
+Cả 2 không cần cài `AttackHook` (khác `Trigger=1`/`2` dựa vào
+`mark_combat_activity()`) - `update_last_attack_input()` vốn đã chạy mỗi
+frame độc lập với `Regen.PerHit` từ trước.
+
+**Đổi tiếp**: ban đầu định hard-code luôn 10 ID vào Rust (`const
+SIT_GESTURE_IDS`), nhưng theo góp ý của người dùng, đổi thành đọc từ ini
+(`[General] Gesture.SittingId`, danh sách ID cách nhau bởi dấu phẩy, giá trị
+mặc định giữ nguyên 10 ID cũ) - lý do: nếu sau này game cập nhật thêm
+gesture ngồi mới mà README/code này chưa kịp cập nhật, hoặc người dùng muốn
+bớt/thêm gesture theo ý riêng (VD không coi "Balled Up" là ngồi), họ tự sửa
+ini được ngay, không cần chờ bản DLL mới. Parse lại từ config mỗi lần có
+gesture mới được bấm (`new_action_presses.gesture()`), không phải mỗi frame,
+nên không lo chi phí parse string lặp lại.
+
+## Thêm đệm 5s cho Idle, thêm debug log cho Idle/Sitting - đang điều tra bug Sitting không hồi (2026-09-10)
+
+Test thật: `Trigger=3` (Idle) hồi ngay lập tức không có độ trễ nào - theo
+yêu cầu người dùng, thêm `IDLE_GRACE_MS=5000` (hằng số, chưa expose ra ini)
+- phải đứng yên liên tục ít nhất 5 giây (tính từ lúc `busy` cuối cùng về
+false, xem `IDLE_SINCE_MS`) `is_idle()` mới trả `true`. Cùng bug report:
+**`Trigger=4` (Sitting) không hồi máu gì cả** khi bấm các gesture ngồi -
+chưa xác định được nguyên nhân (nghi ngờ hàng đầu: giá trị thật của
+`requested_gesture` không khớp bảng `GESTURE_ID` tra được từ CE table, vì
+bảng đó không có gì đảm bảo đúng 1-1 với field `requested_gesture` mà
+`fromsoftware-rs` expose - suy luận thuần túy, chưa verify bằng dữ liệu
+thật). Vì không có môi trường game để tự test, chưa thể sửa mù - thêm 2
+dòng debug log (gate bởi `RegenLog=true` có sẵn):
+
+- `Gesture: requested_gesture=<n> -> is_sitting=<bool>` mỗi lần bấm gesture
+  mới - cho biết giá trị `requested_gesture` thật nhận được lúc bấm từng
+  gesture ngồi, để đối chiếu với 10 ID đang giả định trong
+  `Gesture.SittingId`.
+- `Regen.PerTick: trigger=<n> -> condition_met=<bool> (in_combat=.. idle=..
+  sitting=..)` mỗi tick khi `Trigger != 0` - cho biết tick có thực sự thấy
+  `is_sitting()=true` hay không.
+
+Bước tiếp theo: người dùng bật `RegenLog=true`, vào game bấm lần lượt các
+gesture ngồi, đối chiếu `AutoRegen.log` xem `requested_gesture` thật là bao
+nhiêu - nếu khác hẳn dải `GESTURE_ID` (160-202) thì bảng ID tra được sai
+nguồn, cần dò lại.
+
+**Đã tìm ra (2026-09-10, cùng ngày)**: log thật từ người dùng cho thấy
+`requested_gesture` đúng bằng **1 nửa** giá trị `GESTURE_ID` tra được từ CE
+table - Dejection (bảng ghi 160) đọc ra `80`, Rest (184) đọc ra `92`, Sitting
+Sideways (186) đọc ra `93` - khớp chính xác cả 3 mẫu test thật. Không tài
+liệu công khai nào ghi rõ hệ số `/2` này (khác hẳn kiểu sai do lệch version
+game như các bug offset trước đây) - chỉ suy ra được từ dữ liệu log thật,
+không phải đọc tài liệu. Đã sửa `DEFAULT_SIT_GESTURE_IDS`/`Gesture.SittingId`
+thành `80,90,91,92,93,94,95,97,100,101` (chia đôi cả 10 giá trị cũ). Đệm 5s
+của Idle (`IDLE_GRACE_MS`) test thật cũng đúng như thiết kế - `idle` chuyển
+`false→true` đúng ~5 giây sau lần cuối `busy=true`, xem log
+`Regen.PerTick`.
+
+**Bug tiếp theo, phát hiện ngay sau khi sitting hoạt động**: đang ngồi, bấm
+lại gesture (cùng gesture hoặc gesture khác) → player đứng dậy thật trong
+game (hành vi gốc: bấm gesture lần 2 luôn huỷ/đứng dậy trước, không tự
+chuyển thẳng sang gesture mới), nhưng code vẫn đọc `requested_gesture` y hệt
+lần 1 nên vẫn set lại `IS_SITTING=true` - hồi máu tiếp dù người chơi đã đứng
+dậy. Không có cách phân biệt "bắt đầu" với "huỷ" chỉ từ tín hiệu
+`new_action_presses.gesture()` + `requested_gesture` (2 lần bắn ra giống hệt
+nhau) - phải dựa ngữ cảnh: nếu đang `IS_SITTING=true` thì lần bấm gesture kế
+tiếp (bất kể ID gì) chắc chắn là huỷ. Fix: `is_sit_gesture` giờ luôn `false`
+nếu đang sitting từ trước, bất kể `requested_gesture` có khớp danh sách hay
+không.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
