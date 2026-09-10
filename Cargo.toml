@@ -7,29 +7,10 @@ members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverun
 # own engine structures (WorldChrMan/ChrIns/CSTaskImp/...), used instead of hand
 # rolled AOB scanning + manual offsets. Declared once here so every mod crate
 # builds against the exact same version.
-#
-# Pinned to a published crates.io release (2026-08-26) instead of tracking git
-# HEAD - reproducible builds (anyone building this repo gets the exact same
-# upstream code, not whatever the git repo happened to be at clone time), at
-# the cost of not automatically picking up upstream fixes/fields until the
-# version here is bumped by hand. Confirmed 0.14.0 already has every struct
-# `sometweaks` relies on (including the newest ones, like
-# `SummonBuddyManager`/`ChainingMap`) before switching.
-eldenring = "0.14.0"
-fromsoftware-shared = "0.14.0"
+eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
+fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
-# Applies to every crate in the workspace when built from here (`cargo build
-# --release` at the workspace root, or per-member with `-p <name>`) - each
-# mod crate's own Cargo.toml does not need to repeat this.
 [profile.release]
 lto = true
 codegen-units = 1
-# NOT "abort" (2026-08-26) - `std::panic::catch_unwind` (used by
-# `sometweaks::task::run_recurring_safe` to keep one feature's panic on a
-# single frame from crashing the whole game) only works when panics unwind;
-# "abort" would silently defeat that safety net in release builds while
-# still working in dev builds, which is worse than not having the net at
-# all - the trade-off is a slightly larger release binary (unwind tables
-# are kept) and marginally slower panicking (irrelevant - panics are not a
-# hot path here).
