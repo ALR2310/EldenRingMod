@@ -1,0 +1,122 @@
+[
+  {
+    "id": "10548",
+    "internalId": "18610093304116",
+    "name": "Auto Regen",
+    "crate": "autoregen",
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": ""
+      },
+      {
+        "version": "1.1.0",
+        "commit": ""
+      },
+      {
+        "version": "1.1.1",
+        "commit": ""
+      },
+      {
+        "version": "2.0.0",
+        "commit": "5bb1237557aa2dba5b0d0a81ddfca0af3690a924"
+      },
+      {
+        "version": "2.1.0",
+        "commit": "486116085bf35620e3bffa67964ec466983cd274"
+      },
+      {
+        "version": "2.1.1",
+        "commit": "c17201f5b99252347859d7c8d8c5b210d78e5c8e"
+      },
+      {
+        "version": "2.2.0",
+        "commit": "9a41136df408ce3d006db110d86911efc42d9056"
+      },
+      {
+        "version": "2.3.0",
+        "commit": "566eea9fc0c8966438da3ae823440c6a34f97aa2"
+      },
+      {
+        "version": "2.4.0",
+        "commit": "89498b2ffe602a64ae9b37f42ff24a22ed981b6a"
+      },
+      {
+        "version": "2.5.0",
+        "commit": "c7d64d2762f964d0ed617b9be97ab03b8a266ace"
+      }
+    ]
+  },
+  {
+    "id": "10630",
+    "internalId": "18610093304198",
+    "name": "Runes Multiplier",
+    "crate": "runemultiplier",
+    "deploys": [
+      {
+        "version": "1.0",
+        "commit": "5bb1237557aa2dba5b0d0a81ddfca0af3690a924"
+      },
+      {
+        "version": "1.1",
+        "commit": "79e5c99e1cbf80acf891034ef9f15adafc30a9c1"
+      },
+      {
+        "version": "1.2",
+        "commit": "9a41136df408ce3d006db110d86911efc42d9056"
+      },
+      {
+        "version": "1.3",
+        "commit": "89498b2ffe602a64ae9b37f42ff24a22ed981b6a"
+      }
+    ]
+  },
+  {
+    "id": "10549",
+    "internalId": "18610093304117",
+    "name": "Reduction Weight",
+    "crate": "weightmultiplier",
+    "deploys": [
+      {
+        "version": "1.1",
+        "commit": "5bb1237557aa2dba5b0d0a81ddfca0af3690a924"
+      }
+    ]
+  },
+  {
+    "id": "10528",
+    "internalId": "18610093304096",
+    "name": "Passive Runes",
+    "crate": "passiverunes",
+    "deploys": [
+      {
+        "version": "1.0",
+        "commit": ""
+      },
+      {
+        "version": "2.0",
+        "commit": "ea554a22d17f6b27ea762f9503404fb90031b2a0"
+      },
+      {
+        "version": "2.1",
+        "commit": "9a41136df408ce3d006db110d86911efc42d9056"
+      },
+      {
+        "version": "2.2",
+        "commit": "89498b2ffe602a64ae9b37f42ff24a22ed981b6a"
+      }
+    ]
+  },
+  {
+    "id": "5807",
+    "internalId": "18610093299375",
+    "name": "Rise Archer",
+    "crate": "risearcher",
+    "deploys": [
+      {
+        "version": "unknown",
+        "commit": "5bb1237557aa2dba5b0d0a81ddfca0af3690a924"
+      }
+    ]
+  }
+]
