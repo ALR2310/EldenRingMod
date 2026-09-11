@@ -405,6 +405,49 @@ Build sạch trên lần thử đầu (không có môi trường game để tự
 hoàn toàn vào đọc struct - cần người dùng xác nhận banner có thật sự hiện
 đúng chữ "AutoRegen: config reloaded" không).
 
+## AOB thay `rva::get()` cho tick đăng ký + allocator (2026-09-11)
+
+Vấn đề gốc rễ mà mục "Fix đâm lén..." (2026-08-26) chưa giải quyết triệt
+để: `CSTaskImp::wait_for_instance`/`wait_for_system_init_until_ready` (thêm
+hôm đó) vẫn gọi xuống `eldenring::rva::get()` bên trong -  bảng RVA đó chỉ
+ghi đúng **1** phiên bản game duy nhất mà `fromsoftware-rs` từng được
+publish cho. Test thử chạy mod trên 1 bản game mới hơn bản đã pin thì
+panic ngay từ bước này, không chỉ 1 tính năng nhỏ bị tắt - đúng kiểu lỗi
+`InvalidRva` đã fix hôm 08-26 nhưng lần này ở 1 lớp sâu hơn, không retry
+được nữa vì bảng RVA đơn giản là không có entry cho version đó.
+
+**Đã sửa**: 2 file mới thay 2 chỗ còn phụ thuộc `rva::get()`:
+
+- `task_hook.rs`: thay `fromsoftware_shared::task::SharedTaskImpExt::
+  run_recurring` (nội bộ dùng `rva::get().register_task`) bằng quét AOB
+  trực tiếp tìm hàm `register_task` trong `.text` - xác nhận (2026-09-09)
+  hàm này byte-identical (trừ toán hạng rip-relative tự dịch theo link) trên
+  cả exe 1.16.2 (`eldenring` 0.14.0, RVA `0xeb1fe0`) lẫn exe 1.17.0
+  (`fromsoftware-rs acb2a19`, RVA `0xeb3de0`) - pattern neo vào phần thân
+  hàm ổn định đó, không neo vào RVA. Cần tự dựng lại fake C++ vtable
+  (`vtable-rs`, crate mới thêm vào workspace) để đăng ký task qua địa chỉ
+  tự quét được, vì cơ chế `RecurringTask`/`self_ref` gốc của
+  `fromsoftware-shared` là private, không tái sử dụng được cho địa chỉ khác.
+- `alloc_hook.rs`: tương tự cho `DLAllocator::runtime_heap_allocator()` -
+  global không phải Dantelion2-reflected singleton nên không tra được theo
+  tên như `CSTaskImp`, phải neo AOB vào 1 hàm getter "đọc hoặc lazy-init"
+  nhỏ, tự chứa, xác nhận (2026-09-11) byte-identical trên cả exe 1.16.2 lẫn
+  1.17.0. **Thay thế lời gọi `DLAllocator::runtime_heap_allocator()` trực
+  tiếp trong `regen.rs::show_announcement`** đã mô tả ở mục "Thông báo
+  trong game khi bấm `ReloadKey`" (2026-09-10) ở trên - đoạn đó giờ đã lỗi
+  thời, `show_announcement` gọi `alloc_hook::runtime_heap_allocator()`
+  (trả `Option`, no-op nếu chưa resolve được) thay vì gọi thẳng hàm RVA-gated
+  kia.
+
+`wait_for_cs_task` trong `regen.rs` cũng đổi theo: bỏ hẳn
+`wait_for_system_init_until_ready`/`CSTaskImp::wait_for_instance`, poll
+thẳng `CSTaskImp::instance()` qua `FromStatic` - tra theo tên singleton
+Dantelion2 (`#[shared::singleton("CSTask")]`), không đụng `rva::get()` ở
+bất kỳ bước nào nữa. Cả 3 thay đổi cùng hướng: mod giờ tự sống sót qua bản
+patch game mới mà không cần chờ `fromsoftware-rs` publish lại rồi build lại
+DLL - chỉ tính năng nào AOB không tìm thấy pattern mới tắt riêng lẻ (có
+log), không còn panic sập cả DLL.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
