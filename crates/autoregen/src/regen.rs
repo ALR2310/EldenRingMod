@@ -21,13 +21,13 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use eldenring::cs::{AnnounceNotification, CSMenuManImp, CSTaskGroupIndex, CSTaskImp, MenuString, WorldChrMan};
-use eldenring::dlkr::DLAllocator;
 use eldenring::dltx::DLString;
 use eldenring::util::input;
-use eldenring::util::system::wait_for_system_init;
-use fromsoftware_shared::{FromStatic, Program, RecurringTaskHandle, SharedTaskImpExt};
+use fromsoftware_shared::FromStatic;
 
+use crate::alloc_hook;
 use crate::attack_hook;
+use crate::task_hook;
 use common::config;
 use common::input::parse_virtual_key;
 use common::logger;
@@ -150,7 +150,9 @@ fn show_announcement(text: &str) {
     let Ok(menu_man) = (unsafe { CSMenuManImp::instance_mut() }) else {
         return;
     };
-    let allocator = DLAllocator::runtime_heap_allocator();
+    let Some(allocator) = alloc_hook::runtime_heap_allocator() else {
+        return;
+    };
     let Ok(allocated_string) = DLString::from_str(text, allocator) else {
         return;
     };
@@ -361,43 +363,26 @@ pub fn is_last_attack_skill() -> bool {
     LAST_ATTACK_WAS_SKILL.load(Ordering::Relaxed)
 }
 
-/// Waits for the earliest reliable "the game process is actually alive"
-/// signal (`CSWindow`'s global hInstance, populated right after CRT init -
-/// see the crate's own doc comment on this function), retrying past
-/// `SystemInitError::InvalidRva`/`Timeout` instead of giving up. Ported
-/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
-/// (2026-08-26) - `fromsoftware-rs` already ships this helper for exactly
-/// this purpose, AutoRegen just hadn't called it before, going straight
-/// for `CSTaskImp` instead.
-fn wait_for_system_init_until_ready() {
-    let program = Program::current();
-    loop {
-        if wait_for_system_init(&program, Duration::from_secs(5)).is_ok() {
-            return;
-        }
-        logger::log("System not initialized yet, retrying...");
-        std::thread::sleep(Duration::from_millis(500));
-    }
-}
-
-/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
-/// immediately fatal and never retries it, even with `Duration::MAX` - it
-/// only retries the `Null` case internally. `InvalidRva` fires whenever the
-/// version-specific RVA lookup runs before the game executable has finished
-/// unpacking/relocating (e.g. Arxan), a timing race against how early this
-/// DLL's worker thread happens to start, unrelated to where the DLL is
-/// loaded from. Reported in the wild (Nexus comment, 2026-08-26): AutoRegen
-/// disabled itself for the whole session on a one-off early poll. Retrying
-/// here with a short delay rides out that race instead.
+/// Waits for `CSTaskImp`'s singleton to become available, polling
+/// `FromStatic::instance` directly instead of going through
+/// `CSTaskImp::wait_for_instance` (which internally calls
+/// `eldenring::util::system::wait_for_system_init`, itself hard-locked to
+/// whichever single game version `fromsoftware-rs` was last published for -
+/// see AutoRegen's README, "AOB thay `rva::get()`"). `CSTaskImp` is looked
+/// up by name through the engine's own Dantelion2 reflection data (the
+/// `#[shared::singleton("CSTask")]` on its definition), which - unlike that
+/// RVA table - isn't tied to any particular game version at all, so this
+/// loop survives any future game patch on its own.
 fn wait_for_cs_task() -> &'static CSTaskImp {
-    wait_for_system_init_until_ready();
-
     loop {
-        match CSTaskImp::wait_for_instance(Duration::MAX) {
-            Ok(instance) => return instance,
+        match unsafe { CSTaskImp::instance() } {
+            Ok(instance) => {
+                logger::log("CSTaskImp found.");
+                return instance;
+            }
             Err(err) => {
-                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
-                std::thread::sleep(Duration::from_secs(1));
+                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 500ms..."));
+                std::thread::sleep(Duration::from_millis(500));
             }
         }
     }
@@ -412,22 +397,15 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
 /// (2026-08-26). Requires `[profile.release]`'s `panic = "abort"` to be
 /// off (see workspace `Cargo.toml`) - `catch_unwind` cannot catch
 /// anything once a panic aborts the process outright.
-fn run_recurring_safe<F>(
-    cs_task: &'static CSTaskImp,
-    group: CSTaskGroupIndex,
-    mut f: F,
-) -> RecurringTaskHandle<eldenring::fd4::FD4TaskData>
+fn run_recurring_safe<F>(cs_task: &'static CSTaskImp, group: CSTaskGroupIndex, mut f: F)
 where
     F: FnMut(&eldenring::fd4::FD4TaskData) + 'static + Send,
 {
-    cs_task.run_recurring(
-        move |data: &eldenring::fd4::FD4TaskData| {
-            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
-                logger::log("Regen tick panicked, skipped this frame.");
-            }
-        },
-        group,
-    )
+    task_hook::run_recurring(cs_task, group, move |data: &eldenring::fd4::FD4TaskData| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
+            logger::log("Regen tick panicked, skipped this frame.");
+        }
+    });
 }
 
 /// Registers the Regen.* tick as a recurring task on the game's own
@@ -440,7 +418,7 @@ pub fn run(ini_path: String) {
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
-    let _handle = run_recurring_safe(
+    run_recurring_safe(
         cs_task,
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
@@ -544,14 +522,9 @@ pub fn run(ini_path: String) {
             let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
             let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);
 
-            let hp_healed = heal_main_player(HealField::Hp, hp_flat, hp_fraction);
-            let fp_healed = heal_main_player(HealField::Fp, fp_flat, fp_fraction);
-            let stamina_healed = heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
-            if config::get_bool("RegenLog", false) {
-                logger::log(&format!(
-                    "Regen.PerTick: +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} SP"
-                ));
-            }
+            heal_main_player(HealField::Hp, hp_flat, hp_fraction);
+            heal_main_player(HealField::Fp, fp_flat, fp_fraction);
+            heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
         },
     );
 

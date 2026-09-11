@@ -10,6 +10,13 @@ members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverun
 eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
 fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Builds the fake C++ vtable `fromsoftware-shared`'s own
+# `SharedTaskImpExt::run_recurring` uses to masquerade a Rust closure as a
+# native engine task - needed directly by `autoregen::task_hook` since that
+# module reimplements task registration itself (AOB instead of
+# `eldenring::rva::get()`, see its doc comment) and can't reach
+# `fromsoftware-shared`'s own private copy of this mechanism.
+vtable-rs = "0.1.5"
 
 [profile.release]
 lto = true

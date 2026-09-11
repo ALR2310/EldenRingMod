@@ -474,6 +474,7 @@ pub fn install(params: OnHitParams) -> bool {
         logger::log("AttackHook: ERROR - OnAttack pattern not found (possibly patched by another mod), heal-on-hit disabled.");
         return false;
     };
+    logger::log("OnAttack AOB found.");
 
     let call_site = unsafe { on_attack.add(CALL_SITE_OFFSET) };
 

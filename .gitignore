@@ -13,4 +13,4 @@ regulation.bin.prev
 # Claude Code harness runtime state (session lock, machine/PID-specific) -
 # not project content.
 /.claude/scheduled_tasks.lock
-
+/dumps/
