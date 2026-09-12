@@ -63,13 +63,21 @@ struct Task {
 }
 
 impl TaskVmt for Task {
+    // Both left `unimplemented!()` (panicking) until 2026-09-12 - suspected
+    // (not yet confirmed reproduced) cause of a stutter reported after
+    // 2.5.0's release: if `CSTaskImp` ever calls either of these directly
+    // (e.g. a periodic task-list maintenance/enumeration pass) - as opposed
+    // to `execute`, which only ever runs through `run_recurring_safe`'s own
+    // `catch_unwind` in `regen.rs` - the panic would unwind straight into
+    // the game's own (non-Rust) call frames with no landing pad, which is
+    // undefined behavior. Neither is safety-critical for a task that's
+    // never actually inspected or torn down (`Box::leak`'d, lives for the
+    // DLL's lifetime), so both are now harmless no-ops instead.
     extern "C" fn get_runtime_class(&self) -> usize {
-        unimplemented!()
+        0
     }
 
-    extern "C" fn destructor(&mut self) {
-        unimplemented!()
-    }
+    extern "C" fn destructor(&mut self) {}
 
     extern "C" fn execute(&mut self, data: *const c_void) {
         (self.closure)(unsafe { &*(data as *const FD4TaskData) });

@@ -26,7 +26,7 @@ use eldenring::util::input;
 use fromsoftware_shared::FromStatic;
 
 use crate::alloc_hook;
-use crate::attack_hook;
+use crate::hit_hook;
 use crate::task_hook;
 use common::config;
 use common::input::parse_virtual_key;
@@ -422,10 +422,10 @@ pub fn run(ini_path: String) {
         cs_task,
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
-            // Writes out any RegenLog lines the attack hook queued instead of
-            // writing directly - see attack_hook::flush_pending_logs. Always
+            // Writes out any RegenLog lines the hit hook queued instead of
+            // writing directly - see hit_hook::flush_pending_logs. Always
             // runs, every frame, regardless of what else below is enabled.
-            attack_hook::flush_pending_logs();
+            hit_hook::flush_pending_logs();
 
             // Latches "was the last attack button pressed L2 (Skill)?" so
             // attack_hook can tell a skill hit from a plain one even several
@@ -458,7 +458,7 @@ pub fn run(ini_path: String) {
             // that scan/patch the same game code get to finish their own
             // startup scans first, and re-synced every tick so a hot reload
             // updates it without reinstalling the hook.
-            let on_hit_params = attack_hook::OnHitParams {
+            let on_hit_params = hit_hook::OnHitParams {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
                 trigger: config::get_int("Regen.PerHit.Trigger", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
@@ -470,9 +470,9 @@ pub fn run(ini_path: String) {
             let chr_resolved = main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
-                attack_hook_installed = attack_hook::install(on_hit_params);
+                attack_hook_installed = hit_hook::install(on_hit_params);
             } else if attack_hook_installed {
-                attack_hook::update_params(on_hit_params);
+                hit_hook::update_params(on_hit_params);
             }
 
             // Regen.PerTick.Enabled=false or Interval=0 disables the whole
