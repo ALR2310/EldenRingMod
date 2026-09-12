@@ -1,7 +1,7 @@
 #![allow(non_snake_case)] // crate name is "AutoRegen" to control the output DLL's filename
 
 mod alloc_hook;
-mod attack_hook;
+mod hit_hook;
 mod regen;
 mod task_hook;
 

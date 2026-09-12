@@ -44,8 +44,9 @@ riêng (không có prefix `Regen.`):
   rsi!=player`), hồi 1 lượng cố định (không có biến thể %) độc lập với
   `HpOnHit`/`FpOnHit`/`StaminaOnHit`.
 
-Xem `src/regen.rs` và `src/attack_hook.rs` cho code hiện tại; `AutoRegen.ini`
-cho toàn bộ key cấu hình.
+Xem `src/regen.rs` và `src/hit_hook.rs` (thay `attack_hook.rs` cũ, xem mục
+"Viết lại `Regen Per Hit` từ đầu bằng Ghidra" bên dưới) cho code hiện tại;
+`AutoRegen.ini` cho toàn bộ key cấu hình.
 
 ## Gộp `Regen Per Hit`/`Regen Per Damage`, thêm `Condition`/`Trigger` (2026-08-19)
 
@@ -447,6 +448,98 @@ bất kỳ bước nào nữa. Cả 3 thay đổi cùng hướng: mod giờ tự
 patch game mới mà không cần chờ `fromsoftware-rs` publish lại rồi build lại
 DLL - chỉ tính năng nào AOB không tìm thấy pattern mới tắt riêng lẻ (có
 log), không còn panic sập cả DLL.
+
+## Viết lại `Regen Per Hit` từ đầu bằng Ghidra, thay `attack_hook.rs` bằng `hit_hook.rs` (2026-09-12)
+
+Báo lỗi từ Nexus (v2.4.0, crash khi vào Volcano Manor) hoá ra **là bug thật
+của AutoRegen** - không phải ModEngine2 như nghi ban đầu (điều tra ban đầu
+dựa trên crash dump `.dmp` phân tích bằng `cdb.exe`: ntdll
+`STATUS_INVALID_HANDLE` trong 1 critical section, thread do
+`modengine2.dll`/chính `eldenring.exe` spawn, không có frame nào của
+AutoRegen - dẫn tới kết luận sai là bug nằm ngoài mod). Test đối chứng sau
+đó (build tạm bỏ đoạn forward "tham số thứ 5" ở trampoline `AttackHook`,
+xem code cũ trong lịch sử git commit `44447a2`) cho thấy hết crash ngay -
+xác nhận chắc chắn nguồn gốc nằm ở chính trampoline tay viết của
+`attack_hook.rs`, cụ thể nghi do thiếu unwind metadata (`.pdata`/`.xdata`)
+hợp lệ cho vùng code bị JMP-hijack giữa 1 call-site (`OnAttack` AOB của
+Hexinton) - khi engine game raise 1 exception nội bộ (dùng cho control-flow,
+không phải lỗi thật) đi qua đúng đoạn đó, unwinder tính sai stack frame và
+làm hỏng dữ liệu ở đâu đó khác, muộn hơn nhiều (khớp với crash luôn rơi vào
+1 con trỏ hoàn toàn không liên quan).
+
+Thay vì vá tiếp trampoline hijack-giữa-call-site đó, **viết lại toàn bộ
+`Regen Per Hit` từ đầu, không dùng lại AOB/CE table của Hexinton nữa**:
+
+1. Lấy offset thật của `hp`/`max_hp`/`recoverable_hp`/... trực tiếp từ
+   struct Rust `CSChrDataModule` (`std::mem::offset_of!`, build 1 example
+   tạm rồi xoá), không đoán/không copy từ đâu khác.
+2. Dùng Ghidra (`D:\Programs\ghidra_12.1.2_PUBLIC`, headless qua
+   `analyzeHeadless.bat` - **lưu ý bug thật của bản thân script này**: cờ
+   `-analyze` không hợp lệ trong bản 12.1.2, phải bỏ hẳn (phân tích tự chạy
+   khi `-import`); cũng tránh đường dẫn có dấu cách khi gọi qua `.bat`)
+   phân tích toàn bộ `eldenring.exe` (2.7.1.0, copy ra `D:\tmp` trước để
+   né path có dấu cách), quét >1000 chỗ ghi vào offset `hp`, đối chiếu với
+   cây gọi hàm (BFS 3 tầng) xuất phát từ đúng hàm hit-resolution mà
+   Hexinton's `OnAttack` AOB từng trỏ tới (chỉ dùng làm điểm neo tham chiếu
+   độc lập, không tái dùng kỹ thuật hook của họ) - lọc còn đúng 1 hàm khớp
+   (ghi 4-byte, không phải 8-byte).
+3. Decompile hàm đó (`SetHp`) và các hàm gọi nó, tìm ra `ApplyHpDelta`
+   (`module, delta` - delta âm khi bị damage) rồi tới `FUN_140448910(ctx,
+   attacker, hit_info, _, flag)` - hàm nhận đúng bộ tham số attacker/hit_info
+   mà `attack_hook.rs` cũ vẫn dùng, và **xác nhận độc lập** `hit_info+0x228`
+   = damage (khớp 100% `HITINFO_DAMAGE_OFFSET` cũ, nhưng giờ có bằng chứng
+   từ decompile thật thay vì suy luận qua AOB Hexinton).
+4. `hit_hook.rs` (mới, thay thế hoàn toàn `attack_hook.rs` - đã xoá) hook
+   thẳng vào **entry point thật** của `FUN_140448910` (hàm biên dịch độc
+   lập, có prologue chuẩn 15 byte kết thúc đúng ranh giới lệnh) thay vì hijack
+   giữa call-site: dời nguyên 15 byte prologue gốc ra 1 buffer riêng, nối
+   thêm `mov rax, <return_addr>; jmp rax` (12 byte) ngay sau đó để quay lại
+   đúng chỗ - quan trọng: **buffer phải đủ chỗ cho cả phần jmp nối thêm**,
+   thiếu bước này (bug thật gặp phải lúc code) khiến CPU chạy lố sang vùng
+   `.data` rác ngay sau buffer, crash `ACCESS_VIOLATION` tức khắc khi có hit
+   đầu tiên - đã sửa bằng cách tăng kích thước buffer và tự ghi thêm đoạn
+   jmp đó trong `install()`. Hook mới chỉ "nghe" `rcx/rdx/r8/r9` (lưu ra
+   stack, gọi callback Rust, khôi phục lại nguyên vẹn) rồi để hàm gốc chạy
+   tiếp y nguyên - không tự gọi lại hàm gốc bằng tay như thiết kế cũ.
+
+Kết quả test trong game (2026-09-12): đâm lén/riposte/chí mạng đều đúng
+animation, hồi máu theo hit vẫn hoạt động đúng (log xác nhận đọc damage
+chính xác qua nhiều loại đòn), và **không còn crash khi vào Volcano
+Manor** dù bật `Regen.PerHit` - cùng máy, cùng save, cùng kịch bản từng
+100% tái hiện được crash trước đó.
+
+Ghi chú AOB pattern mới (`HIT_APPLY_PATTERN` trong `hit_hook.rs`): mới
+verify trên đúng 1 bản game (2.7.1.0/1.17.1) - chưa cross-check bản khác
+như cách `task_hook`/`alloc_hook` đã làm (mục "AOB thay `rva::get()`" ở
+trên).
+
+## Fix panic trong fake vtable của `task_hook.rs` - nghi ngờ nguồn gốc giật hình sau bản 2.5.0 (2026-09-12)
+
+Sau khi 2.5.0 (đã bao gồm `task_hook.rs`/`alloc_hook.rs` từ mục "AOB thay
+`rva::get()`" ở trên, nhưng **chưa** có `hit_hook.rs` - việc đó publish sau)
+lên Nexus, có báo cáo giật hình 1-2 giây liên tục, lặp lại mỗi 15-20 giây,
+xảy ra **cả ở menu** (không liên quan gì đến combat/`Regen.PerHit`) - đối
+chiếu git log xác nhận đúng thời điểm publish rơi sau commit `task_hook.rs`
+(`a7d9138`, 2026-09-11 14:40).
+
+Soát lại `task_hook.rs::Task` (fake vtable dùng để đăng ký tick vào
+`CSTaskImp`, xem mục "AOB thay `rva::get()`" ở trên): `get_runtime_class`
+và `destructor` đều để `unimplemented!()` (panic) - khác với `execute`
+(closure tick mỗi frame), 2 hàm này được **chính engine game gọi trực
+tiếp qua vtable**, không đi qua `catch_unwind` nào của `regen.rs`. Nếu
+`CSTaskImp` từng gọi 1 trong 2 hàm này vào bất kỳ lúc nào (chưa xác nhận
+được chắc chắn có xảy ra hay không, nhưng đây là hành vi không xác định/UB
+bất kể có xảy ra hay không - panic unwind thẳng vào call stack C++ của
+game, không có landing pad Rust) - đủ khớp để giải thích 1 kiểu lỗi định
+kỳ, không phải crash cứng ngay lập tức, xảy ra bất kể `Regen.PerHit`.
+
+**Đã sửa**: `get_runtime_class` trả về `0`, `destructor` no-op - cả 2 đều
+an toàn vì `Task` được `Box::leak` (sống suốt vòng đời DLL, không bao giờ
+thật sự bị game "huỷ"), nên không cần logic thật đằng sau 2 hàm này, chỉ
+cần không panic. Tự test lại (máy tác giả) không thấy giật hình, nhưng
+**chưa tái hiện được hiện tượng gốc để xác nhận chắc chắn** đây đúng là
+nguyên nhân duy nhất - ghi vào changelog `2.5.1` như 1 fix chứ không khẳng
+định chắc 100%.
 
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
