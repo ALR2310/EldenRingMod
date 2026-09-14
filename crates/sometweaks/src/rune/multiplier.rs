@@ -234,7 +234,7 @@ fn install(debug_log: bool) -> bool {
 pub fn run() {
     apply_multiplier();
 
-    let debug_log = config::get_bool("DebugLog", false);
+    let debug_log = config::get_bool("LogFile", false);
     if !install(debug_log) {
         logger::warn("Rune.Multiplier: disabled for this session (hook install failed).");
         return;

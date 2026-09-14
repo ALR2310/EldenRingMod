@@ -2267,3 +2267,35 @@ nhất còn tồn đọng từ đợt audit README ngày 2026-09-03) - xoá hẳ
 thêm - ai đã có 3 key này trong file ini cũ sẽ tự được `migrate()` chuyển
 vào `[Legacy]` ở lần khởi động kế tiếp (đúng cơ chế vừa sửa ở mục
 2026-09-04 phía trên).
+
+## Đổi `Regen.PerTick.Unit` → `Regen.PerTick.ValueType`, `Regen.PerHit.Trigger` → `Regen.PerHit.Mode` (2026-09-14)
+
+Đổi tên 2 key cho rõ nghĩa hơn, không đổi hành vi/giá trị mặc định - đồng
+bộ với [`AutoRegen`](../autoregen) (xem README của nó cùng ngày, cùng module
+`regen`):
+
+- `Regen.PerTick.Unit` → `Regen.PerTick.ValueType` (vẫn 0 = điểm cố định,
+  1 = % max stat).
+- `Regen.PerHit.Trigger` → `Regen.PerHit.Mode` (vẫn 0/1/2 như mục "Gom nhóm
+  lại ini..." phía trên) - đổi tên vì trùng tên với `Regen.PerTick.Trigger`
+  (chọn *điều kiện* áp dụng: always/ngoài combat/trong combat) dù 2 key
+  mang ý nghĩa hoàn toàn khác nhau (`Regen.PerHit.Mode` chọn *cách tính giá
+  trị hồi*: điểm cố định/%max/%damage) - dễ nhầm khi đọc ini cạnh nhau.
+
+Không tự động migrate giá trị (đổi tên key, không đổi ý nghĩa/giá trị) -
+`config::migrate()` tự đẩy `Regen.PerTick.Unit`/`Regen.PerHit.Trigger` cũ
+vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL, người dùng cần tự copy
+giá trị đã tùy chỉnh sang key mới trong `SomeTweaks.ini`.
+
+## Đổi `[Debug]`/`DebugLog` thành `[Logging]`/`LogFile` (2026-09-14)
+
+Đồng bộ tên section/key logging với các mod khác trong repo (`AutoRegen`,
+`PassiveRunes`, `RuneMultiplier`, `RiseArcher`) - `[Logging]`/`LogFile` giờ
+là quy ước chung cho toàn bộ mod trong workspace này, thay cho `DebugLog`
+(dễ hiểu lầm là chỉ dành riêng cho 1 tính năng "debug" nào đó, trong khi nó
+gate log chi tiết của mọi module trong `SomeTweaks`: `regen`, `rune`,
+`spirit`). Không đổi hành vi: log `SomeTweaks.log` vẫn luôn được tạo
+(overwrite mỗi lần chạy), key này chỉ gate phần log chi tiết. Đổi ở tất cả
+chỗ dùng: `regen/hit_hook.rs`, `regen/mod.rs`, `rune/multiplier.rs`,
+`rune/reward.rs`, `spirit/summon_count.rs`. `config::migrate()` tự đẩy
+`DebugLog` cũ vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL.

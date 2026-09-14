@@ -7,11 +7,11 @@
 //! `CSTaskGroupIndex::FrameBegin` tasks run.
 //!
 //! Config shape (`Regen.PerTick.*`/`Regen.PerHit.*`, `Enabled`/`Trigger`/
-//! `Unit`) matches [`SomeTweaks`](../sometweaks)'s `regen` module - that
-//! crate had in turn started as a straight port of AutoRegen's own older
-//! `Condition`/`HpPctOnHit`-style ini (separate flat/percent keys per stat,
-//! no `Enabled` flag), then evolved its own cleaner design (one value field
-//! per stat + a `Unit`/`Trigger` selector for what it means, plus an
+//! `ValueType`/`Mode`) matches [`SomeTweaks`](../sometweaks)'s `regen`
+//! module - that crate had in turn started as a straight port of AutoRegen's
+//! own older `Condition`/`HpPctOnHit`-style ini (separate flat/percent keys
+//! per stat, no `Enabled` flag), then evolved its own cleaner design (one
+//! value field per stat + a `ValueType`/`Mode` selector for what it means, plus an
 //! explicit `Enabled` instead of "0 disables everything"). Backported here so
 //! both mods share the same config shape and code, rather than AutoRegen
 //! being stuck with the older design it started from.
@@ -21,13 +21,13 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use eldenring::cs::{AnnounceNotification, CSMenuManImp, CSTaskGroupIndex, CSTaskImp, MenuString, WorldChrMan};
-use eldenring::dlkr::DLAllocator;
 use eldenring::dltx::DLString;
 use eldenring::util::input;
-use eldenring::util::system::wait_for_system_init;
-use fromsoftware_shared::{FromStatic, Program, RecurringTaskHandle, SharedTaskImpExt};
+use fromsoftware_shared::FromStatic;
 
-use crate::attack_hook;
+use crate::alloc_hook;
+use crate::hit_hook;
+use crate::task_hook;
 use common::config;
 use common::input::parse_virtual_key;
 use common::logger;
@@ -68,19 +68,6 @@ pub fn is_in_combat() -> bool {
     last != 0 && now_ms().saturating_sub(last) < COMBAT_TIMEOUT_MS
 }
 
-/// Splits a `Regen.PerTick.Unit`-tagged ini value into the `(flat_amount,
-/// percent_fraction)` pair [apply_heal] expects: `Unit=0` treats `value` as
-/// flat points, `Unit=1` as a percent of max (divided by 100 into a
-/// fraction). Only one of the pair is ever non-zero, since the ini has a
-/// single field per stat rather than separate flat/percent keys.
-fn split_by_unit(unit: i32, value: f64) -> (i32, f64) {
-    if unit == 1 {
-        (0, value / 100.0)
-    } else {
-        (value.round() as i32, 0.0)
-    }
-}
-
 /// Heals `flat_amount` plus `percent_fraction` of max (e.g. 0.01 = 1%, already
 /// divided by 100), clamped to max, with at least 1 point restored if the
 /// percent alone would round to 0. Returns the amount actually restored (0 if
@@ -100,6 +87,34 @@ fn apply_heal(current: &mut i32, max: i32, flat_amount: i32, percent_fraction: f
     *current - before
 }
 
+/// Computes one `Regen.PerTick` heal amount, honoring `value_type`: `0` =
+/// `value` as flat points, `1` = `value`% of max stat, `2` = `value`% of the
+/// stat's *missing* amount (`max - current`) - heals fast while low, tapering
+/// off as the stat approaches max instead of restoring the same amount
+/// regardless of how full the stat already is. Modes `1`/`2` restore at
+/// least 1 point if the percent alone would round to 0 (as long as `value` is
+/// positive and there's still room to heal).
+fn compute_tick_heal(value_type: i32, value: f64, current: i32, max: i32) -> i32 {
+    match value_type {
+        1 => {
+            if value <= 0.0 {
+                0
+            } else {
+                ((value / 100.0 * max as f64) as i32).max(1)
+            }
+        }
+        2 => {
+            if value <= 0.0 {
+                0
+            } else {
+                let missing = (max - current) as f64;
+                ((value / 100.0 * missing) as i32).max(1)
+            }
+        }
+        _ => value.round() as i32,
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum HealField {
     Hp,
@@ -107,36 +122,63 @@ pub enum HealField {
     Stamina,
 }
 
-/// Applies a heal to the resolved main player, given the same
-/// `(flat_amount, percent_fraction)` convention as [apply_heal]. No-op
-/// (returns 0) if the player isn't currently resolved or is dead - shared by
-/// the tick loop below and by `attack_hook`'s heal-on-hit.
-pub fn heal_main_player(field: HealField, flat_amount: i32, percent_fraction: f64) -> i32 {
-    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance_mut() }) else {
-        return 0;
-    };
-    let Some(main_player) = world_chr_man.main_player.as_mut() else {
-        return 0;
-    };
+/// Resolves the main player and gives `f` mutable access to `field`'s
+/// `(current, max)` pair. `None` if the player isn't currently resolved or is
+/// dead - shared by [heal_main_player] (attack-hook heal-on-hit) and
+/// [heal_main_player_tick] (the tick loop below).
+fn with_stat_mut<R>(field: HealField, f: impl FnOnce(&mut i32, i32) -> R) -> Option<R> {
+    let world_chr_man = unsafe { WorldChrMan::instance_mut() }.ok()?;
+    let main_player = world_chr_man.main_player.as_mut()?;
     let data = &mut main_player.chr_ins.modules.data;
     if data.hp <= 0 {
-        return 0; // dead - don't touch anything
+        return None; // dead - don't touch anything
     }
-
-    match field {
+    Some(match field {
         HealField::Hp => {
             let max = data.max_hp;
-            apply_heal(&mut data.hp, max, flat_amount, percent_fraction)
+            f(&mut data.hp, max)
         }
         HealField::Fp => {
             let max = data.max_fp;
-            apply_heal(&mut data.fp, max, flat_amount, percent_fraction)
+            f(&mut data.fp, max)
         }
         HealField::Stamina => {
             let max = data.max_stamina;
-            apply_heal(&mut data.stamina, max, flat_amount, percent_fraction)
+            f(&mut data.stamina, max)
         }
-    }
+    })
+}
+
+/// Applies a heal to the resolved main player, given the same
+/// `(flat_amount, percent_fraction)` convention as [apply_heal]. No-op
+/// (returns 0) if the player isn't currently resolved or is dead - used by
+/// `hit_hook`'s heal-on-hit (`Regen.PerHit`, no cap/`ValueType=2` support).
+pub fn heal_main_player(field: HealField, flat_amount: i32, percent_fraction: f64) -> i32 {
+    with_stat_mut(field, |current, max| apply_heal(current, max, flat_amount, percent_fraction))
+        .unwrap_or(0)
+}
+
+/// Applies one `Regen.PerTick` heal to the resolved main player - see
+/// [compute_tick_heal] for what `value_type`/`value` mean. `cap_pct`
+/// (`Regen.PerTick.Cap`, percent of the stat's true max) is a ceiling ticks
+/// never restore past, independent of `value_type`: already at or above the
+/// cap is a no-op even if the stat isn't at its true max yet. No-op (returns
+/// 0) if the player isn't currently resolved or is dead.
+pub fn heal_main_player_tick(field: HealField, value_type: i32, value: f64, cap_pct: f64) -> i32 {
+    with_stat_mut(field, |current, max| {
+        let cap = (((cap_pct / 100.0) * max as f64) as i32).clamp(0, max);
+        if *current >= cap {
+            return 0;
+        }
+        let heal = compute_tick_heal(value_type, value, *current, max);
+        if heal <= 0 {
+            return 0;
+        }
+        let before = *current;
+        *current = (*current + heal).min(cap);
+        *current - before
+    })
+    .unwrap_or(0)
 }
 
 /// Shows `text` in the game's own top-of-screen system announcement banner
@@ -150,7 +192,9 @@ fn show_announcement(text: &str) {
     let Ok(menu_man) = (unsafe { CSMenuManImp::instance_mut() }) else {
         return;
     };
-    let allocator = DLAllocator::runtime_heap_allocator();
+    let Some(allocator) = alloc_hook::runtime_heap_allocator() else {
+        return;
+    };
     let Ok(allocated_string) = DLString::from_str(text, allocator) else {
         return;
     };
@@ -177,11 +221,14 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
 /// The pad-input bits read each frame to decide `LAST_ATTACK_WAS_SKILL`,
 /// `IS_SITTING` and `is_idle()` below.
 ///
-/// `r1`/`r2`/`l1`/`l2`/`new_gesture` come from `new_action_presses` (fires
-/// exactly 1 frame, on the press) - confirmed in-game (2026-09-03) to
-/// correlate with Ash of War/skill hits far more reliably than any
-/// `AtkParam` field does (see AutoRegen's README). `requested_gesture` is a
-/// plain value (not a bit), only meaningful the same frame `new_gesture` is
+/// `r1`/`r2`/`l1`/`l2` come from `new_action_presses` (fires exactly 1
+/// frame, on the press) - confirmed in-game (2026-09-03) to correlate with
+/// Ash of War/skill hits far more reliably than any `AtkParam` field does
+/// (see AutoRegen's README). `gesture_accepted` comes from
+/// `queued_action_inputs` instead (see `main_player_action_snapshot`) so it
+/// only fires when the current animation actually let the gesture button
+/// through, not just when it was pressed. `requested_gesture` is a plain
+/// value (not a bit), only meaningful the same frame `gesture_accepted` is
 /// set. `busy` covers every other way the player can be "not idle" - held
 /// (not just newly-pressed) actions from `action_requests`, plus actual
 /// movement input - read from the same module so idle detection doesn't
@@ -191,7 +238,7 @@ struct ActionSnapshot {
     r2: bool,
     l1: bool,
     l2: bool,
-    new_gesture: bool,
+    gesture_accepted: bool,
     requested_gesture: i32,
     busy: bool,
 }
@@ -223,7 +270,15 @@ fn main_player_action_snapshot() -> Option<ActionSnapshot> {
         r2: new_presses.r2(),
         l1: new_presses.l1(),
         l2: new_presses.l2(),
-        new_gesture: new_presses.gesture(),
+        // `queued_action_inputs` (not `new_action_presses`) is only set when
+        // the button press was ALSO in `possible_action_inputs` - i.e. the
+        // current animation actually accepted it. Confirmed bug report
+        // (Kolagon, 2026-09-13): pressing the gesture button while mid-cast
+        // (or any other animation the gesture can't interrupt) still set
+        // `new_action_presses.gesture()` for that frame even though the
+        // character never actually sat down - `queued_action_inputs` stays
+        // clear in that case instead.
+        gesture_accepted: action_request.queued_action_inputs.gesture(),
         requested_gesture: action_request.requested_gesture,
         busy,
     })
@@ -250,7 +305,7 @@ static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
 // dropdown in The Grand Archives' Elden Ring Cheat Engine table
 // (github.com/The-Grand-Archives/Elden-Ring-CT-TGA) - e.g. that table lists
 // Dejection as 160, but `requested_gesture` reads back 80 in-game (confirmed
-// 2026-09-10 via the `RegenLog` debug line below: Dejection=80, Rest=92,
+// 2026-09-10 via the `LogFile` debug line below: Dejection=80, Rest=92,
 // Sitting Sideways=93, each exactly that table's ID / 2). fromsoftware-rs
 // doesn't ship a named enum for these, and no public source documents this
 // /2 factor - it was reverse-engineered from live log output, not read off
@@ -310,11 +365,11 @@ pub fn update_last_attack_input() {
         LAST_ATTACK_WAS_SKILL.store(true, Ordering::Relaxed);
     }
 
-    if snapshot.new_gesture {
+    if snapshot.gesture_accepted {
         // A 2nd gesture request while already sitting always cancels/stands
         // up in-game first, whether it's the same gesture or a different one
         // - it never switches straight into the newly-selected gesture.
-        // Since this cancel fires the exact same signal (new_action_presses.
+        // Since this cancel fires the exact same signal (queued_action_inputs.
         // gesture() + requested_gesture=<id>) as starting one, the only way
         // to tell them apart is context: already sitting means this press
         // must be the cancel. Confirmed as a real bug in-game (2026-09-10):
@@ -323,7 +378,7 @@ pub fn update_last_attack_input() {
         // already gotten up.
         let is_sit_gesture = !IS_SITTING.load(Ordering::Relaxed) && sit_gesture_ids().contains(&snapshot.requested_gesture);
         IS_SITTING.store(is_sit_gesture, Ordering::Relaxed);
-        if config::get_bool("RegenLog", false) {
+        if config::get_bool("LogFile", false) {
             logger::log(&format!(
                 "Gesture: requested_gesture={} -> is_sitting={is_sit_gesture}",
                 snapshot.requested_gesture
@@ -361,43 +416,48 @@ pub fn is_last_attack_skill() -> bool {
     LAST_ATTACK_WAS_SKILL.load(Ordering::Relaxed)
 }
 
-/// Waits for the earliest reliable "the game process is actually alive"
-/// signal (`CSWindow`'s global hInstance, populated right after CRT init -
-/// see the crate's own doc comment on this function), retrying past
-/// `SystemInitError::InvalidRva`/`Timeout` instead of giving up. Ported
-/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
-/// (2026-08-26) - `fromsoftware-rs` already ships this helper for exactly
-/// this purpose, AutoRegen just hadn't called it before, going straight
-/// for `CSTaskImp` instead.
-fn wait_for_system_init_until_ready() {
-    let program = Program::current();
-    loop {
-        if wait_for_system_init(&program, Duration::from_secs(5)).is_ok() {
-            return;
-        }
-        logger::log("System not initialized yet, retrying...");
-        std::thread::sleep(Duration::from_millis(500));
-    }
-}
+/// Waits for `CSTaskImp`'s singleton to become available, polling
+/// `FromStatic::instance` directly instead of going through
+/// `CSTaskImp::wait_for_instance` (which internally calls
+/// `eldenring::util::system::wait_for_system_init`, itself hard-locked to
+/// whichever single game version `fromsoftware-rs` was last published for -
+/// see AutoRegen's README, "AOB thay `rva::get()`"). `CSTaskImp` is looked
+/// up by name through the engine's own Dantelion2 reflection data (the
+/// `#[shared::singleton("CSTask")]` on its definition), which - unlike that
+/// RVA table - isn't tied to any particular game version at all, so this
+/// loop survives any future game patch on its own.
+// Reported in the wild (Nexus comments, 2026-09-08, before this AOB-based
+// lookup existed): the old RVA-gated `CSTaskImp::wait_for_instance` retried
+// silently *inside* `fromsoftware-rs` itself with zero logging, so a version
+// mismatch just left "Activating AutoRegen..." as the log's last line
+// forever - no indication anything was even still trying, let alone why it
+// wasn't working. This loop already fixed the "silent" half by logging every
+// attempt itself - `WARN_AFTER` below fixes the other half: even visible
+// retries look identical forever if this genuinely never succeeds (a truly
+// incompatible future game version), so after this long a clear, actionable
+// one-shot message replaces the wall of identical lines.
+const WARN_AFTER: Duration = Duration::from_secs(15);
 
-/// `CSTaskImp::wait_for_instance` treats `SystemInitError::InvalidRva` as
-/// immediately fatal and never retries it, even with `Duration::MAX` - it
-/// only retries the `Null` case internally. `InvalidRva` fires whenever the
-/// version-specific RVA lookup runs before the game executable has finished
-/// unpacking/relocating (e.g. Arxan), a timing race against how early this
-/// DLL's worker thread happens to start, unrelated to where the DLL is
-/// loaded from. Reported in the wild (Nexus comment, 2026-08-26): AutoRegen
-/// disabled itself for the whole session on a one-off early poll. Retrying
-/// here with a short delay rides out that race instead.
 fn wait_for_cs_task() -> &'static CSTaskImp {
-    wait_for_system_init_until_ready();
-
+    let start = Instant::now();
+    let mut warned = false;
     loop {
-        match CSTaskImp::wait_for_instance(Duration::MAX) {
-            Ok(instance) => return instance,
+        match unsafe { CSTaskImp::instance() } {
+            Ok(instance) => {
+                logger::log("CSTaskImp found.");
+                return instance;
+            }
             Err(err) => {
-                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 1s..."));
-                std::thread::sleep(Duration::from_secs(1));
+                if !warned && start.elapsed() >= WARN_AFTER {
+                    warned = true;
+                    logger::error(&format!(
+                        "CSTaskImp not found after {}s ({err:?}) - game may need a mod update, check Nexus.",
+                        WARN_AFTER.as_secs()
+                    ));
+                } else {
+                    logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 500ms..."));
+                }
+                std::thread::sleep(Duration::from_millis(500));
             }
         }
     }
@@ -412,22 +472,15 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
 /// (2026-08-26). Requires `[profile.release]`'s `panic = "abort"` to be
 /// off (see workspace `Cargo.toml`) - `catch_unwind` cannot catch
 /// anything once a panic aborts the process outright.
-fn run_recurring_safe<F>(
-    cs_task: &'static CSTaskImp,
-    group: CSTaskGroupIndex,
-    mut f: F,
-) -> RecurringTaskHandle<eldenring::fd4::FD4TaskData>
+fn run_recurring_safe<F>(cs_task: &'static CSTaskImp, group: CSTaskGroupIndex, mut f: F)
 where
     F: FnMut(&eldenring::fd4::FD4TaskData) + 'static + Send,
 {
-    cs_task.run_recurring(
-        move |data: &eldenring::fd4::FD4TaskData| {
-            if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
-                logger::log("Regen tick panicked, skipped this frame.");
-            }
-        },
-        group,
-    )
+    task_hook::run_recurring(cs_task, group, move |data: &eldenring::fd4::FD4TaskData| {
+        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
+            logger::log("Regen tick panicked, skipped this frame.");
+        }
+    });
 }
 
 /// Registers the Regen.* tick as a recurring task on the game's own
@@ -440,14 +493,14 @@ pub fn run(ini_path: String) {
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
-    let _handle = run_recurring_safe(
+    run_recurring_safe(
         cs_task,
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
-            // Writes out any RegenLog lines the attack hook queued instead of
-            // writing directly - see attack_hook::flush_pending_logs. Always
+            // Writes out any LogFile lines the hit hook queued instead of
+            // writing directly - see hit_hook::flush_pending_logs. Always
             // runs, every frame, regardless of what else below is enabled.
-            attack_hook::flush_pending_logs();
+            hit_hook::flush_pending_logs();
 
             // Latches "was the last attack button pressed L2 (Skill)?" so
             // attack_hook can tell a skill hit from a plain one even several
@@ -480,9 +533,9 @@ pub fn run(ini_path: String) {
             // that scan/patch the same game code get to finish their own
             // startup scans first, and re-synced every tick so a hot reload
             // updates it without reinstalling the hook.
-            let on_hit_params = attack_hook::OnHitParams {
+            let on_hit_params = hit_hook::OnHitParams {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
-                trigger: config::get_int("Regen.PerHit.Trigger", 0),
+                trigger: config::get_int("Regen.PerHit.Mode", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
                 exclude_aow: config::get_bool("Regen.PerHit.ExcludeAow", false),
                 hp: config::get_double("Regen.PerHit.HP", 0.0),
@@ -492,9 +545,9 @@ pub fn run(ini_path: String) {
             let chr_resolved = main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
-                attack_hook_installed = attack_hook::install(on_hit_params);
+                attack_hook_installed = hit_hook::try_install(on_hit_params);
             } else if attack_hook_installed {
-                attack_hook::update_params(on_hit_params);
+                hit_hook::update_params(on_hit_params);
             }
 
             // Regen.PerTick.Enabled=false or Interval=0 disables the whole
@@ -521,7 +574,7 @@ pub fn run(ini_path: String) {
                 4 => is_sitting(),
                 _ => true,
             };
-            if config::get_bool("RegenLog", false) && condition != 0 {
+            if config::get_bool("LogFile", false) && condition != 0 {
                 logger::log(&format!(
                     "Regen.PerTick: trigger={condition} -> condition_met={condition_met} (in_combat={}, idle={}, sitting={})",
                     is_in_combat(),
@@ -533,25 +586,21 @@ pub fn run(ini_path: String) {
                 return;
             }
 
-            // Regen.PerTick.Unit picks what the HP/FP/SP values below
-            // mean: 0 = flat points, 1 = percent of max stat (divided by 100
-            // to get the fraction restored per tick).
-            let unit = config::get_int("Regen.PerTick.Unit", 0);
+            // Regen.PerTick.ValueType picks what the HP/FP/SP values below
+            // mean: 0 = flat points, 1 = percent of max stat, 2 = percent of
+            // the stat's missing amount (max - current) - see
+            // compute_tick_heal. Regen.PerTick.Cap (percent of true max) caps
+            // how far any of the 3 stats gets restored by this tick,
+            // regardless of ValueType or Trigger.
+            let unit = config::get_int("Regen.PerTick.ValueType", 0);
+            let cap_pct = config::get_double("Regen.PerTick.Cap", 100.0);
             let hp_value = config::get_double("Regen.PerTick.HP", 0.0);
             let fp_value = config::get_double("Regen.PerTick.FP", 0.0);
             let stamina_value = config::get_double("Regen.PerTick.SP", 0.0);
-            let (hp_flat, hp_fraction) = split_by_unit(unit, hp_value);
-            let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
-            let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);
 
-            let hp_healed = heal_main_player(HealField::Hp, hp_flat, hp_fraction);
-            let fp_healed = heal_main_player(HealField::Fp, fp_flat, fp_fraction);
-            let stamina_healed = heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
-            if config::get_bool("RegenLog", false) {
-                logger::log(&format!(
-                    "Regen.PerTick: +{hp_healed} HP, +{fp_healed} FP, +{stamina_healed} SP"
-                ));
-            }
+            heal_main_player_tick(HealField::Hp, unit, hp_value, cap_pct);
+            heal_main_player_tick(HealField::Fp, unit, fp_value, cap_pct);
+            heal_main_player_tick(HealField::Stamina, unit, stamina_value, cap_pct);
         },
     );
 

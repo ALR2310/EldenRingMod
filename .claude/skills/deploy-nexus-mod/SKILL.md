@@ -264,10 +264,13 @@ sửa code để "cho qua".
     tạo file hoàn toàn mới, sai mục đích):
     Đưa luôn nội dung changelog (đã chốt ở bước 2) vào `description` - để
     người xem "Files" tab thấy ngay đổi gì mà không cần lật sang mục
-    Changelog riêng:
+    Changelog riêng. `name` là **tên hiển thị** trên trang Nexus, không
+    phải tên file thật (upload ở bước 9-10 đã tự mang tên file zip rồi) -
+    lỗi thật đã gặp (2026-09-12): dùng `"<Mod>.zip"` khiến Nexus hiển thị
+    đuôi `.zip` thừa trong tên file trên trang mod, chỉ nên dùng `"<Mod>"`:
     ```bash
     curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
-      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>.zip\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"description\": \"<changelog text, mỗi dòng 1 bullet trần (KHÔNG tự thêm dấu \\\"- \\\" ở đầu) - giống hệt nội dung gửi ở bước 13>\"}" \
+      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"description\": \"<changelog text, mỗi dòng 1 bullet trần (KHÔNG tự thêm dấu \\\"- \\\" ở đầu) - giống hệt nội dung gửi ở bước 13>\"}" \
       "https://api.nexusmods.com/v3/mod-files/<mod_file_id>/versions"
     ```
 
