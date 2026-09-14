@@ -33,8 +33,9 @@
 //!   rcx = ctx, rdx = attacker, r8 = hit_info, r9 = flag (byte, zero-extended)
 
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicI32, AtomicU64, AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use common::config;
 use common::logger;
@@ -423,4 +424,45 @@ pub fn install(params: OnHitParams) -> bool {
 
     logger::log("HitHook: installed.");
     true
+}
+
+// `regen::run`'s tick calls `try_install` again on every single frame until
+// it succeeds (so it can keep retrying if e.g. another mod hasn't finished
+// patching this same site yet) - calling `install` (and its AOB scan)
+// unthrottled at 60fps would both hammer `memscan::find_pattern_in_module`
+// pointlessly and, if the pattern is genuinely never going to match (a future
+// incompatible game version), flood the log with an identical line every
+// single frame. `RETRY_THROTTLE` caps how often an actual attempt runs;
+// `WARN_AFTER` escalates to 1 clear, actionable message instead of a wall of
+// identical retries once this has clearly gone on far too long to be normal
+// loading jitter (same fix ported from AutoRegen, prompted by Nexus reports
+// of the old RVA-gated lookup going silent after a game update, 2026-09-08).
+const RETRY_THROTTLE: Duration = Duration::from_secs(10);
+const WARN_AFTER: Duration = Duration::from_secs(15);
+
+static FIRST_ATTEMPT: OnceLock<Instant> = OnceLock::new();
+static LAST_ATTEMPT_MS: AtomicU64 = AtomicU64::new(0);
+static WARNED: AtomicBool = AtomicBool::new(false);
+
+/// Throttled wrapper around `install` - call this every tick instead of
+/// `install` directly while the hook isn't installed yet.
+pub fn try_install(params: OnHitParams) -> bool {
+    let first_attempt = *FIRST_ATTEMPT.get_or_init(Instant::now);
+    let elapsed = first_attempt.elapsed();
+
+    let now_ms = elapsed.as_millis() as u64;
+    let last_ms = LAST_ATTEMPT_MS.load(Ordering::Relaxed);
+    if last_ms != 0 && now_ms.saturating_sub(last_ms) < RETRY_THROTTLE.as_millis() as u64 {
+        return false; // too soon since the last real attempt - skip this tick
+    }
+    LAST_ATTEMPT_MS.store(now_ms.max(1), Ordering::Relaxed);
+
+    if elapsed >= WARN_AFTER && !WARNED.swap(true, Ordering::Relaxed) {
+        logger::error(&format!(
+            "HitHook: pattern not found after {}s - game may need a mod update, check Nexus.",
+            WARN_AFTER.as_secs()
+        ));
+    }
+
+    install(params)
 }

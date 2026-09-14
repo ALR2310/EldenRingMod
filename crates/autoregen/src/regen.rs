@@ -179,11 +179,14 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
 /// The pad-input bits read each frame to decide `LAST_ATTACK_WAS_SKILL`,
 /// `IS_SITTING` and `is_idle()` below.
 ///
-/// `r1`/`r2`/`l1`/`l2`/`new_gesture` come from `new_action_presses` (fires
-/// exactly 1 frame, on the press) - confirmed in-game (2026-09-03) to
-/// correlate with Ash of War/skill hits far more reliably than any
-/// `AtkParam` field does (see AutoRegen's README). `requested_gesture` is a
-/// plain value (not a bit), only meaningful the same frame `new_gesture` is
+/// `r1`/`r2`/`l1`/`l2` come from `new_action_presses` (fires exactly 1
+/// frame, on the press) - confirmed in-game (2026-09-03) to correlate with
+/// Ash of War/skill hits far more reliably than any `AtkParam` field does
+/// (see AutoRegen's README). `gesture_accepted` comes from
+/// `queued_action_inputs` instead (see `main_player_action_snapshot`) so it
+/// only fires when the current animation actually let the gesture button
+/// through, not just when it was pressed. `requested_gesture` is a plain
+/// value (not a bit), only meaningful the same frame `gesture_accepted` is
 /// set. `busy` covers every other way the player can be "not idle" - held
 /// (not just newly-pressed) actions from `action_requests`, plus actual
 /// movement input - read from the same module so idle detection doesn't
@@ -193,7 +196,7 @@ struct ActionSnapshot {
     r2: bool,
     l1: bool,
     l2: bool,
-    new_gesture: bool,
+    gesture_accepted: bool,
     requested_gesture: i32,
     busy: bool,
 }
@@ -225,7 +228,15 @@ fn main_player_action_snapshot() -> Option<ActionSnapshot> {
         r2: new_presses.r2(),
         l1: new_presses.l1(),
         l2: new_presses.l2(),
-        new_gesture: new_presses.gesture(),
+        // `queued_action_inputs` (not `new_action_presses`) is only set when
+        // the button press was ALSO in `possible_action_inputs` - i.e. the
+        // current animation actually accepted it. Confirmed bug report
+        // (Kolagon, 2026-09-13): pressing the gesture button while mid-cast
+        // (or any other animation the gesture can't interrupt) still set
+        // `new_action_presses.gesture()` for that frame even though the
+        // character never actually sat down - `queued_action_inputs` stays
+        // clear in that case instead.
+        gesture_accepted: action_request.queued_action_inputs.gesture(),
         requested_gesture: action_request.requested_gesture,
         busy,
     })
@@ -312,11 +323,11 @@ pub fn update_last_attack_input() {
         LAST_ATTACK_WAS_SKILL.store(true, Ordering::Relaxed);
     }
 
-    if snapshot.new_gesture {
+    if snapshot.gesture_accepted {
         // A 2nd gesture request while already sitting always cancels/stands
         // up in-game first, whether it's the same gesture or a different one
         // - it never switches straight into the newly-selected gesture.
-        // Since this cancel fires the exact same signal (new_action_presses.
+        // Since this cancel fires the exact same signal (queued_action_inputs.
         // gesture() + requested_gesture=<id>) as starting one, the only way
         // to tell them apart is context: already sitting means this press
         // must be the cancel. Confirmed as a real bug in-game (2026-09-10):
@@ -373,7 +384,21 @@ pub fn is_last_attack_skill() -> bool {
 /// `#[shared::singleton("CSTask")]` on its definition), which - unlike that
 /// RVA table - isn't tied to any particular game version at all, so this
 /// loop survives any future game patch on its own.
+// Reported in the wild (Nexus comments, 2026-09-08, before this AOB-based
+// lookup existed): the old RVA-gated `CSTaskImp::wait_for_instance` retried
+// silently *inside* `fromsoftware-rs` itself with zero logging, so a version
+// mismatch just left "Activating AutoRegen..." as the log's last line
+// forever - no indication anything was even still trying, let alone why it
+// wasn't working. This loop already fixed the "silent" half by logging every
+// attempt itself - `WARN_AFTER` below fixes the other half: even visible
+// retries look identical forever if this genuinely never succeeds (a truly
+// incompatible future game version), so after this long a clear, actionable
+// one-shot message replaces the wall of identical lines.
+const WARN_AFTER: Duration = Duration::from_secs(15);
+
 fn wait_for_cs_task() -> &'static CSTaskImp {
+    let start = Instant::now();
+    let mut warned = false;
     loop {
         match unsafe { CSTaskImp::instance() } {
             Ok(instance) => {
@@ -381,7 +406,15 @@ fn wait_for_cs_task() -> &'static CSTaskImp {
                 return instance;
             }
             Err(err) => {
-                logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 500ms..."));
+                if !warned && start.elapsed() >= WARN_AFTER {
+                    warned = true;
+                    logger::error(&format!(
+                        "CSTaskImp not found after {}s ({err:?}) - game may need a mod update, check Nexus.",
+                        WARN_AFTER.as_secs()
+                    ));
+                } else {
+                    logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 500ms..."));
+                }
                 std::thread::sleep(Duration::from_millis(500));
             }
         }
@@ -470,7 +503,7 @@ pub fn run(ini_path: String) {
             let chr_resolved = main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
-                attack_hook_installed = hit_hook::install(on_hit_params);
+                attack_hook_installed = hit_hook::try_install(on_hit_params);
             } else if attack_hook_installed {
                 hit_hook::update_params(on_hit_params);
             }
