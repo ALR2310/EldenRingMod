@@ -1,11 +1,10 @@
-Reduces your total equip load by a configurable percentage - patches the actual gameplay weight calculation, not just the displayed number, so roll type and run speed change too.
+A DLL mod that lets you adjust your equip load multiplier to make yourself lighter or heavier, or set it to a fixed value instead. Fully configurable via its config file.
 
-Default configuration ([b]WeightMultiplier.ini[/b]):
-[code]InitialDelaySeconds=5      ; seconds to wait after game launch before applying the mod
-WeightReductionPercent=50  ; % to reduce your total equip load by (0 = no change)
-                           ; e.g. 50 turns a real load of 60.9 into 30.45
-                           ; e.g. 100 turns a real load of 60.9 into 0
-[/code]
+[size=4][b]Features[/b][/size]
+[list]
+[*]Multiply your equip load by a configurable factor, or set it to a fixed value.[/*]
+[*]Hotkey to reload the ini without restarting the game.[/*]
+[/list]
 
 [b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
 
@@ -13,30 +12,36 @@ WeightReductionPercent=50  ; % to reduce your total equip load by (0 = no change
 
 [b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
 [list=1]
-[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).
-[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
 [*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
 [code]external_dlls = [
     "natives\\WeightMultiplier.dll",
-]
-[/code]
-[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
 [/list]
 
 [b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
 [list=1]
-[*]Download Elden Mod Loader from the link above and extract it into your game folder.
-[*]Download this mod and drag [b]WeightMultiplier.dll[/b] and [b]WeightMultiplier.ini[/b] into the [b]mods[/b] folder.
-[*]Launch the game - the mod will be loaded automatically.
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]WeightMultiplier.dll[/b] and [b]WeightMultiplier.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
 [/list]
 
-[size=4][b]Changelog[/b][/size]
-
-[b]2.0[/b]
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]2.0.0[/b]
 [list]
-[*]Renamed from ReductionWeight to WeightMultiplier and rewritten in Rust - same single hook on the equip-load summing loop's finish point, byte-identical patch technique.[/*]
+[*]Rewritten from C++ to Rust.[/*]
+[*]Added a fixed-value option.[/*]
+[*]Added a hotkey to reload the config.[/*]
 [/list]
-[b]1.0[/b]
+[b]1.1.0[/b]
 [list]
-[*]Reduces total equip load by a configurable percentage via a single inline hook.[/*]
+[*]Allow negative values.[/*]
 [/list]
+[b]1.0.0[/b]
+[list]
+[*]Reduces equip load.[/*]
+[/list]
+[/spoiler]

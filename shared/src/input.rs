@@ -1,5 +1,21 @@
 //! Virtual-key name parsing shared by every mod that reads a hotkey ini key
-//! (e.g. `ReloadKey`, `HotReloadKey`).
+//! (e.g. `ReloadKey`, `HotReloadKey`), plus a raw-Win32 key-press poll for
+//! mods with no `fromsoftware-rs` dependency (which otherwise use
+//! `eldenring::util::input::is_key_pressed`, registered on the game's own
+//! per-frame task scheduler - not an option here).
+
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn GetAsyncKeyState(v_key: i32) -> i16;
+}
+
+/// Whether `vk` was pressed since the last call to this function for the
+/// same key - edge-triggered via `GetAsyncKeyState`'s low bit, which Windows
+/// tracks and clears per call, so no state of our own to maintain. Meant to
+/// be polled periodically from a plain thread loop (e.g. every 100ms).
+pub fn is_key_pressed(vk: i32) -> bool {
+    (unsafe { GetAsyncKeyState(vk) } & 1) != 0
+}
 
 /// Parses, in order of precedence: a raw virtual-key code in hex ("0x2D") or
 /// decimal ("112"), "F1".."F24", or a single letter/digit. Returns `fallback`
