@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
-mod attack_hook;
+mod hit_hook;
 
 use common::config;
 use common::logger;
@@ -170,8 +170,13 @@ pub fn run() {
         "Regen",
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
+            // Writes out any DebugLog lines hit_hook queued instead of
+            // writing directly - see hit_hook::flush_pending_logs. Always
+            // runs, every frame, regardless of what else below is enabled.
+            hit_hook::flush_pending_logs();
+
             // Latches "was the last attack button pressed L2 (Skill)?" so
-            // attack_hook can tell a skill hit from a plain one even several
+            // hit_hook can tell a skill hit from a plain one even several
             // frames after the button was released - see
             // LAST_ATTACK_WAS_SKILL. Unconditional every frame.
             update_last_attack_input();
@@ -186,11 +191,11 @@ pub fn run() {
             let needs_combat_tracking = per_tick_enabled && (condition == 1 || condition == 2);
 
             // Heal-on-hit is independent of this tick's own interval (see
-            // attack_hook.rs) - installed once we're in-game so other mods that
+            // hit_hook.rs) - installed once we're in-game so other mods that
             // scan/patch the same game code get to finish their own startup
             // scans first, and re-synced every tick so a hot reload updates it
             // without reinstalling the hook.
-            let on_hit_params = attack_hook::OnHitParams {
+            let on_hit_params = hit_hook::OnHitParams {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
                 trigger: config::get_int("Regen.PerHit.Trigger", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
@@ -202,9 +207,9 @@ pub fn run() {
             let chr_resolved = crate::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
-                attack_hook_installed = attack_hook::install(on_hit_params);
+                attack_hook_installed = hit_hook::install(on_hit_params);
             } else if attack_hook_installed {
-                attack_hook::update_params(on_hit_params);
+                hit_hook::update_params(on_hit_params);
             }
 
             // Regen.PerTick.Enabled=false or Interval=0 disables the whole
