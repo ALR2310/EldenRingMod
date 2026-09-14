@@ -136,3 +136,71 @@ jmp   <target + 7>                 ; quay lại code gốc (E9 rel32, qua common
 - **Luôn test cả 2 mặt**: số hiển thị trên UI *và* hành vi thực tế (roll,
   chạy) — bài học từ Lần 2 là 1 hook có thể đúng nửa việc (UI) mà sai nửa
   còn lại (gameplay), dù không crash và không báo lỗi gì.
+
+## Đổi ini sang `Mode`/`Multiplier`/`FixedValue`, thêm chế độ giá trị cố định (2026-09-14)
+
+Đổi hẳn bộ ini key, không cố giữ tương thích với `WeightReductionPercent`
+cũ (theo yêu cầu người dùng - key mới hoàn toàn, không phải chỉ đổi tên):
+
+- `Mode` (0/1) chọn cách tính - `0` = `Multiplier` (hệ số nhân trực tiếp,
+  thay cho `WeightReductionPercent`: `Multiplier=0.5` ~ giảm 50% cũ,
+  `Multiplier=1.0` = không đổi, `Multiplier=2.0` = tăng gấp đôi, cùng đơn vị
+  với key `Multiplier` của [`runemultiplier`](../runemultiplier)), `1` =
+  `FixedValue` (đặt cứng tải trọng bằng đúng 1 số, bất kể đang mặc gì).
+- **Breaking hoàn toàn** với `WeightReductionPercent` - không phải đổi tên
+  suông, đơn vị cũng đổi (% giảm → hệ số nhân trực tiếp), người dùng cũ
+  phải tự tính lại giá trị nếu nâng cấp.
+
+Implementation: tận dụng đúng 1 điểm hook đã có (`movaps xmm0,xmm6`, chạy
+đúng 1 lần sau khi vòng lặp cộng trọng lượng đã xong - xem mục "Cơ chế" ở
+trên) cho cả 2 mode, không cần thêm điểm patch nào khác như DLL "NoWeight"
+bên thứ 3 (Zibinha) phải làm (hook giữa vòng lặp để set cứng, xem mục
+"Lịch sử tìm offset"). `build_stub()` giờ chọn `mulss xmm6,[rcx]` (mode
+`Multiplier`, giữ nguyên như cũ) hay `movss xmm6,[rcx]` (mode `FixedValue`,
+ghi đè thẳng tổng đã cộng xong) tùy `Mode`, cùng 1 static giá trị
+`WEIGHT_VALUE` (đổi tên từ `WEIGHT_FACTOR`) mang ý nghĩa khác nhau tùy
+mode - không cần 2 static riêng vì chỉ 1 trong 2 được dùng tại 1 thời điểm
+(chọn lúc `install()`, trước khi bake vào stub).
+
+## Thêm hot reload (`ReloadKey`), `[Logging] LogFile`, đổi `InitialDelaySeconds` → `LoadDelay` (2026-09-14)
+
+Bỏ hẳn quyết định thiết kế gốc "cố tình không có hotkey reload" (từng ghi
+trong doc comment đầu `hook.rs`) - theo yêu cầu người dùng, thêm `[General]
+ReloadKey=F5` giống mọi mod khác trong workspace, cộng thêm `[Logging]
+LogFile=true` (đồng bộ tên section/key logging chung, xem README của
+`autoregen`/`sometweaks`/`passiverunes`/`runemultiplier` cùng ngày).
+
+- **Không thêm `fromsoftware-rs`**: mod này vẫn cố tình không phụ thuộc
+  crate đó (xem đầu file) - poll `ReloadKey` bằng `GetAsyncKeyState` thô
+  (`common::input::is_key_pressed`, mới thêm, khai báo `extern "system"`
+  thủ công + `#[link(name = "user32")]`, cùng phong cách
+  `codepatch.rs` đã khai báo `VirtualAlloc`/`VirtualProtect` cho
+  `kernel32`) thay vì `eldenring::util::input::is_key_pressed` (cần đăng ký
+  qua `CSTaskImp`, chỉ mods có `fromsoftware-rs` mới dùng được). Vòng lặp
+  reload chạy trên 1 OS thread thường (`std::thread::sleep` 100ms/lần), y
+  hệt kiểu polling gốc mà `runemultiplier` từng dùng trước khi nó chuyển
+  sang `CSTaskGroupIndex::FrameBegin` (xem README của nó, mục "Bản Rust
+  hiện tại").
+- **Đổi `Mode` lúc đang chạy phức tạp hơn đổi `Multiplier`/`FixedValue`**:
+  giá trị (`Multiplier`/`FixedValue`) hot-reload an toàn vì stub đã cài đọc
+  từ 1 địa chỉ cố định (`WEIGHT_VALUE`) mỗi lần chạy - chỉ cần ghi đè giá
+  trị đó. Nhưng `Mode` chọn **opcode nào** chạy (`mulss` hay `movss`) đã
+  ghi cứng vào code thực thi lúc `install()` - đổi `Mode` lúc runtime cần
+  tự vá lại đúng 4 byte đó (`STUB_MODE_INSTR_ADDR`, qua
+  `codepatch::overwrite_bytes`) - rủi ro y hệt lúc `install()` ban đầu
+  (ghi đè code CPU có thể đang thực thi), chỉ khác là lặp lại theo yêu cầu
+  thay vì chỉ 1 lần. Người dùng đã xác nhận chấp nhận đánh đổi này (câu
+  hỏi "hỗ trợ đổi Mode luôn hay chỉ đổi số" - chọn hỗ trợ đổi Mode luôn).
+- **`catch_unwind` quanh mỗi lần poll** (không phải `run_recurring_safe`
+  kiểu `autoregen`/`sometweaks`): vòng lặp reload chạy trên thread riêng
+  của chính mod, không phải do game gọi vào qua `CSTaskImp` như các mod
+  kia - panic ở đây không có rủi ro phá call stack C++ của game, chỉ cần
+  không làm chết luôn thread reload cho phần còn lại của session.
+- **`InitialDelaySeconds` → `LoadDelay`, đơn vị giây → mili giây** (giá trị
+  mặc định đổi từ `5` thành `5000`, cùng độ trễ thực tế) - khớp quy ước
+  "mili giây" mà mọi key thời gian khác trong workspace đang dùng
+  (`Regen.PerTick.Interval`, `Rune.Passive.Interval`...).
+
+`WeightMultiplier.ini` đổi section: `[General]` (mới, chứa `ReloadKey` +
+`LoadDelay`), `[Features]` (đổi tên từ không-section-cụ-thể, chứa
+`Mode`/`Multiplier`/`FixedValue`), `[Logging]` (mới, chứa `LogFile`).
