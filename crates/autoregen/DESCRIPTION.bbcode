@@ -1,8 +1,9 @@
-Adds automatic HP, FP, and Stamina regeneration over time, with configurable rates - plus optional HP/FP/Stamina restore the instant your own weapon attack lands a hit, either a fixed amount/percent of your max stat, or a percent of the damage you just dealt (true lifesteal). Fully configurable via [b]AutoRegen.ini[/b] - see the comments in the file for every option.
+Automatic HP/FP/Stamina regen over time, plus optional restore-on-hit. Fully configurable via its config file.
 
 [size=4][b]Features[/b][/size]
 [list]
-[*]Passive HP/FP/Stamina regen on a timer, as flat points or a percent of max.[/*]
+[*]Passive HP/FP/Stamina regen on a timer, as flat points, a percent of max, or a percent of what's missing (heals faster while low, tapers off near full).[/*]
+[*]Optional ceiling on how far passive regen restores you, so it can stop short of full.[/*]
 [*]Optionally restrict regen to: out of combat, in combat, idle (no input for a few seconds), or sitting via a gesture.[/*]
 [*]Optional restore-on-hit when your own attack lands - fixed amount, percent of max stat, or true lifesteal (percent of damage dealt).[/*]
 [*]Restore-on-hit can be limited to melee, ranged/spell hits, or both, and can exclude Ash of War/Weapon Art hits.[/*]
@@ -34,8 +35,13 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [*]Launch the game - the mod will be loaded automatically.[/*]
 [/list]
 
-[size=4][b]Changelog[/b][/size]
-
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]2.6.0[/b]
+[list]
+[*]Added an option to heal based on missing HP/FP/Stamina.[/*]
+[*]Added an option to cap how far passive regen restores you.[/*]
+[*]Fixed sitting regen triggering without actually sitting.[/*]
+[/list]
 [b]2.5.1[/b]
 [list]
 [*]Fixed a crash with Regen Per Hit enabled at Volcano Manor.[/*]
@@ -89,3 +95,4 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [list]
 [*]HP/FP/Stamina regeneration over time.[/*]
 [/list]
+[/spoiler]
