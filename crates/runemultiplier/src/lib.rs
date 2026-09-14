@@ -26,9 +26,9 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\RuneMultiplier.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // DebugLog gates the log file entirely (off by default) - same
-        // convention as the original RuneMultiplier's Logger::Init(dir).
-        if config::get_bool("DebugLog", false) {
+        // [Logging] LogFile gates the log file entirely (off by default) -
+        // same convention as the original RuneMultiplier's Logger::Init(dir).
+        if config::get_bool("LogFile", false) {
             logger::init(&dir, "RuneMultiplier.log");
         }
         logger::install_panic_hook();
