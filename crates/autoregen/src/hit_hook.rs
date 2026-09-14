@@ -290,7 +290,7 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
         return;
     }
 
-    if config::get_bool("RegenLog", false) {
+    if config::get_bool("LogFile", false) {
         if let Some(damage) = read_damage(hit_info) {
             let atk_id = read_atk_id(hit_info).unwrap_or(-1);
             let source_type = read_source_type(hit_info);
@@ -347,7 +347,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
             source = "hit landed".to_string();
         }
     }
-    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("RegenLog", false) {
+    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("LogFile", false) {
         return;
     }
     queue_log(format!(

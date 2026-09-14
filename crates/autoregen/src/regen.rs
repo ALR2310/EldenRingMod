@@ -7,11 +7,11 @@
 //! `CSTaskGroupIndex::FrameBegin` tasks run.
 //!
 //! Config shape (`Regen.PerTick.*`/`Regen.PerHit.*`, `Enabled`/`Trigger`/
-//! `Unit`) matches [`SomeTweaks`](../sometweaks)'s `regen` module - that
-//! crate had in turn started as a straight port of AutoRegen's own older
-//! `Condition`/`HpPctOnHit`-style ini (separate flat/percent keys per stat,
-//! no `Enabled` flag), then evolved its own cleaner design (one value field
-//! per stat + a `Unit`/`Trigger` selector for what it means, plus an
+//! `ValueType`/`Mode`) matches [`SomeTweaks`](../sometweaks)'s `regen`
+//! module - that crate had in turn started as a straight port of AutoRegen's
+//! own older `Condition`/`HpPctOnHit`-style ini (separate flat/percent keys
+//! per stat, no `Enabled` flag), then evolved its own cleaner design (one
+//! value field per stat + a `ValueType`/`Mode` selector for what it means, plus an
 //! explicit `Enabled` instead of "0 disables everything"). Backported here so
 //! both mods share the same config shape and code, rather than AutoRegen
 //! being stuck with the older design it started from.
@@ -68,19 +68,6 @@ pub fn is_in_combat() -> bool {
     last != 0 && now_ms().saturating_sub(last) < COMBAT_TIMEOUT_MS
 }
 
-/// Splits a `Regen.PerTick.Unit`-tagged ini value into the `(flat_amount,
-/// percent_fraction)` pair [apply_heal] expects: `Unit=0` treats `value` as
-/// flat points, `Unit=1` as a percent of max (divided by 100 into a
-/// fraction). Only one of the pair is ever non-zero, since the ini has a
-/// single field per stat rather than separate flat/percent keys.
-fn split_by_unit(unit: i32, value: f64) -> (i32, f64) {
-    if unit == 1 {
-        (0, value / 100.0)
-    } else {
-        (value.round() as i32, 0.0)
-    }
-}
-
 /// Heals `flat_amount` plus `percent_fraction` of max (e.g. 0.01 = 1%, already
 /// divided by 100), clamped to max, with at least 1 point restored if the
 /// percent alone would round to 0. Returns the amount actually restored (0 if
@@ -100,6 +87,34 @@ fn apply_heal(current: &mut i32, max: i32, flat_amount: i32, percent_fraction: f
     *current - before
 }
 
+/// Computes one `Regen.PerTick` heal amount, honoring `value_type`: `0` =
+/// `value` as flat points, `1` = `value`% of max stat, `2` = `value`% of the
+/// stat's *missing* amount (`max - current`) - heals fast while low, tapering
+/// off as the stat approaches max instead of restoring the same amount
+/// regardless of how full the stat already is. Modes `1`/`2` restore at
+/// least 1 point if the percent alone would round to 0 (as long as `value` is
+/// positive and there's still room to heal).
+fn compute_tick_heal(value_type: i32, value: f64, current: i32, max: i32) -> i32 {
+    match value_type {
+        1 => {
+            if value <= 0.0 {
+                0
+            } else {
+                ((value / 100.0 * max as f64) as i32).max(1)
+            }
+        }
+        2 => {
+            if value <= 0.0 {
+                0
+            } else {
+                let missing = (max - current) as f64;
+                ((value / 100.0 * missing) as i32).max(1)
+            }
+        }
+        _ => value.round() as i32,
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum HealField {
     Hp,
@@ -107,36 +122,63 @@ pub enum HealField {
     Stamina,
 }
 
-/// Applies a heal to the resolved main player, given the same
-/// `(flat_amount, percent_fraction)` convention as [apply_heal]. No-op
-/// (returns 0) if the player isn't currently resolved or is dead - shared by
-/// the tick loop below and by `attack_hook`'s heal-on-hit.
-pub fn heal_main_player(field: HealField, flat_amount: i32, percent_fraction: f64) -> i32 {
-    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance_mut() }) else {
-        return 0;
-    };
-    let Some(main_player) = world_chr_man.main_player.as_mut() else {
-        return 0;
-    };
+/// Resolves the main player and gives `f` mutable access to `field`'s
+/// `(current, max)` pair. `None` if the player isn't currently resolved or is
+/// dead - shared by [heal_main_player] (attack-hook heal-on-hit) and
+/// [heal_main_player_tick] (the tick loop below).
+fn with_stat_mut<R>(field: HealField, f: impl FnOnce(&mut i32, i32) -> R) -> Option<R> {
+    let world_chr_man = unsafe { WorldChrMan::instance_mut() }.ok()?;
+    let main_player = world_chr_man.main_player.as_mut()?;
     let data = &mut main_player.chr_ins.modules.data;
     if data.hp <= 0 {
-        return 0; // dead - don't touch anything
+        return None; // dead - don't touch anything
     }
-
-    match field {
+    Some(match field {
         HealField::Hp => {
             let max = data.max_hp;
-            apply_heal(&mut data.hp, max, flat_amount, percent_fraction)
+            f(&mut data.hp, max)
         }
         HealField::Fp => {
             let max = data.max_fp;
-            apply_heal(&mut data.fp, max, flat_amount, percent_fraction)
+            f(&mut data.fp, max)
         }
         HealField::Stamina => {
             let max = data.max_stamina;
-            apply_heal(&mut data.stamina, max, flat_amount, percent_fraction)
+            f(&mut data.stamina, max)
         }
-    }
+    })
+}
+
+/// Applies a heal to the resolved main player, given the same
+/// `(flat_amount, percent_fraction)` convention as [apply_heal]. No-op
+/// (returns 0) if the player isn't currently resolved or is dead - used by
+/// `hit_hook`'s heal-on-hit (`Regen.PerHit`, no cap/`ValueType=2` support).
+pub fn heal_main_player(field: HealField, flat_amount: i32, percent_fraction: f64) -> i32 {
+    with_stat_mut(field, |current, max| apply_heal(current, max, flat_amount, percent_fraction))
+        .unwrap_or(0)
+}
+
+/// Applies one `Regen.PerTick` heal to the resolved main player - see
+/// [compute_tick_heal] for what `value_type`/`value` mean. `cap_pct`
+/// (`Regen.PerTick.Cap`, percent of the stat's true max) is a ceiling ticks
+/// never restore past, independent of `value_type`: already at or above the
+/// cap is a no-op even if the stat isn't at its true max yet. No-op (returns
+/// 0) if the player isn't currently resolved or is dead.
+pub fn heal_main_player_tick(field: HealField, value_type: i32, value: f64, cap_pct: f64) -> i32 {
+    with_stat_mut(field, |current, max| {
+        let cap = (((cap_pct / 100.0) * max as f64) as i32).clamp(0, max);
+        if *current >= cap {
+            return 0;
+        }
+        let heal = compute_tick_heal(value_type, value, *current, max);
+        if heal <= 0 {
+            return 0;
+        }
+        let before = *current;
+        *current = (*current + heal).min(cap);
+        *current - before
+    })
+    .unwrap_or(0)
 }
 
 /// Shows `text` in the game's own top-of-screen system announcement banner
@@ -263,7 +305,7 @@ static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
 // dropdown in The Grand Archives' Elden Ring Cheat Engine table
 // (github.com/The-Grand-Archives/Elden-Ring-CT-TGA) - e.g. that table lists
 // Dejection as 160, but `requested_gesture` reads back 80 in-game (confirmed
-// 2026-09-10 via the `RegenLog` debug line below: Dejection=80, Rest=92,
+// 2026-09-10 via the `LogFile` debug line below: Dejection=80, Rest=92,
 // Sitting Sideways=93, each exactly that table's ID / 2). fromsoftware-rs
 // doesn't ship a named enum for these, and no public source documents this
 // /2 factor - it was reverse-engineered from live log output, not read off
@@ -336,7 +378,7 @@ pub fn update_last_attack_input() {
         // already gotten up.
         let is_sit_gesture = !IS_SITTING.load(Ordering::Relaxed) && sit_gesture_ids().contains(&snapshot.requested_gesture);
         IS_SITTING.store(is_sit_gesture, Ordering::Relaxed);
-        if config::get_bool("RegenLog", false) {
+        if config::get_bool("LogFile", false) {
             logger::log(&format!(
                 "Gesture: requested_gesture={} -> is_sitting={is_sit_gesture}",
                 snapshot.requested_gesture
@@ -455,7 +497,7 @@ pub fn run(ini_path: String) {
         cs_task,
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
-            // Writes out any RegenLog lines the hit hook queued instead of
+            // Writes out any LogFile lines the hit hook queued instead of
             // writing directly - see hit_hook::flush_pending_logs. Always
             // runs, every frame, regardless of what else below is enabled.
             hit_hook::flush_pending_logs();
@@ -493,7 +535,7 @@ pub fn run(ini_path: String) {
             // updates it without reinstalling the hook.
             let on_hit_params = hit_hook::OnHitParams {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
-                trigger: config::get_int("Regen.PerHit.Trigger", 0),
+                trigger: config::get_int("Regen.PerHit.Mode", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
                 exclude_aow: config::get_bool("Regen.PerHit.ExcludeAow", false),
                 hp: config::get_double("Regen.PerHit.HP", 0.0),
@@ -532,7 +574,7 @@ pub fn run(ini_path: String) {
                 4 => is_sitting(),
                 _ => true,
             };
-            if config::get_bool("RegenLog", false) && condition != 0 {
+            if config::get_bool("LogFile", false) && condition != 0 {
                 logger::log(&format!(
                     "Regen.PerTick: trigger={condition} -> condition_met={condition_met} (in_combat={}, idle={}, sitting={})",
                     is_in_combat(),
@@ -544,20 +586,21 @@ pub fn run(ini_path: String) {
                 return;
             }
 
-            // Regen.PerTick.Unit picks what the HP/FP/SP values below
-            // mean: 0 = flat points, 1 = percent of max stat (divided by 100
-            // to get the fraction restored per tick).
-            let unit = config::get_int("Regen.PerTick.Unit", 0);
+            // Regen.PerTick.ValueType picks what the HP/FP/SP values below
+            // mean: 0 = flat points, 1 = percent of max stat, 2 = percent of
+            // the stat's missing amount (max - current) - see
+            // compute_tick_heal. Regen.PerTick.Cap (percent of true max) caps
+            // how far any of the 3 stats gets restored by this tick,
+            // regardless of ValueType or Trigger.
+            let unit = config::get_int("Regen.PerTick.ValueType", 0);
+            let cap_pct = config::get_double("Regen.PerTick.Cap", 100.0);
             let hp_value = config::get_double("Regen.PerTick.HP", 0.0);
             let fp_value = config::get_double("Regen.PerTick.FP", 0.0);
             let stamina_value = config::get_double("Regen.PerTick.SP", 0.0);
-            let (hp_flat, hp_fraction) = split_by_unit(unit, hp_value);
-            let (fp_flat, fp_fraction) = split_by_unit(unit, fp_value);
-            let (stamina_flat, stamina_fraction) = split_by_unit(unit, stamina_value);
 
-            heal_main_player(HealField::Hp, hp_flat, hp_fraction);
-            heal_main_player(HealField::Fp, fp_flat, fp_fraction);
-            heal_main_player(HealField::Stamina, stamina_flat, stamina_fraction);
+            heal_main_player_tick(HealField::Hp, unit, hp_value, cap_pct);
+            heal_main_player_tick(HealField::Fp, unit, fp_value, cap_pct);
+            heal_main_player_tick(HealField::Stamina, unit, stamina_value, cap_pct);
         },
     );
 

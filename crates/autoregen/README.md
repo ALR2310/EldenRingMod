@@ -541,6 +541,83 @@ cần không panic. Tự test lại (máy tác giả) không thấy giật hình
 nguyên nhân duy nhất - ghi vào changelog `2.5.1` như 1 fix chứ không khẳng
 định chắc 100%.
 
+## Đổi `Regen.PerTick.Unit` → `Regen.PerTick.ValueType`, `Regen.PerHit.Trigger` → `Regen.PerHit.Mode` (2026-09-14)
+
+Đổi tên 2 key cho rõ nghĩa hơn, không đổi hành vi/giá trị mặc định:
+
+- `Regen.PerTick.Unit` → `Regen.PerTick.ValueType` (vẫn 0 = điểm cố định,
+  1 = % max stat).
+- `Regen.PerHit.Trigger` → `Regen.PerHit.Mode` (vẫn 0/1/2 như mục "Gộp
+  `Regen Per Hit`/`Regen Per Damage`" phía trên) - đổi tên vì trùng tên với
+  `Regen.PerTick.Trigger` (chọn *điều kiện* áp dụng: always/combat/idle/
+  sitting) dù 2 key mang ý nghĩa hoàn toàn khác nhau (`Regen.PerHit.Mode`
+  chọn *cách tính giá trị hồi*: điểm cố định/%max/%damage) - dễ gây nhầm lẫn
+  khi đọc ini cạnh nhau.
+
+Áp dụng đồng thời cho [`SomeTweaks`](../sometweaks) (cùng module `regen`,
+xem README của nó cùng ngày) để 2 mod tiếp tục dùng chung 1 thiết kế ini.
+Không tự động migrate giá trị (đổi tên key, không đổi ý nghĩa/giá trị) -
+`config::migrate()` tự đẩy `Regen.PerTick.Unit`/`Regen.PerHit.Trigger` cũ
+vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL, người dùng cần tự copy
+giá trị đã tùy chỉnh sang key mới trong `AutoRegen.ini`.
+
+## Thêm `Regen.PerTick.ValueType=2` (% máu đã mất) và `Regen.PerTick.Cap` (2026-09-14)
+
+Feature request từ người dùng, bàn qua nhiều vòng trước khi chốt xuống còn
+đúng 2 thứ (ban đầu có bàn thêm `Trigger=5`/`LowHpThreshold` - "chỉ hồi khi
+dưới ngưỡng X%" - nhưng bị bỏ vì `Cap` một mình đã đủ tạo hiệu ứng "hồi tới
+X% rồi dừng" khi kết hợp đúng, không cần thêm 1 trigger riêng):
+
+- **`Regen.PerTick.ValueType=2`**: giá trị mới cho key `ValueType` đã có
+  (0=điểm cố định, 1=% max) - hồi theo **% phần máu/FP/SP đang thiếu**
+  (`(max - current) * pct`), khác hẳn `ValueType=1` (luôn hồi cùng 1 lượng
+  bất kể current đang bao nhiêu). Hiệu ứng: hồi nhanh lúc máu thấp, chậm dần
+  khi gần đầy (đường cong tiệm cận, giống natural regen trong nhiều RPG khác)
+  - có sàn tối thiểu 1 điểm/tick (giống `ValueType=1`) nên vẫn bò tới đúng
+    max chứ không dừng lửng lơ ở 99%.
+- **`Regen.PerTick.Cap`** (mặc định `100` = không giới hạn thêm): trần hồi
+  phục riêng, tính theo % **max stat thật** (không phải % của giá trị nào
+  khác) - áp dụng cho **cả 3 stat, mọi `Trigger` (0-4)**, độc lập hoàn toàn
+  với `ValueType`. Khác với ý tưởng `Trigger=5` đã bỏ: `Cap` không phải là
+  điều kiện kích hoạt, mà là **trần** luôn có hiệu lực bất kể tick đang chạy
+  vì lý do gì (always/ngoài combat/trong combat/idle/sitting).
+
+Lưu ý tương tác nếu dùng `Cap` cùng combat-based trigger nào đó có "ngưỡng"
+riêng của nó (không còn `LowHpThreshold` trong bản này nữa, nhưng ghi lại cho
+rõ nguyên tắc chung): `Cap` luôn là trần cuối cùng, tính theo max stat thật -
+không phụ thuộc điều kiện tick đang chạy vì lý do gì.
+
+Implementation (`regen.rs`): xoá hẳn `split_by_unit()` (chỉ dùng được cho 2
+mode cũ, không đủ cho mode "% missing" vì cần biết `current` ngay lúc tính,
+trong khi hàm cũ tính `(flat, percent_fraction)` trước khi resolve player) -
+thay bằng `compute_tick_heal(value_type, value, current, max)` (thuần, nhận
+đủ 4 tham số). Tách `heal_main_player()` cũ (dùng bởi `hit_hook.rs`/
+`Regen.PerHit`, giữ nguyên convention `(flat_amount, percent_fraction)`,
+không đổi hành vi) và hàm mới `heal_main_player_tick()` (dùng riêng cho
+`Regen.PerTick`, nhận `value_type`/`value`/`cap_pct`) ra 2 hàm độc lập, dùng
+chung 1 helper `with_stat_mut()` để resolve player + lấy `&mut current`/`max`
+- tránh lặp lại đúng đoạn code resolve `WorldChrMan`/`main_player` vốn đã có
+sẵn.
+
+Mới làm ở `autoregen`, **chưa port sang [`sometweaks`](../sometweaks)** -
+đợi ổn định rồi mới đưa thiết kế này quay lại đó (khác thứ tự thường lệ mọi
+lần trước, lần này cố ý làm 1 bên trước theo yêu cầu người dùng).
+
+## Đổi `[Debug]`/`RegenLog` thành `[Logging]`/`LogFile` (2026-09-14)
+
+Đổi tên cho đúng phạm vi thật: key này chưa bao giờ chỉ dành riêng cho
+"Regen" - nó gate luôn log per-hit của `Regen.PerHit` (`hit_hook.rs`) lẫn
+log điều kiện tick/gesture debug (`regen.rs`), tức là bật/tắt log chi tiết
+cho **toàn bộ mod**, không riêng 1 tính năng nào. Tên `RegenLog` dễ khiến
+hiểu lầm là chỉ áp dụng cho `[Regen Per Tick]`. Không đổi hành vi: vẫn chỉ
+gate phần log chi tiết (per-hit damage/heal, điều kiện tick/gesture) - file
+log `AutoRegen.log` tự nó **luôn ghi** (ghi đè mỗi lần chạy) bất kể key này,
+xem `lib.rs`.
+
+`config::migrate()` tự đẩy `RegenLog` cũ (trong `[Debug]` hoặc bất kỳ đâu)
+vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL - cần tự copy giá trị đã
+tùy chỉnh sang `[Logging] LogFile` mới trong `AutoRegen.ini`.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,

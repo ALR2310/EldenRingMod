@@ -239,3 +239,13 @@ nhân với `xmm1` tại điểm này — cách patch cũ (đã bỏ) của mod 
 tiến so với cả 2 (giữ nguyên `mulss xmm0,xmm1` gốc rồi nhân thêm hệ số
 riêng lên kết quả), nhưng vấn đề cộng dồn với hook `AddSoul_Call` khiến
 toàn bộ điểm patch này bị loại bỏ — chỉ AOB còn giá trị để định vị.
+
+## Đổi `[Debug]`/`DebugLog` thành `[Logging]`/`LogFile` (2026-09-14)
+
+Đồng bộ tên section/key logging với các mod khác trong repo (`AutoRegen`,
+`SomeTweaks`, `PassiveRunes`, `RiseArcher`) - `[Logging]`/`LogFile` giờ là
+quy ước chung cho toàn bộ mod trong workspace này. Không đổi hành vi: key
+này vẫn gate việc **có tạo file log hay không** (khác `AutoRegen`/
+`SomeTweaks` - `RuneMultiplier.log` chỉ được tạo khi bật, xem `lib.rs`), chỉ
+đổi tên. `config::migrate()` tự đẩy `DebugLog` cũ vào `[Legacy]` ở lần chạy
+đầu sau khi cập nhật DLL.

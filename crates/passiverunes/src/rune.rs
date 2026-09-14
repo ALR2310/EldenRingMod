@@ -210,7 +210,7 @@ pub fn run(ini_path: String) {
                     if !add_runes(milestone.bonus) {
                         break;
                     }
-                    if config::get_bool("RuneLog", false) {
+                    if config::get_bool("LogFile", false) {
                         logger::log(&format!(
                             "Milestone bonus +{} at {}s",
                             milestone.bonus,
@@ -235,7 +235,7 @@ pub fn run(ini_path: String) {
             interval_elapsed_ms = 0.0;
 
             let amount = config::get_int("Rune.Passive.Amount", 100).max(0) as u32;
-            if amount > 0 && add_runes(amount) && config::get_bool("RuneLog", false) {
+            if amount > 0 && add_runes(amount) && config::get_bool("LogFile", false) {
                 logger::log(&format!(
                     "+{amount} runes (interval tick, session {:.0}s)",
                     session_elapsed_ms / 1000.0

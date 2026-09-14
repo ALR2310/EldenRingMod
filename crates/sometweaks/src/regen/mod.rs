@@ -85,9 +85,9 @@ pub fn is_last_attack_skill() -> bool {
     LAST_ATTACK_WAS_SKILL.load(Ordering::Relaxed)
 }
 
-/// Splits a `Regen.PerTick.Unit`-tagged ini value into the `(flat_amount,
-/// percent_fraction)` pair [apply_heal] expects: `Unit=0` treats `value` as
-/// flat points, `Unit=1` as a percent of max (divided by 100 into a
+/// Splits a `Regen.PerTick.ValueType`-tagged ini value into the `(flat_amount,
+/// percent_fraction)` pair [apply_heal] expects: `ValueType=0` treats `value` as
+/// flat points, `ValueType=1` as a percent of max (divided by 100 into a
 /// fraction). Only one of the pair is ever non-zero, since the ini has a
 /// single field per stat rather than separate flat/percent keys.
 fn split_by_unit(unit: i32, value: f64) -> (i32, f64) {
@@ -170,7 +170,7 @@ pub fn run() {
         "Regen",
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
-            // Writes out any DebugLog lines hit_hook queued instead of
+            // Writes out any LogFile lines hit_hook queued instead of
             // writing directly - see hit_hook::flush_pending_logs. Always
             // runs, every frame, regardless of what else below is enabled.
             hit_hook::flush_pending_logs();
@@ -197,7 +197,7 @@ pub fn run() {
             // without reinstalling the hook.
             let on_hit_params = hit_hook::OnHitParams {
                 enabled: config::get_bool("Regen.PerHit.Enabled", false),
-                trigger: config::get_int("Regen.PerHit.Trigger", 0),
+                trigger: config::get_int("Regen.PerHit.Mode", 0),
                 damage_type: config::get_int("Regen.PerHit.DamageType", 0),
                 exclude_aow: config::get_bool("Regen.PerHit.ExcludeAow", false),
                 hp: config::get_double("Regen.PerHit.HP", 0.0),
@@ -238,10 +238,10 @@ pub fn run() {
                 return;
             }
 
-            // Regen.PerTick.Unit picks what the HP/FP/SP values below
+            // Regen.PerTick.ValueType picks what the HP/FP/SP values below
             // mean: 0 = flat points, 1 = percent of max stat (divided by 100
             // to get the fraction restored per tick).
-            let unit = config::get_int("Regen.PerTick.Unit", 0);
+            let unit = config::get_int("Regen.PerTick.ValueType", 0);
             let hp_value = config::get_double("Regen.PerTick.HP", 0.0);
             let fp_value = config::get_double("Regen.PerTick.FP", 0.0);
             let stamina_value = config::get_double("Regen.PerTick.SP", 0.0);

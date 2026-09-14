@@ -50,7 +50,7 @@ fn queue_log(message: String) {
     }
 }
 
-/// Writes out any DebugLog lines queued by the hook instead of writing
+/// Writes out any LogFile lines queued by the hook instead of writing
 /// directly - synchronous file I/O (`Mutex<File>` + `writeln!`, see
 /// `common::logger`) on the hot hit-resolution path risks disrupting a
 /// backstab's tightly-timed critical-hit sequence (suspected + fixed in
@@ -297,7 +297,7 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
         return;
     }
 
-    if config::get_bool("DebugLog", false) {
+    if config::get_bool("LogFile", false) {
         if let Some(damage) = read_damage(hit_info) {
             let source_type = read_source_type(hit_info);
             queue_log(format!("HitHook: player dealt {damage} damage (sourceType={source_type})."));
@@ -350,7 +350,7 @@ fn apply_on_hit_heal(hit_info: *const c_void) {
             source = "hit landed".to_string();
         }
     }
-    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("DebugLog", false) {
+    if (hp_healed <= 0 && fp_healed <= 0 && stamina_healed <= 0) || !config::get_bool("LogFile", false) {
         return;
     }
     queue_log(format!(

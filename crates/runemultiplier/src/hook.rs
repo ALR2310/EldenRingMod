@@ -301,7 +301,7 @@ where
 pub fn run(ini_path: String, dir: String) {
     init_multiplier();
 
-    let debug_log = config::get_bool("DebugLog", false);
+    let debug_log = config::get_bool("LogFile", false);
     if !install(debug_log) {
         logger::log("RuneMultiplier disabled for this session (hook install failed).");
         return;
@@ -319,7 +319,7 @@ pub fn run(ini_path: String, dir: String) {
             let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
-                if config::get_bool("DebugLog", false) {
+                if config::get_bool("LogFile", false) {
                     logger::init(&dir, "RuneMultiplier.log"); // no-op if already initialized; starts logging if just turned on
                 }
                 init_multiplier();

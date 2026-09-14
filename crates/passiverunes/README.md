@@ -162,3 +162,13 @@ hook hay logic patch code nào cả - đúng loại việc crate `eldenring`
 - Không có ASM/AOB hook nào trong toàn bộ mod này (khác `SpiritSummonMultiplier`
   cần patch code, hay `AutoRegen`/`AttackHook`) - nên **không có phần nào
   bị mất đi** khi đổi ngôn ngữ, thuần lợi.
+
+## Đổi `[Debug]`/`RuneLog` thành `[Logging]`/`LogFile` (2026-09-14)
+
+Đồng bộ tên section/key logging với các mod khác trong repo (`AutoRegen`,
+`SomeTweaks`, `RuneMultiplier`, `RiseArcher`) - `[Logging]`/`LogFile` giờ là
+quy ước chung cho toàn bộ mod trong workspace này, không riêng gì mod nào.
+Không đổi hành vi: vẫn chỉ gate log chi tiết (milestone/tick bonus), file log
+`PassiveRunes.log` tự nó luôn được tạo bất kể key này (xem `lib.rs`).
+`config::migrate()` tự đẩy `RuneLog` cũ vào `[Legacy]` ở lần chạy đầu sau khi
+cập nhật DLL.
