@@ -25,8 +25,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\PassiveRunes.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // The log is always on (overwritten every run) so Debug.RuneLog has
-        // something to write to even when it's off by default - same
+        // The log is always on (overwritten every run) so [Logging] LogFile
+        // has something to write to even when it's off by default - same
         // convention as SomeTweaks.
         logger::init(&dir, "PassiveRunes.log");
         logger::install_panic_hook();

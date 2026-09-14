@@ -208,7 +208,7 @@ pub fn run() {
             elapsed_ms = 0.0;
 
             let rebuilt = apply(&mode);
-            if rebuilt > 0 && config::get_bool("DebugLog", false) {
+            if rebuilt > 0 && config::get_bool("LogFile", false) {
                 logger::log(&format!("Spirit.Summon: rebuilt {rebuilt} chain(s)."));
             }
         },

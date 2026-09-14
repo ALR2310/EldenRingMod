@@ -13,3 +13,4 @@ common = { path = "../../shared" }
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
 chrono.workspace = true
+vtable-rs.workspace = true
