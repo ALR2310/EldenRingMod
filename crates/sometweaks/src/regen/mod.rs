@@ -207,7 +207,7 @@ pub fn run() {
             let chr_resolved = crate::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
-                attack_hook_installed = hit_hook::install(on_hit_params);
+                attack_hook_installed = hit_hook::try_install(on_hit_params);
             } else if attack_hook_installed {
                 hit_hook::update_params(on_hit_params);
             }
