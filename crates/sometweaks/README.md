@@ -2331,3 +2331,27 @@ player;` khỏi `lib.rs`, đổi `regen/mod.rs` gọi thẳng
 `.l1`/`.l2` (bỏ qua `.new_gesture`/`.requested_gesture`/`.busy`, `sometweaks`
 không cần). Crate này giờ không còn file `player.rs` nào nữa. Không đổi
 hành vi - build + release build xác nhận.
+
+## Fix race condition: `wait_for_solo_param_repository` bỏ cuộc sau 5 phút chờ vào world (2026-09-17)
+
+Phát hiện khi test `DropMultiplier` (mod port từ chính `drop_rate` của
+crate này, xem README của nó cùng ngày): `common::player::
+wait_for_solo_param_repository` (khi đó còn nhận `timeout`) hard-code chờ
+tối đa 300s rồi bỏ cuộc - nếu người chơi mở game xong bận việc khác >5 phút
+mới thật sự vào world, mọi tính năng đợi `SoloParamRepository` trong crate
+này (`drop_rate`, `misc::unlock_ashes_of_war`, `misc::unlock_enchantments`,
+`grace_menu::unlock_shop` - cả 4 chỗ đều gọi cùng hàm này với cùng
+`Duration::from_secs(300)`) sẽ bị tắt cho session đó, chỉ phục hồi được nếu
+biết tự bấm `ReloadKey` (và chỉ `drop_rate`/`unlock_shop` có hotkey watch để
+phục hồi được - `unlock_ashes_of_war`/`unlock_enchantments` không hot-reload
+nên tắt luôn, không có đường quay lại).
+
+Sửa tại hàm dùng chung: bỏ hẳn tham số `timeout`, chờ **vô hạn** (giống
+`common::task::wait_for_cs_task` không bao giờ bỏ cuộc), chỉ log nhắc nhở
+mỗi 30s thay vì 1 dòng `ERROR` rồi im lặng mãi. Cả 4 call site trong crate
+này đổi từ `match .../let Some(repo) = ... else { ... return/log lỗi }`
+thành gọi thẳng `let repo = common::player::wait_for_solo_param_repository();`
+- không còn nhánh lỗi nào để viết nữa, vì hàm giờ không bao giờ trả về
+"thất bại". Build + release build xác nhận không đổi hành vi khi vào world
+bình thường (dưới 5 phút vẫn hoạt động y hệt, chỉ khác là không còn giới
+hạn thời gian chờ).

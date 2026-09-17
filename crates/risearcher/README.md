@@ -261,3 +261,19 @@ chiếu không tiền tố `task::`/`player::`/`reload::` trong `lib.rs`) thành
 `common::task::`/`common::player::`/`common::reload::`. Không đổi hành vi -
 build + release build (`build-mod.ps1 -Mod RiseArcher`) xác nhận giống hệt
 trước migrate.
+
+## Fix race condition: bỏ cuộc vĩnh viễn nếu chưa vào world trong 5 phút (2026-09-17)
+
+Phát hiện khi test `DropMultiplier` (xem README `sometweaks`/`dropmultiplier`
+cùng ngày, cùng lỗi): `run()` gọi `wait_for_solo_param_repository(Duration::
+from_secs(300))`, hết 300s không thấy player vào world thì `return` luôn -
+**không chỉ bỏ qua việc áp buff 1 lần**, mà bỏ luôn cả phần đăng ký
+`common::task::run_recurring_safe` theo dõi `ReloadKey` phía sau - tức là
+RiseArcher **tắt vĩnh viễn cho session đó, không có cách nào phục hồi**
+kể cả tự bấm F5 (khác `drop_rate`/`grace_menu::unlock_shop` bên
+`sometweaks`, 2 cái đó vẫn đăng ký reload watch dù lần chờ đầu thất bại).
+
+`common::player::wait_for_solo_param_repository` giờ bỏ hẳn tham số
+`timeout`, chờ vô hạn (không bao giờ bỏ cuộc, giống
+`common::task::wait_for_cs_task`) - `run()` đổi thành gọi thẳng không cần
+nhánh `else { return }` nào nữa. Build + release build xác nhận.

@@ -42,3 +42,24 @@ Không đổi: toàn bộ thuật toán `scale_row`/công thức `ChancePercent`
 snapshot `ORIGINAL_BASE_POINTS` để hot-reload không cộng dồn, cách gate
 `SoloParamRepository`/`WorldChrMan.main_player` trước khi đọc param - xem
 comment đầu `src/drop_rate.rs` cho chi tiết đầy đủ (giữ nguyên từ bản gốc).
+
+## Bỏ prefix "DropMultiplier:" trong log, bỏ timeout 5 phút chờ vào world (2026-09-17)
+
+Test thật trong game phát hiện 2 việc:
+
+- **Log dư thừa**: mọi dòng log đều tự thêm `"DropMultiplier: "` ở đầu - vô
+  nghĩa với 1 mod đơn tính năng (log file của chính nó đã là
+  `DropMultiplier.log` rồi, không như `sometweaks` gộp nhiều tính năng
+  chung 1 log cần tiền tố để phân biệt). Bỏ hết tiền tố này.
+- **Race condition thật, tái hiện được**: `wait_for_solo_param_repository`
+  (khi đó còn nhận `timeout`) hard-code chờ tối đa 300s (5 phút) rồi bỏ
+  cuộc, log `ERROR ... disabled for this session` - nếu người chơi mở game
+  xong bận việc khác >5 phút mới thật sự vào world, tính năng chỉnh tỉ lệ
+  rớt đồ **không tự áp dụng**, chỉ phục hồi được nếu người dùng tự bấm
+  `ReloadKey` (và biết là cần bấm). Sửa tại **hàm dùng chung**
+  `common::player::wait_for_solo_param_repository` (không riêng gì
+  `DropMultiplier` - `sometweaks`/`risearcher` cũng dính đúng lỗi này, xem
+  README của chúng cùng ngày): bỏ hẳn tham số `timeout`, chờ **vô hạn**
+  (giống `common::task::wait_for_cs_task` không bao giờ bỏ cuộc), chỉ log
+  nhắc nhở mỗi 30s (không phải warning - chờ vài phút để chọn save/load vào
+  world là bình thường, khác với `CSTaskImp` chậm bất thường).

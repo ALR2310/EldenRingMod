@@ -90,24 +90,43 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
         .map(|p| &p.chr_ins as *const _ as *const u8)
 }
 
-/// Waits (up to `timeout`) for `SoloParamRepository` - the live in-memory
-/// regulation.bin - AND for the player to actually be in the game world
-/// before returning. `SoloParamRepository::instance_mut()` alone can return
-/// `Ok` as soon as the manager object exists (title/loading screen, well
-/// before its param tables are actually populated) - same
-/// premature-ready-singleton class [main_player_chr_ins_ptr] itself exists
-/// to guard against.
-pub fn wait_for_solo_param_repository(timeout: Duration) -> Option<&'static mut SoloParamRepository> {
+// How often to log a reminder while still waiting for the player - not a
+// warning (taking a few minutes to pick a save and load in is completely
+// normal, unlike a slow CSTaskImp init), just a "still here, still trying"
+// breadcrumb so a long wait doesn't look like the thread died.
+const REMINDER_EVERY: Duration = Duration::from_secs(30);
+
+/// Waits - forever, never gives up, like [`crate::task::wait_for_cs_task`] -
+/// for `SoloParamRepository` (the live in-memory regulation.bin) AND for the
+/// player to actually be in the game world before returning.
+/// `SoloParamRepository::instance_mut()` alone can return `Ok` as soon as the
+/// manager object exists (title/loading screen, well before its param
+/// tables are actually populated) - same premature-ready-singleton class
+/// [main_player_chr_ins_ptr] itself exists to guard against.
+///
+/// Used to take a `timeout` and return `Option` (2026-08-24 through
+/// 2026-09-17) - every caller passed the same `Duration::from_secs(300)` and
+/// treated a timeout as "disabled for this session" (some, like
+/// `risearcher`, didn't even keep the reload-watch task running past that
+/// point). In practice this just meant a player who alt-tabbed or was slow
+/// to pick a save lost the feature for the rest of the session, silently
+/// (only a log line, easy to miss) unless they knew to press `ReloadKey`
+/// afterward. There's no real reason to ever give up here - unlike a
+/// version-locked lookup, this is purely "hasn't happened yet", so it's
+/// changed to retry forever, the same way `wait_for_cs_task` already did.
+pub fn wait_for_solo_param_repository() -> &'static mut SoloParamRepository {
     let step = Duration::from_millis(200);
     let mut waited = Duration::ZERO;
+    let mut last_reminder = Duration::ZERO;
     loop {
         if main_player_chr_ins_ptr().is_some() {
             if let Ok(repo) = unsafe { SoloParamRepository::instance_mut() } {
-                return Some(repo);
+                return repo;
             }
         }
-        if waited >= timeout {
-            return None;
+        if waited - last_reminder >= REMINDER_EVERY {
+            last_reminder = waited;
+            crate::logger::log("Still waiting for the player to be in the game world (SoloParamRepository)...");
         }
         std::thread::sleep(step);
         waited += step;
