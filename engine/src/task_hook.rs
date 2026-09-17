@@ -1,15 +1,14 @@
-//! Registers AutoRegen's per-frame regen tick without touching
-//! `fromsoftware-rs`'s version-gated `eldenring::rva::get()`.
+//! Registers a per-frame task without touching `fromsoftware-rs`'s
+//! version-gated `eldenring::rva::get()`.
 //!
-//! `fromsoftware_shared::task::SharedTaskImpExt::run_recurring` (what
-//! `regen.rs` used before) resolves the game's real task-registration
-//! function through a per-game-version RVA table (`rva::get().register_task`)
-//! - that table only ever contains the ONE exact version string the crate
-//! was last published for, and panics hard on any other (see AutoRegen's
-//! README, "AOB thay `rva::get()` cho tick đăng ký" for the full story of why
-//! this exists: testing the mod against a newer game patch than the pinned
-//! `fromsoftware-rs` release panicked immediately at startup instead of just
-//! this one feature failing).
+//! `fromsoftware_shared::task::SharedTaskImpExt::run_recurring` resolves the
+//! game's real task-registration function through a per-game-version RVA
+//! table (`rva::get().register_task`) - that table only ever contains the ONE
+//! exact version string the crate was last published for, and panics hard on
+//! any other (see AutoRegen's README, "AOB thay `rva::get()` cho tick đăng
+//! ký" for the full story of why this exists: testing a mod against a newer
+//! game patch than the pinned `fromsoftware-rs` release panicked immediately
+//! at startup instead of just this one feature failing).
 //!
 //! Verified (2026-09-09) that the actual game function `register_task`
 //! resolves to is byte-identical, aside from its `call`/`lea` rip-relative
@@ -17,8 +16,8 @@
 //! (`eldenring` 0.14.0's RVA 0xeb1fe0) and a 1.17.0 exe (`fromsoftware-rs`
 //! commit `acb2a19`'s RVA 0xeb3de0) - a byte pattern anchored on everything
 //! BUT those operands is unique in `.text` on both. Scanning for that
-//! pattern with `common::memscan` (same technique as `attack_hook`'s hit
-//! hook) finds the function regardless of which exact version shifted it,
+//! pattern with `common::memscan` (same technique as AutoRegen's `hit_hook`)
+//! finds the function regardless of which exact version shifted it,
 //! sidestepping `rva::get()`'s hard version gate entirely for this one call
 //! site.
 //!
@@ -65,14 +64,14 @@ struct Task {
 impl TaskVmt for Task {
     // Both left `unimplemented!()` (panicking) until 2026-09-12 - suspected
     // (not yet confirmed reproduced) cause of a stutter reported after
-    // 2.5.0's release: if `CSTaskImp` ever calls either of these directly
-    // (e.g. a periodic task-list maintenance/enumeration pass) - as opposed
-    // to `execute`, which only ever runs through `run_recurring_safe`'s own
-    // `catch_unwind` in `regen.rs` - the panic would unwind straight into
-    // the game's own (non-Rust) call frames with no landing pad, which is
-    // undefined behavior. Neither is safety-critical for a task that's
-    // never actually inspected or torn down (`Box::leak`'d, lives for the
-    // DLL's lifetime), so both are now harmless no-ops instead.
+    // AutoRegen 2.5.0's release: if `CSTaskImp` ever calls either of these
+    // directly (e.g. a periodic task-list maintenance/enumeration pass) - as
+    // opposed to `execute`, which only ever runs through a caller's own
+    // `catch_unwind` (see `task::run_recurring_safe`) - the panic would
+    // unwind straight into the game's own (non-Rust) call frames with no
+    // landing pad, which is undefined behavior. Neither is safety-critical
+    // for a task that's never actually inspected or torn down (`Box::leak`'d,
+    // lives for the DLL's lifetime), so both are now harmless no-ops instead.
     extern "C" fn get_runtime_class(&self) -> usize {
         0
     }
@@ -91,10 +90,10 @@ impl TaskVmt for Task {
 /// should treat that the same as any other AOB-based feature failing to find
 /// its anchor.
 ///
-/// The registered task is never unregistered, same as this workspace's
-/// actual usage today (`regen::run` parks its thread forever and never drops
-/// the handle `run_recurring` used to return) - it lives for the DLL's
-/// lifetime, so leaking its allocation here changes nothing observable.
+/// The registered task is never unregistered - it's meant for features that
+/// park their thread forever and never drop a handle - it lives for the
+/// DLL's lifetime, so leaking its allocation here changes nothing
+/// observable.
 pub fn run_recurring<F>(cs_task: &'static CSTaskImp, group: CSTaskGroupIndex, closure: F) -> bool
 where
     F: FnMut(&FD4TaskData) + 'static + Send,
@@ -104,9 +103,7 @@ where
         Duration::from_millis(500),
         Duration::from_secs(60),
     ) else {
-        logger::error(
-            "Could not locate the game's task-registration function (AOB pattern not found) - Regen tick NOT installed.",
-        );
+        logger::error("Could not locate the game's task-registration function (AOB pattern not found) - task NOT installed.");
         return false;
     };
     logger::log("register_task AOB found.");

@@ -20,14 +20,12 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use eldenring::cs::{AnnounceNotification, CSMenuManImp, CSTaskGroupIndex, CSTaskImp, MenuString, WorldChrMan};
+use eldenring::cs::{AnnounceNotification, CSMenuManImp, CSTaskGroupIndex, MenuString, WorldChrMan};
 use eldenring::dltx::DLString;
 use eldenring::util::input;
 use fromsoftware_shared::FromStatic;
 
-use crate::alloc_hook;
 use crate::hit_hook;
-use crate::task_hook;
 use common::config;
 use common::input::parse_virtual_key;
 use common::logger;
@@ -192,7 +190,7 @@ fn show_announcement(text: &str) {
     let Ok(menu_man) = (unsafe { CSMenuManImp::instance_mut() }) else {
         return;
     };
-    let Some(allocator) = alloc_hook::runtime_heap_allocator() else {
+    let Some(allocator) = engine::alloc_hook::runtime_heap_allocator() else {
         return;
     };
     let Ok(allocated_string) = DLString::from_str(text, allocator) else {
@@ -205,17 +203,6 @@ fn show_announcement(text: &str) {
             allocated_string,
         },
     });
-}
-
-/// Returns the main player's `ChrIns` address, used by `attack_hook` to
-/// confirm a hit's attacker/target is the player themselves. `None` if not
-/// resolved yet (title screen, loading, ...).
-pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
-    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
-    world_chr_man
-        .main_player
-        .as_ref()
-        .map(|p| &p.chr_ins as *const _ as *const u8)
 }
 
 /// The pad-input bits read each frame to decide `LAST_ATTACK_WAS_SKILL`,
@@ -416,85 +403,25 @@ pub fn is_last_attack_skill() -> bool {
     LAST_ATTACK_WAS_SKILL.load(Ordering::Relaxed)
 }
 
-/// Waits for `CSTaskImp`'s singleton to become available, polling
-/// `FromStatic::instance` directly instead of going through
-/// `CSTaskImp::wait_for_instance` (which internally calls
-/// `eldenring::util::system::wait_for_system_init`, itself hard-locked to
-/// whichever single game version `fromsoftware-rs` was last published for -
-/// see AutoRegen's README, "AOB thay `rva::get()`"). `CSTaskImp` is looked
-/// up by name through the engine's own Dantelion2 reflection data (the
-/// `#[shared::singleton("CSTask")]` on its definition), which - unlike that
-/// RVA table - isn't tied to any particular game version at all, so this
-/// loop survives any future game patch on its own.
-// Reported in the wild (Nexus comments, 2026-09-08, before this AOB-based
-// lookup existed): the old RVA-gated `CSTaskImp::wait_for_instance` retried
-// silently *inside* `fromsoftware-rs` itself with zero logging, so a version
-// mismatch just left "Activating AutoRegen..." as the log's last line
-// forever - no indication anything was even still trying, let alone why it
-// wasn't working. This loop already fixed the "silent" half by logging every
-// attempt itself - `WARN_AFTER` below fixes the other half: even visible
-// retries look identical forever if this genuinely never succeeds (a truly
-// incompatible future game version), so after this long a clear, actionable
-// one-shot message replaces the wall of identical lines.
-const WARN_AFTER: Duration = Duration::from_secs(15);
-
-fn wait_for_cs_task() -> &'static CSTaskImp {
-    let start = Instant::now();
-    let mut warned = false;
-    loop {
-        match unsafe { CSTaskImp::instance() } {
-            Ok(instance) => {
-                logger::log("CSTaskImp found.");
-                return instance;
-            }
-            Err(err) => {
-                if !warned && start.elapsed() >= WARN_AFTER {
-                    warned = true;
-                    logger::error(&format!(
-                        "CSTaskImp not found after {}s ({err:?}) - game may need a mod update, check Nexus.",
-                        WARN_AFTER.as_secs()
-                    ));
-                } else {
-                    logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 500ms..."));
-                }
-                std::thread::sleep(Duration::from_millis(500));
-            }
-        }
-    }
-}
-
-/// Registers `f` as a recurring task the same way `cs_task.run_recurring`
-/// does, but catches any panic `f` raises for a given frame instead of
-/// letting it unwind into the game's own call stack - `f` just gets
-/// skipped for that one frame (logged), which is harmless here (no state
-/// this tick keeps is unsafe to leave stale for a single frame). Ported
-/// from `.docs/UltimatePassiveRegeneration` via `sometweaks::task`
-/// (2026-08-26). Requires `[profile.release]`'s `panic = "abort"` to be
-/// off (see workspace `Cargo.toml`) - `catch_unwind` cannot catch
-/// anything once a panic aborts the process outright.
-fn run_recurring_safe<F>(cs_task: &'static CSTaskImp, group: CSTaskGroupIndex, mut f: F)
-where
-    F: FnMut(&eldenring::fd4::FD4TaskData) + 'static + Send,
-{
-    task_hook::run_recurring(cs_task, group, move |data: &eldenring::fd4::FD4TaskData| {
-        if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
-            logger::log("Regen tick panicked, skipped this frame.");
-        }
-    });
-}
-
 /// Registers the Regen.* tick as a recurring task on the game's own
 /// `FrameBegin` task group and blocks the calling thread forever watching for
 /// `General.ReloadKey`. Meant to run on its own worker thread spawned from
 /// `DllMain`; never returns.
+///
+/// `CSTaskImp` acquisition and the panic-safe wrapper both come from the
+/// shared `engine` crate now (2026-09-14) - see its `task` module doc
+/// comment for why this no longer needs its own copy of either (this crate
+/// is where both were originally written, before being extracted once a
+/// second/third mod needed the exact same thing).
 pub fn run(ini_path: String) {
-    let cs_task = wait_for_cs_task();
+    let cs_task = engine::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
-    run_recurring_safe(
+    engine::task::run_recurring_safe(
         cs_task,
+        "Regen",
         CSTaskGroupIndex::FrameBegin,
         move |data: &eldenring::fd4::FD4TaskData| {
             // Writes out any LogFile lines the hit hook queued instead of
@@ -542,7 +469,7 @@ pub fn run(ini_path: String) {
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
                 stamina: config::get_double("Regen.PerHit.SP", 0.0),
             };
-            let chr_resolved = main_player_chr_ins_ptr().is_some();
+            let chr_resolved = engine::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
                 attack_hook_installed = hit_hook::try_install(on_hit_params);

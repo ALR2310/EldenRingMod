@@ -618,6 +618,58 @@ xem `lib.rs`.
 vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL - cần tự copy giá trị đã
 tùy chỉnh sang `[Logging] LogFile` mới trong `AutoRegen.ini`.
 
+## Tách `task_hook.rs`/`alloc_hook.rs`/`wait_for_cs_task`/`run_recurring_safe` ra crate `engine` (2026-09-14)
+
+Xóa hẳn `src/task_hook.rs`/`src/alloc_hook.rs` khỏi crate này, cùng
+`wait_for_cs_task`/`run_recurring_safe` nội bộ trong `regen.rs` và
+`main_player_chr_ins_ptr` - chuyển nguyên bản (không đổi logic/AOB pattern)
+sang crate share mới **[`engine`](../../engine)** ở gốc workspace, ngang
+hàng với [`shared`](../../shared) (`common`). Lý do: lúc port tính năng
+`Drop Rate` của [`sometweaks`](../sometweaks) ra mod riêng
+([`DropMultiplier`](../dropmultiplier), cùng ngày), nhận ra bộ 4 thứ này
+(vốn chỉ ở `autoregen`, viết ra để giải quyết đúng vấn đề `rva::get()`
+version-lock - xem mục "AOB thay `rva::get()`..." phía trên) sắp phải copy
+lần thứ 2 (`DropMultiplier`) trong khi `sometweaks`/`risearcher` cũng đang
+tự mang 2 bản `task.rs`/`player.rs`/`reload.rs` gần như y hệt nhau (chỉ khác
+là bản của họ **chưa** có cải tiến AOB, vẫn còn dính `rva::get()`) - tách ra
+1 lần trước khi nhân bản thêm, thay vì tiếp tục copy-paste mỗi lần 1 mod mới
+cần.
+
+`engine` khác `common`: `common` **cố tình** không phụ thuộc
+`eldenring`/`fromsoftware-shared` (xem comment đầu `Cargo.toml` của nó -
+plumbing tổng quát, có thể tái dùng cho mod ở game khác); `engine` thì
+ngược lại, tồn tại **chính vì** cần phụ thuộc 2 crate đó để nói chuyện với
+struct/singleton thật của game, chỉ tách khỏi từng mod chứ không tách khỏi
+`eldenring`. Nội dung crate mới (4 module, xem doc comment `engine/src/lib.rs`):
+
+- `task_hook`/`alloc_hook`: y hệt bản cũ của `autoregen`, không đổi 1 dòng
+  AOB pattern nào.
+- `task`: gộp `wait_for_cs_task()` (bản mới nhất của `autoregen`, tra
+  `CSTaskImp::instance()` theo tên, không qua `wait_for_instance()`/RVA) với
+  chữ ký `run_recurring_safe(cs_task, tag, group, f)` có tham số `tag` từ
+  `sometweaks`/`risearcher`'s `task.rs` (bản `autoregen` cũ không có `tag`,
+  chỉ dùng cho 1 tính năng duy nhất nên không cần) - **quan trọng**: đây là
+  bản `wait_for_cs_task` **mới hơn, an toàn hơn** bản `sometweaks`/
+  `risearcher` đang dùng (bản đó vẫn gọi `wait_for_system_init_until_ready`
+  + `CSTaskImp::wait_for_instance` retry `InvalidRva` - còn dính `rva::get()`
+  1 lớp sâu hơn), nên 2 mod đó khi migrate sang `engine` sau này sẽ tự động
+  được nâng cấp luôn, không chỉ gọn code.
+- `player`: `main_player_chr_ins_ptr`/`wait_for_solo_param_repository` -
+  giữ nguyên từ `sometweaks::player`/`risearcher::player` (giống hệt nhau ở
+  cả 2 nơi), bỏ `NewActionPresses`/`main_player_new_action_presses` (chi
+  tiết riêng của `Regen.PerHit.ExcludeAow`, không phải nhu cầu chung).
+- `reload`: watch `ReloadKey` + `RELOAD_GENERATION`, giữ nguyên từ
+  `sometweaks::reload`/`risearcher::reload`, chỉ đổi để dùng
+  `engine::task` nội bộ thay vì tự có bản riêng.
+
+`autoregen` (crate này) migrate xong, dùng thẳng `engine::task_hook`/
+`engine::alloc_hook`/`engine::task::{wait_for_cs_task, run_recurring_safe}`/
+`engine::player::main_player_chr_ins_ptr` - build lại xác nhận không đổi
+hành vi. **`sometweaks`/`risearcher` chưa migrate** (vẫn giữ bản `task.rs`/
+`player.rs`/`reload.rs` riêng, cũ hơn) - để dành làm sau, không bắt buộc
+ngay; `DropMultiplier` (mod mới) dùng thẳng `engine` ngay từ đầu, không tự
+viết bản riêng nào.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,

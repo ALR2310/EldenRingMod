@@ -273,7 +273,7 @@ fn read_target(ctx: *const c_void) -> Option<*const c_void> {
 }
 
 fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_void) {
-    let Some(player_ptr) = regen::main_player_chr_ins_ptr() else {
+    let Some(player_ptr) = engine::player::main_player_chr_ins_ptr() else {
         return;
     };
 

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverunes", "crates/runemultiplier", "crates/weightmultiplier", "crates/risearcher"]
+members = ["shared", "engine", "crates/autoregen", "crates/sometweaks", "crates/passiverunes", "crates/runemultiplier", "crates/weightmultiplier", "crates/risearcher", "crates/dropmultiplier"]
 
 [workspace.dependencies]
 # https://github.com/vswarte/fromsoftware-rs - safe Rust bindings to Elden Ring's

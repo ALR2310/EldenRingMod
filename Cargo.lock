@@ -30,8 +30,8 @@ dependencies = [
  "chrono",
  "common",
  "eldenring",
+ "engine",
  "fromsoftware-shared",
- "vtable-rs",
 ]
 
 [[package]]
@@ -128,6 +128,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2ea6706d74fca54e15f1d40b5cf7fe7f764aaec61352a9fcec58fe27e042fc8"
 
 [[package]]
+name = "dropmultiplier"
+version = "1.0.0"
+dependencies = [
+ "common",
+ "eldenring",
+ "engine",
+ "fromsoftware-shared",
+]
+
+[[package]]
 name = "eldenring"
 version = "0.14.0"
 source = "git+https://github.com/vswarte/fromsoftware-rs?rev=16d266146bcc7e896ac0d9a2c020e0d4c07baf52#16d266146bcc7e896ac0d9a2c020e0d4c07baf52"
@@ -152,6 +162,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "engine"
+version = "1.0.0"
+dependencies = [
+ "common",
+ "eldenring",
+ "fromsoftware-shared",
+ "vtable-rs",
 ]
 
 [[package]]
