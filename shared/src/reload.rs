@@ -38,7 +38,9 @@ pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Watches `ReloadKey` on the game's own `FrameBegin` task group for the
 /// rest of the process's life, reloading `ini_path` into the shared config
-/// map and bumping [RELOAD_GENERATION] on every press. Meant to run on its
+/// map and bumping [RELOAD_GENERATION] on every press, plus showing a
+/// generic "Config reloaded" in-game banner (see [`crate::announce`]) so
+/// the reload is visible without checking the log file. Meant to run on its
 /// own worker thread spawned from `DllMain`; never returns.
 pub fn run(ini_path: String) {
     let cs_task = crate::task::wait_for_cs_task();
@@ -53,6 +55,7 @@ pub fn run(ini_path: String) {
                 config::load(&ini_path);
                 RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
                 logger::log("Reload: config reloaded (hotkey pressed).");
+                crate::announce::show_announcement("Config reloaded");
             }
         },
     );

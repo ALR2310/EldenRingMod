@@ -30,8 +30,12 @@
 //!   data is safe to read.
 //! - `reload`: watches a `ReloadKey` ini hotkey and reloads config,
 //!   independent of any feature module.
+//! - `announce`: shows text in the game's own top-of-screen system
+//!   announcement banner (e.g. "config reloaded"), for in-game confirmation
+//!   without needing to check a log file.
 
 pub mod alloc_hook;
+pub mod announce;
 pub mod codepatch;
 pub mod config;
 pub mod input;

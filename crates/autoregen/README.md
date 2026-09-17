@@ -1015,7 +1015,22 @@ rồi chỉ dùng `.r1`/`.r2`/`.l1`/`.l2` (bỏ qua `.new_gesture`/
 mod - build + release build (`build-mod.ps1`) xác nhận cho cả `AutoRegen`
 lẫn `SomeTweaks`.
 
-## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
+## Chuyển `show_announcement` sang `common::announce`, thêm banner cho `common::reload` (2026-09-17)
+
+Xóa hẳn `show_announcement` nội bộ trong `regen.rs` (từng thêm ngày
+2026-09-10, mục "Thông báo trong game khi bấm `ReloadKey`") - chuyển
+nguyên bản (không đổi logic) sang `common::announce::show_announcement`.
+Lý do: `dropmultiplier` muốn có banner xác nhận reload y hệt `AutoRegen`
+nhưng chưa có cách nào dùng lại, vì hàm này trước đó chỉ là hàm riêng
+(`fn`, không `pub`) trong `regen.rs`.
+
+`AutoRegen` tự gọi `common::announce::show_announcement("AutoRegen: config
+reloaded")` tại đúng chỗ cũ (tick loop của nó tự đọc `ReloadKey` riêng,
+không qua `common::reload::run()`) - không đổi hành vi. Nhân tiện thêm
+banner **"Config reloaded"** (chung, không ghi tên mod) vào chính
+`common::reload::run()` - watcher `ReloadKey` dùng chung mà
+`dropmultiplier`/`sometweaks`/`risearcher` đều gọi - nên cả 3 mod đó giờ
+cũng tự động có banner reload, không cần tự thêm gì riêng.
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
 tên project gốc là "AshesEverywhere" theo PDB path còn sót lại trong file).
