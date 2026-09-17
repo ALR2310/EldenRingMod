@@ -17,6 +17,69 @@ use std::time::Duration;
 use eldenring::cs::{SoloParamRepository, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
+/// The pad-input bits read each frame off the main player's own
+/// `CSChrActionRequestModule` - shared by every feature that needs to
+/// classify player input (e.g. "was that hit a plain attack or an Ash of
+/// War/Skill?", "is the player idle?", "did they just start a gesture?").
+///
+/// `r1`/`r2`/`l1`/`l2`/`new_gesture` come from `new_action_presses` (fires
+/// exactly 1 frame, on the press) - confirmed in-game (2026-09-03) to
+/// correlate with Ash of War/Skill hits far more reliably than any
+/// `AtkParam` field does (see AutoRegen's README). `requested_gesture` is a
+/// plain value (not a bit), only meaningful the same frame `new_gesture` is
+/// set. `busy` covers every other way the player can be "not idle" - held
+/// (not just newly-pressed) actions from `action_requests`, plus actual
+/// movement input - read from the same module so a caller checking idle
+/// state doesn't need yet another `WorldChrMan::instance()` call of its own.
+///
+/// Ported from `autoregen::regen`'s `ActionSnapshot` (2026-09-17) once
+/// `sometweaks::player`'s own narrower `NewActionPresses` (just `r1`/`r2`/
+/// `l1`/`l2`, for telling a Skill hit from a plain one) turned out to be a
+/// strict subset of the exact same fields, read off the exact same struct -
+/// callers that only need the 4 press bits can just ignore the rest.
+pub struct ActionSnapshot {
+    pub r1: bool,
+    pub r2: bool,
+    pub l1: bool,
+    pub l2: bool,
+    pub new_gesture: bool,
+    pub requested_gesture: i32,
+    pub busy: bool,
+}
+
+/// Reads this frame's action-input snapshot (see [ActionSnapshot]) off the
+/// main player's `CSChrActionRequestModule`. `None` if not resolved yet.
+pub fn main_player_action_snapshot() -> Option<ActionSnapshot> {
+    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
+    let main_player = world_chr_man.main_player.as_ref()?;
+    let action_request = &main_player.chr_ins.modules.action_request;
+    let new_presses = &action_request.new_action_presses;
+    let held = &action_request.action_requests;
+    let busy = action_request.movement_request_flags.raw_input()
+        || held.r1()
+        || held.r2()
+        || held.l1()
+        || held.l2()
+        || held.sp_move()
+        || held.jump()
+        || held.use_item()
+        || held.action()
+        || held.guard()
+        || held.rideon()
+        || held.rideoff()
+        || held.ladderup()
+        || held.ladderdown();
+    Some(ActionSnapshot {
+        r1: new_presses.r1(),
+        r2: new_presses.r2(),
+        l1: new_presses.l1(),
+        l2: new_presses.l2(),
+        new_gesture: new_presses.gesture(),
+        requested_gesture: action_request.requested_gesture,
+        busy,
+    })
+}
+
 /// Returns the main player's `ChrIns` address if currently resolved, `None`
 /// otherwise (title screen, loading, no save loaded, ...).
 pub fn main_player_chr_ins_ptr() -> Option<*const u8> {

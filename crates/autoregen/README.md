@@ -996,6 +996,25 @@ khi 1 trong 10 gesture ngồi active, y hệt trước):
   `Regen.PerTick:` đổi thành `gesture_active=`; log `Gesture: ... ->
   is_sitting=...` đổi thành `-> is_gesture_active=...`.
 
+## Gộp `ActionSnapshot` với `sometweaks::player::NewActionPresses` vào `common::player` (2026-09-17)
+
+Xóa hẳn struct `ActionSnapshot` + hàm `main_player_action_snapshot()` nội
+bộ trong `regen.rs`, chuyển nguyên bản sang `common::player` (đổi tên
+`common::player::ActionSnapshot`/`common::player::main_player_action_snapshot`).
+Lý do: nhận ra `sometweaks::player::NewActionPresses` (4 field `r1`/`r2`/
+`l1`/`l2`, dùng cho `Regen.PerHit.ExcludeAow`) chỉ là **tập con đúng y hệt**
+của `ActionSnapshot` (cùng tên field, cùng đọc từ đúng 1 struct
+`CSChrActionRequestModule` của game) - 2 mod đang tự đọc riêng cùng 1 dữ
+liệu cho 2 mục đích khác nhau (phân loại đòn Skill/thường ở `sometweaks`;
+idle/gesture detection ở `autoregen`), gộp làm 1 để không còn đọc trùng.
+
+`sometweaks::player.rs` sau khi gộp **không còn field/hàm nào riêng nữa** -
+xóa hẳn cả file, gọi thẳng `common::player::main_player_action_snapshot()`
+rồi chỉ dùng `.r1`/`.r2`/`.l1`/`.l2` (bỏ qua `.new_gesture`/
+`.requested_gesture`/`.busy` không cần). Không đổi hành vi gameplay ở cả 2
+mod - build + release build (`build-mod.ps1`) xác nhận cho cả `AutoRegen`
+lẫn `SomeTweaks`.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
