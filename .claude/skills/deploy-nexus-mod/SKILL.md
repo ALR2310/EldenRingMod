@@ -267,10 +267,16 @@ sửa code để "cho qua".
     Changelog riêng. `name` là **tên hiển thị** trên trang Nexus, không
     phải tên file thật (upload ở bước 9-10 đã tự mang tên file zip rồi) -
     lỗi thật đã gặp (2026-09-12): dùng `"<Mod>.zip"` khiến Nexus hiển thị
-    đuôi `.zip` thừa trong tên file trên trang mod, chỉ nên dùng `"<Mod>"`:
+    đuôi `.zip` thừa trong tên file trên trang mod, chỉ nên dùng `"<Mod>"`.
+
+    Luôn kèm `"primary_mod_manager_download": true` (field thật trong
+    `CreateModFileVersionRequest` của API - **không phải** `is_primary`,
+    field đó chỉ là thuộc tính đọc trong response `ModFileVersion`, không
+    gửi lên được) để tự động tick "set as primary file" ngay lúc tạo
+    version, không cần vào tay trang Nexus chỉnh lại sau khi publish:
     ```bash
     curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
-      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"description\": \"<changelog text, mỗi dòng 1 bullet trần (KHÔNG tự thêm dấu \\\"- \\\" ở đầu) - giống hệt nội dung gửi ở bước 13>\"}" \
+      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"<changelog text, mỗi dòng 1 bullet trần (KHÔNG tự thêm dấu \\\"- \\\" ở đầu) - giống hệt nội dung gửi ở bước 13>\"}" \
       "https://api.nexusmods.com/v3/mod-files/<mod_file_id>/versions"
     ```
 
@@ -300,10 +306,11 @@ sửa code để "cho qua".
     phải 1 thay đổi rủi ro riêng.
 
 15. Báo lại kết quả cho người dùng: version mới đã lên chưa (link mod
-    page), `manifest.json` đã cập nhật xong, và nhắc rằng **có thể vẫn cần
-    vào tay trang Nexus** để kiểm tra file mới có tự động là "primary
-    download" chưa hay cần tự đặt - skill không tự xác nhận được việc này
-    qua API.
+    page), `manifest.json` đã cập nhật xong. File vừa tạo đã tự động là
+    "primary download" nhờ `primary_mod_manager_download: true` gửi ở bước
+    12 - không cần vào tay trang Nexus chỉnh lại. Vẫn có thể khuyên người
+    dùng ghé qua trang mod xem lại 1 lượt cho chắc, nhưng không còn là bước
+    bắt buộc/nghi ngờ như trước.
 
 ## Ghi chú an toàn
 

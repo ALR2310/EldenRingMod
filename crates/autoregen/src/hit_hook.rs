@@ -170,7 +170,10 @@ fn get_source_object_type(source_object: *const c_void) -> i32 {
 // matching `attack_hook.rs`'s own offsets exactly.
 const HITINFO_DAMAGE_OFFSET: isize = 0x228;
 const HITINFO_SOURCE_OBJECT_OFFSET: isize = 0x1D8;
-const HITINFO_ATK_PARAM_ID_OFFSET: isize = 0x40;
+// Param ID of the attack, only needed by the commented-out per-hit debug
+// log in `apply_hit_heal` - uncomment together with `read_atk_id` below when
+// actively debugging it.
+// const HITINFO_ATK_PARAM_ID_OFFSET: isize = 0x40;
 
 fn read_damage(hit_info: *const c_void) -> Option<i32> {
     if !looks_like_pointer(hit_info) {
@@ -189,12 +192,12 @@ fn read_source_type(hit_info: *const c_void) -> i32 {
     }
 }
 
-fn read_atk_id(hit_info: *const c_void) -> Option<i32> {
-    if !looks_like_pointer(hit_info) {
-        return None;
-    }
-    unsafe { Some(*(hit_info.byte_offset(HITINFO_ATK_PARAM_ID_OFFSET) as *const i32)) }
-}
+// fn read_atk_id(hit_info: *const c_void) -> Option<i32> {
+//     if !looks_like_pointer(hit_info) {
+//         return None;
+//     }
+//     unsafe { Some(*(hit_info.byte_offset(HITINFO_ATK_PARAM_ID_OFFSET) as *const i32)) }
+// }
 
 fn matches_damage_type(hit_info: *const c_void, damage_type: i32) -> bool {
     if damage_type == 2 {
@@ -290,16 +293,24 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
         return;
     }
 
-    if config::get_bool("LogFile", false) {
-        if let Some(damage) = read_damage(hit_info) {
-            let atk_id = read_atk_id(hit_info).unwrap_or(-1);
-            let source_type = read_source_type(hit_info);
-            let is_skill = regen::is_last_attack_skill();
-            queue_log(format!(
-                "HitHook: player dealt {damage} damage (atkId={atk_id} sourceType={source_type} isSkill={is_skill})."
-            ));
-        }
-    }
+    // Per-hit debug log, deliberately commented out (not deleted) - fires on
+    // literally EVERY hit the player lands, which flooded LogFile across a
+    // long combat-heavy session (reported 2026-09-17) far worse than the
+    // Gesture/Regen.PerTick logs. Uncomment (and `read_atk_id`/
+    // `HITINFO_ATK_PARAM_ID_OFFSET` above `read_damage`) only for active
+    // debugging of damage/atkId/sourceType/isSkill classification, then
+    // comment back out before shipping.
+    //
+    // if config::get_bool("LogFile", false) {
+    //     if let Some(damage) = read_damage(hit_info) {
+    //         let atk_id = read_atk_id(hit_info).unwrap_or(-1);
+    //         let source_type = read_source_type(hit_info);
+    //         let is_skill = regen::is_last_attack_skill();
+    //         queue_log(format!(
+    //             "HitHook: player dealt {damage} damage (atkId={atk_id} sourceType={source_type} isSkill={is_skill})."
+    //         ));
+    //     }
+    // }
 
     if ENABLED.load(Ordering::Relaxed) == 0
         || !matches_damage_type(hit_info, DAMAGE_TYPE.load(Ordering::Relaxed))
