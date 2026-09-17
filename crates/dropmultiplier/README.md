@@ -63,3 +63,15 @@ Test thật trong game phát hiện 2 việc:
   (giống `common::task::wait_for_cs_task` không bao giờ bỏ cuộc), chỉ log
   nhắc nhở mỗi 30s (không phải warning - chờ vài phút để chọn save/load vào
   world là bình thường, khác với `CSTaskImp` chậm bất thường).
+
+## Banner "Config reloaded" trong game khi bấm ReloadKey (2026-09-17)
+
+Hỏi được xác nhận: `AutoRegen` có banner cuộn chữ trên đầu màn hình lúc
+reload, `DropMultiplier` thì không. Hàm đó (`show_announcement`, dùng
+widget thông báo có sẵn của game, kiểu "Autosaving...") trước đó chỉ là
+hàm riêng trong `autoregen/src/regen.rs`, không dùng lại được - chuyển
+sang `common::announce::show_announcement` (xem README `autoregen`, mục
+cùng ngày) rồi gọi thẳng từ `common::reload::run()` (watcher `ReloadKey`
+dùng chung mà mod này đã gọi sẵn) - không cần sửa gì thêm trong
+`drop_rate.rs`/`lib.rs`, banner **"Config reloaded"** tự xuất hiện mỗi lần
+bấm F5.
