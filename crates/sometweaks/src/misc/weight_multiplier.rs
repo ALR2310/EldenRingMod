@@ -26,7 +26,7 @@
 //! effect immediately with no re-patching - a tick on `FrameBegin` just
 //! keeps it in sync with `WeightMultiplier` (2026-08-25, was previously
 //! "no hot-reload" here for lack of a tick loop to piggyback on; now uses
-//! [crate::task::wait_for_cs_task] the same way every other tick-based
+//! [common::task::wait_for_cs_task] the same way every other tick-based
 //! feature in this crate does).
 
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -135,8 +135,8 @@ pub fn run() {
 
     logger::log("WeightMultiplier: hook active.");
 
-    let cs_task = crate::task::wait_for_cs_task();
-    let _handle = crate::task::run_recurring_safe(
+    let cs_task = common::task::wait_for_cs_task();
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "WeightMultiplier",
         CSTaskGroupIndex::FrameBegin,

@@ -107,7 +107,7 @@ pub fn run() {
         return;
     }
 
-    let Some(repo) = crate::player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
+    let Some(repo) = common::player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
         logger::error("UnlockAshesOfWar: SoloParamRepository never became available, disabled for this session.");
         return;
     };

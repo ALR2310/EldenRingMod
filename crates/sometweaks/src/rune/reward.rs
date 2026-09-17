@@ -61,7 +61,7 @@ fn parse_milestones(spec: &str) -> Vec<Milestone> {
 /// (same gate `player::main_player_chr_ins_ptr` exists for) confirms a live
 /// player character actually exists.
 fn add_runes(amount: u32) -> bool {
-    if crate::player::main_player_chr_ins_ptr().is_none() {
+    if common::player::main_player_chr_ins_ptr().is_none() {
         return false;
     }
     let Ok(game_data_man) = (unsafe { GameDataMan::instance_mut() }) else {
@@ -76,7 +76,7 @@ fn add_runes(amount: u32) -> bool {
 /// `FrameBegin` task group. Meant to run on its own worker thread spawned
 /// from `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
 
     // Milestones are parsed once at startup rather than re-read every tick
     // like Enabled/Interval/Amount below - re-parsing would also require
@@ -93,7 +93,7 @@ pub fn run() {
     let mut session_elapsed_ms: f64 = 0.0;
     let mut interval_elapsed_ms: f64 = 0.0;
 
-    let _handle = crate::task::run_recurring_safe(
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "Rune.Passive",
         CSTaskGroupIndex::FrameBegin,

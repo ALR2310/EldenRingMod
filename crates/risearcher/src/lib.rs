@@ -1,9 +1,6 @@
 #![allow(non_snake_case)] // crate name is "RiseArcher" to control the output DLL's filename
 
 mod bullet;
-mod player;
-mod reload;
-mod task;
 mod weapon;
 
 use std::sync::atomic::Ordering;
@@ -50,8 +47,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // `reload` owns General.ReloadKey watching for the whole DLL (see its
         // module doc comment for why only one module may call
         // eldenring::util::input::is_key_pressed for the same key) - `run`
-        // below only polls `reload::RELOAD_GENERATION`.
-        std::thread::spawn(move || reload::run(ini_path));
+        // below only polls `common::reload::RELOAD_GENERATION`.
+        std::thread::spawn(move || common::reload::run(ini_path));
 
         run();
     });
@@ -60,9 +57,9 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
 }
 
 /// Waits for the player to actually be in the game world (see
-/// `player::wait_for_solo_param_repository` for why that, not just
+/// `common::player::wait_for_solo_param_repository` for why that, not just
 /// `SoloParamRepository::instance_mut()`, is the right gate), applies every
-/// weapon/bullet buff, then watches `reload::RELOAD_GENERATION` for the rest
+/// weapon/bullet buff, then watches `common::reload::RELOAD_GENERATION` for the rest
 /// of the DLL's lifetime, reapplying from each row's cached original values
 /// (see `weapon::Baseline`/`bullet::Baseline`) on every `ReloadKey` press.
 ///
@@ -73,10 +70,10 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
 /// exists only to detect the reload hotkey, same as every other
 /// hot-reloadable feature in `sometweaks` (2026-09-08).
 fn run() {
-    let mut last_seen_generation = reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+    let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     logger::log("RiseArcher: waiting for the player to be in the game world (regulation.bin)...");
-    let Some(repo) = player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
+    let Some(repo) = common::player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
         logger::log("ERROR: SoloParamRepository never became available - RiseArcher disabled for this session.");
         return;
     };
@@ -92,13 +89,13 @@ fn run() {
         "Applied to {weapon_changed} EquipParamWeapon row(s) and {bullet_changed} Bullet row(s)."
     ));
 
-    let cs_task = task::wait_for_cs_task();
-    let _handle = task::run_recurring_safe(
+    let cs_task = common::task::wait_for_cs_task();
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "RiseArcher",
         CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
-            let generation = reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+            let generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
             if generation == last_seen_generation {
                 return;
             }

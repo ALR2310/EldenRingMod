@@ -160,12 +160,12 @@ pub enum HealField {
 /// `FrameBegin` task group. Meant to run on its own worker thread spawned
 /// from `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
 
-    let _handle = crate::task::run_recurring_safe(
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "Regen",
         CSTaskGroupIndex::FrameBegin,
@@ -204,7 +204,7 @@ pub fn run() {
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
                 stamina: config::get_double("Regen.PerHit.SP", 0.0),
             };
-            let chr_resolved = crate::player::main_player_chr_ins_ptr().is_some();
+            let chr_resolved = common::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
                 attack_hook_installed = hit_hook::try_install(on_hit_params);

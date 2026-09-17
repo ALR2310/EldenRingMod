@@ -79,10 +79,10 @@ fn apply(repo: &mut SoloParamRepository, unlock: bool) -> usize {
 /// toggled off) on every press. Meant to run on its own worker thread
 /// spawned from `DllMain`; never returns.
 pub fn run() {
-    let mut last_seen_generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+    let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("GraceMenu.UnlockShop", false) {
-        match crate::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
+        match common::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
             Some(repo) => {
                 let rows = apply(repo, true);
                 logger::log(&format!("GraceMenu.UnlockShop=true applied to {rows} ShopLineupParam row(s)."));
@@ -95,8 +95,8 @@ pub fn run() {
         logger::log("GraceMenu.UnlockShop=false - skipping entirely at startup.");
     }
 
-    let cs_task = crate::task::wait_for_cs_task();
-    let _handle = crate::task::run_recurring_safe(
+    let cs_task = common::task::wait_for_cs_task();
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "GraceMenu.UnlockShop",
         CSTaskGroupIndex::FrameBegin,
@@ -105,7 +105,7 @@ pub fn run() {
             // `reload::RELOAD_GENERATION` instead of watching the key
             // ourselves - `reload` must stay the only caller for
             // `General.ReloadKey` (see that module's doc comment).
-            let generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+            let generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
             if generation == last_seen_generation {
                 return;
             }

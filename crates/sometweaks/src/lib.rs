@@ -5,10 +5,8 @@ mod grace_menu;
 mod misc;
 mod player;
 mod regen;
-mod reload;
 mod rune;
 mod spirit;
-mod task;
 
 use common::{config, dll_dir, logger};
 use misc::{torrent_anywhere, unlock_ashes_of_war, unlock_enchantments, warp_anywhere, weight_multiplier};
@@ -60,14 +58,14 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // features" instead of interleaving ten copies of the same fact.
         // The features' own `task::wait_for_cs_task()` calls now return the
         // cached instance immediately.
-        crate::task::wait_for_cs_task();
+        common::task::wait_for_cs_task();
 
         // `reload` owns General.ReloadKey watching for the whole DLL (see its
         // module doc comment for why only one module may call
         // eldenring::util::input::is_key_pressed for the same key) - every
         // other feature below runs independently, on its own worker thread,
         // reading the same shared config map.
-        std::thread::spawn(move || reload::run(ini_path));
+        std::thread::spawn(move || common::reload::run(ini_path));
 
         std::thread::spawn(rune_reward::run);
         std::thread::spawn(rune_multiplier::run);
