@@ -30,7 +30,6 @@ dependencies = [
  "chrono",
  "common",
  "eldenring",
- "engine",
  "fromsoftware-shared",
 ]
 
@@ -104,6 +103,9 @@ name = "common"
 version = "1.0.0"
 dependencies = [
  "chrono",
+ "eldenring",
+ "fromsoftware-shared",
+ "vtable-rs",
 ]
 
 [[package]]
@@ -133,7 +135,6 @@ version = "1.0.0"
 dependencies = [
  "common",
  "eldenring",
- "engine",
  "fromsoftware-shared",
 ]
 
@@ -162,16 +163,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "engine"
-version = "1.0.0"
-dependencies = [
- "common",
- "eldenring",
- "fromsoftware-shared",
- "vtable-rs",
 ]
 
 [[package]]

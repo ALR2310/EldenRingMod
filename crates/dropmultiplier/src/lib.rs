@@ -39,11 +39,11 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        // `engine::reload` owns `General.ReloadKey` watching for the whole
+        // `common::reload` owns `General.ReloadKey` watching for the whole
         // DLL (see its module doc comment for why only one caller may poll
         // that key) - `drop_rate::run` below only polls
-        // `engine::reload::RELOAD_GENERATION`.
-        std::thread::spawn(move || engine::reload::run(ini_path));
+        // `common::reload::RELOAD_GENERATION`.
+        std::thread::spawn(move || common::reload::run(ini_path));
 
         drop_rate::run();
     });

@@ -190,7 +190,7 @@ fn show_announcement(text: &str) {
     let Ok(menu_man) = (unsafe { CSMenuManImp::instance_mut() }) else {
         return;
     };
-    let Some(allocator) = engine::alloc_hook::runtime_heap_allocator() else {
+    let Some(allocator) = common::alloc_hook::runtime_heap_allocator() else {
         return;
     };
     let Ok(allocated_string) = DLString::from_str(text, allocator) else {
@@ -596,13 +596,13 @@ pub fn is_last_attack_skill() -> bool {
 /// is where both were originally written, before being extracted once a
 /// second/third mod needed the exact same thing).
 pub fn run(ini_path: String) {
-    let cs_task = engine::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
     let mut last_logged_tick_state: Option<(i32, bool)> = None;
 
-    engine::task::run_recurring_safe(
+    common::task::run_recurring_safe(
         cs_task,
         "Regen",
         CSTaskGroupIndex::FrameBegin,
@@ -654,7 +654,7 @@ pub fn run(ini_path: String) {
                 fp: config::get_double("Regen.PerHit.FP", 0.0),
                 stamina: config::get_double("Regen.PerHit.SP", 0.0),
             };
-            let chr_resolved = engine::player::main_player_chr_ins_ptr().is_some();
+            let chr_resolved = common::player::main_player_chr_ins_ptr().is_some();
             let hook_wanted = on_hit_params.wants_heal() || needs_combat_tracking;
             if hook_wanted && chr_resolved && !attack_hook_installed {
                 attack_hook_installed = hit_hook::try_install(on_hit_params);

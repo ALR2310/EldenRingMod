@@ -20,16 +20,21 @@ Khác biệt so với bản gốc trong `sometweaks`:
   `ChancePercent` - không cần tiền tố vì cả file ini của mod này chỉ nói về
   đúng 1 tính năng (khớp quy ước `weightmultiplier`/`runemultiplier`: mod
   đơn tính năng không cần namespace key).
-- **Dùng chung crate [`engine`](../../engine)** thay vì tự có bản
+- **Dùng chung [`shared`](../../shared) (`common`)** thay vì tự có bản
   `player.rs`/`task.rs`/`reload.rs` riêng - xem README của `autoregen`, mục
-  cùng ngày, để biết `engine` là gì và vì sao nó tách ra đúng lúc mod này
-  cần lần thứ 2 (sau `sometweaks`/`risearcher`, cả 2 đều tự có bản
-  `task.rs`/`player.rs`/`reload.rs` y hệt nhau). `DropMultiplier` là mod
-  **đầu tiên trong workspace này khởi tạo mà dùng thẳng `engine` ngay từ
-  đầu**, không phải migrate từ code riêng như `autoregen` đã làm.
-- Nhờ dùng `engine::task`, mod này **không mang theo rủi ro `rva::get()`
+  "Tách `task_hook.rs`.../Gộp crate `engine` ngược vào `shared`" (cùng ngày)
+  để biết đầy đủ câu chuyện: các module này (`task_hook`/`alloc_hook`/
+  `task`/`player`/`reload`) từng là 1 crate riêng tên `engine` trong vài
+  giờ, rồi gộp ngược vào `shared`/`common` cùng ngày - `DropMultiplier` chỉ
+  còn biết tới `common::*`, chưa từng thấy dạng `engine` độc lập. Tách ra
+  ban đầu vì lúc port mod này nhận ra bộ này sắp bị copy lần thứ 2 (sau
+  `sometweaks`/`risearcher`, cả 2 đều tự có bản `task.rs`/`player.rs`/
+  `reload.rs` y hệt nhau). `DropMultiplier` là mod **đầu tiên trong
+  workspace này khởi tạo mà dùng thẳng bộ này ngay từ đầu**, không phải
+  migrate từ code riêng như `autoregen` đã làm.
+- Nhờ dùng `common::task`, mod này **không mang theo rủi ro `rva::get()`
   version-lock** mà bản gốc trong `sometweaks` vẫn còn (xem README
-  `autoregen`, mục "AOB thay `rva::get()`...") - `engine::task::wait_for_cs_task`
+  `autoregen`, mục "AOB thay `rva::get()`...") - `common::task::wait_for_cs_task`
   đã dùng cách tra `CSTaskImp::instance()` theo tên (không qua RVA) ngay từ
   đầu.
 

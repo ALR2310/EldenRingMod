@@ -21,7 +21,7 @@ use eldenring::cs::{CSTaskGroupIndex, CSTaskImp};
 use eldenring::fd4::FD4TaskData;
 use fromsoftware_shared::FromStatic;
 
-use common::logger;
+use crate::logger;
 
 use crate::task_hook;
 

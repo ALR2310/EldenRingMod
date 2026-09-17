@@ -670,6 +670,39 @@ hành vi. **`sometweaks`/`risearcher` chưa migrate** (vẫn giữ bản `task.r
 ngay; `DropMultiplier` (mod mới) dùng thẳng `engine` ngay từ đầu, không tự
 viết bản riêng nào.
 
+## Gộp crate `engine` ngược vào `shared` (`common`) (2026-09-14, cùng ngày)
+
+Đảo ngược quyết định ở mục ngay trên - `engine` (crate riêng, mới tách được
+vài giờ) gộp lại vào [`shared`](../../shared) (`common`), không còn tồn tại
+độc lập nữa. Lý do: bàn lại với người dùng về việc gọn thư mục (`shared`/
+`engine` đều nằm ở gốc workspace, muốn nhóm chung 1 chỗ) - cân nhắc giữa
+"gộp thành 1 crate" và "2 crate con trong `shared/`", ban đầu nghiêng về
+giữ tách biệt vì lo `weightmultiplier` (mod duy nhất không cần
+`eldenring`) sẽ bị kéo thêm dependency không cần thiết nếu gộp.
+
+Test thật (build `WeightMultiplier` cả trước/sau khi gộp, so kích thước
+file): **kích thước `.dll` cuối cùng không đổi** (272896 byte cả 2 lần) -
+workspace này đã bật `lto = true`/`codegen-units = 1` từ trước, nên code
+không dùng tới (toàn bộ `task_hook`/`alloc_hook`/`task`/`player`/`reload`,
+với `weightmultiplier` không gọi dòng nào) bị linker cắt bỏ khỏi output
+cuối cùng, bất kể có "khai" dependency đó hay không. Cái giá thật sự của
+việc gộp chỉ là: build riêng lẻ 1 mod không dùng các module đó (`cargo
+build -p weightmultiplier` từ cache sạch) giờ cũng phải compile
+`eldenring`/`fromsoftware-shared` một lần - không ảnh hưởng gì tới sản phẩm
+cuối, chỉ hơi chậm hơn ở build riêng lẻ lần đầu. Đánh đổi này được người
+dùng chấp nhận để đổi lấy cấu trúc thư mục gọn hơn (không cần nhớ "cái nào
+ở `shared/`, cái nào ở `engine/`").
+
+Thực hiện: dời nguyên 5 file (`task_hook.rs`/`alloc_hook.rs`/`task.rs`/
+`player.rs`/`reload.rs`) từ `engine/src/` vào `shared/src/`, đổi
+`use common::X` nội bộ trong các file đó thành `use crate::X` (giờ cùng 1
+crate), thêm `eldenring`/`fromsoftware-shared`/`vtable-rs` vào
+`[dependencies]` của `shared/Cargo.toml`, xóa hẳn thư mục `engine/` +
+entry trong `members` của `Cargo.toml` gốc. `autoregen`/`dropmultiplier`
+đổi mọi `engine::X` thành `common::X`, bỏ dòng `engine = { path = ... }`
+trong `Cargo.toml` của cả 2. Build + `cargo test --workspace` xác nhận
+không đổi hành vi.
+
 ## Fix log `Regen.PerTick` spam mỗi frame/interval dù giá trị không đổi (2026-09-14)
 
 Người dùng phát hiện `AutoRegen.log` (khi bật `[Logging] LogFile`) bị dòng
