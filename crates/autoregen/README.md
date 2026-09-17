@@ -618,6 +618,299 @@ xem `lib.rs`.
 vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL - cần tự copy giá trị đã
 tùy chỉnh sang `[Logging] LogFile` mới trong `AutoRegen.ini`.
 
+## Fix log `Regen.PerTick` spam mỗi frame/interval dù giá trị không đổi (2026-09-14)
+
+Người dùng phát hiện `AutoRegen.log` (khi bật `[Logging] LogFile`) bị dòng
+`Regen.PerTick: trigger=... -> condition_met=...` ([regen.rs](src/regen.rs))
+ghi lặp lại liên tục mỗi `Regen.PerTick.Interval` (mặc định 1s) kể cả khi
+player đứng yên và không có gì thay đổi (`condition_met`/`in_combat`/`idle`/
+`sitting` y hệt lần trước) - log này vốn thêm ở mục "Thêm đệm 5s cho Idle..."
+(2026-09-10) để debug bug Sitting không hồi, nhưng chưa từng throttle theo
+giá trị, chỉ throttle theo `Regen.PerTick.Interval` (vốn để throttle tần
+suất *heal*, không phải tần suất log).
+
+Sửa: thêm biến `last_logged_tick_state` (capture trong closure `run()`,
+cùng cách với `elapsed_ms`/`attack_hook_installed`) lưu tuple `(trigger,
+condition_met, in_combat, idle, sitting)` của lần log gần nhất - chỉ ghi
+dòng log mới khi tuple này đổi so với lần trước. Không đổi ini key/hành vi
+heal nào, chỉ giảm nhiễu log.
+
+## Revert: `queued_action_inputs.gesture()` làm Sitting mất hẳn tác dụng, quay lại `new_action_presses.gesture()` (2026-09-14)
+
+Bản 2.6.0 (commit `63f980b`) từng đổi tín hiệu chốt gesture từ
+`new_action_presses.gesture()` sang `queued_action_inputs.gesture()`, với ý
+định chỉ tính là "ngồi" khi animation hiện tại thực sự nhận nút bấm (fix báo
+lỗi Kolagon, 2026-09-13: bấm gesture giữa lúc đang cast không nên tính là
+ngồi). Người dùng tự phát hiện sau khi deploy: `Trigger=4` (Sitting) **mất
+hẳn tác dụng**, không còn hồi máu lúc ngồi nữa.
+
+Nguyên nhân: theo doc của `fromsoftware-rs`
+(`CSChrActionRequestModule::queued_action_inputs`), field này chỉ được set
+cho action **cũng có mặt trong `possible_action_inputs`** - bitmask này quản
+lý luật cancel của các action chiến đấu thường (đánh/né/đỡ/dùng đồ...),
+không bao gồm hệ thống gesture wheel (một luồng UI riêng, không đi qua
+`possible_action_inputs`). Kết quả `queued_action_inputs.gesture()` gần như
+không bao giờ bật, nên `IS_SITTING` không bao giờ thành `true` nữa - lỗi im
+lặng, không có log ERROR nào báo vì đây không phải crash/panic, chỉ là điều
+kiện luôn `false`.
+
+Đã revert lại đúng `new_action_presses.gesture()` như trước 2.6.0 (xem mục
+"Thêm `Regen.PerTick.Trigger=3`..." phía trên) - chấp nhận lại edge-case
+hiếm gặp ban đầu (gesture bấm giữa lúc đang cast) cho tới khi tìm được tín
+hiệu đúng hơn và **test thực tế trong game trước khi publish**, không suy
+đoán từ doc comment của thư viện nữa như lần này.
+
+### 2 lần thử tiếp theo đều sai giả thuyết - test trực tiếp trong game (2026-09-14)
+
+Ngay sau khi revert, thử đúng lời hứa "test thực tế trước khi publish" ở
+trên - 2 giả thuyết dựa trên doc comment của `fromsoftware-rs`, **cả 2 đều
+bị chính log `LogFile` trong game bác bỏ**:
+
+1. **`TaeCancelFlags::cancel_disable`** ("Global cancel disable... Persistent"
+   theo doc) - kỳ vọng `true` lúc đang cast phép (không thể bị ngắt). Log
+   thực tế: `cancel_disable=false` **ngay cả khi đang niệm phép** - field
+   này không phản ánh "đang trong animation không-cancel-được" như tên gọi
+   có vẻ ngụ ý.
+2. **`possible_action_inputs.gesture()`** (tự làm lại đúng phép AND mà
+   `queued_action_inputs` lẽ ra phải làm, nhưng không qua bước "cleared khi
+   `stay_state` active" đã nghi ngờ là nguyên nhân gây lỗi 2.6.0) - kỳ vọng
+   `true` lúc ngồi bình thường. Log thực tế: `gesture_allowed=false` **ngay
+   cả lúc ngồi thành công bình thường** - phá luôn cả trường hợp đúng, y hệt
+   kiểu lỗi của 2.6.0.
+
+Kết luận rút ra: gesture (`ACTION_ARM_GESTURE`, bit 21 của `ChrActions`) tuy
+nằm chung struct `ChrActions` với các action chiến đấu, nhưng **không thực
+sự tham gia** vào hệ thống gating `possible_action_inputs`/
+`queued_action_inputs` của `CSChrActionRequestModule` - cả 2 field này đọc
+sai bất kể tình huống nào, không riêng gì lúc cast phép. Cái thực sự chặn
+gesture lúc mid-cast nằm ở nơi khác trong bộ nhớ game, chưa tìm ra.
+
+Đã revert cả 2 field này, quay về đúng `new_action_presses.gesture()`
+nguyên bản (edge-case Kolagon vẫn còn treo, chưa có hướng mới). Ghi chú
+trong code (`ActionSnapshot`'s doc comment, `regen.rs`) để không ai thử lại
+2 field này mà không kiểm tra lại điều kiện "phải đọc `true` lúc ngồi
+thành công bình thường VÀ `false` lúc mid-cast, cả 2 xác nhận qua
+`LogFile` trong game" trước.
+
+### Lần thử thứ 3 - `possible_action_cancels` tưởng đúng qua 11 lần test, hoá ra là artifact chu kỳ animation idle (2026-09-15)
+
+Khác 2 lần trước (đoán từ doc comment), lần này bắt đầu bằng dữ liệu thật:
+thêm field debug dump toàn bộ bitfield liên quan vào dòng log `Gesture:`,
+nhờ người dùng test trực tiếp trong game và cung cấp log thật để đối chiếu
+(không tự suy đoán). Qua nhiều vòng test (đơn lẻ, dồn dập, có nhãn rõ từng
+lần bấm), `possible_action_cancels` (OR toàn bộ bit qua hàm
+`chr_actions_any_set`, đặt tên `any_cancelable`) cho kết quả **nhất quán
+tuyệt đối**: bằng 0 ở cả 4 lần "cast phép + bấm gesture" test riêng biệt,
+khác 0 ở cả 7 lần ngồi/đứng dậy bình thường (kể cả bấm dồn dập). Đã áp dụng
+làm điều kiện lọc (`&& snapshot.any_cancelable`) và xác nhận hoạt động đúng
+qua thêm 1 vòng test nữa.
+
+Nhưng sau đó, theo yêu cầu của người dùng ("muốn chứng minh giá trị này là
+gì trước khi bấm gesture"), thêm 1 dòng log riêng in `stay_state`/
+`any_cancelable`/giá trị thô `possible_action_cancels` mỗi khi **có thay
+đổi**, độc lập hoàn toàn với việc bấm gesture (log liên tục theo từng
+frame nền, không cần chờ user bấm nút) - để quan sát giá trị này biến đổi
+ra sao khi không hề đụng tới gesture. Kết quả bất ngờ: **đứng yên hoàn toàn
+không làm gì** trong hơn 1 phút, `possible_action_cancels` vẫn tự dao động
+đều đặn **đúng chu kỳ 3 giây một lần** giữa `0` và giá trị "mở gần hết"
+(`31073500911`) - một artifact của chính animation đứng yên (nhiều khả năng
+có 1 khung hình "vulnerable"/không-cancel-được cố định lặp lại trong vòng
+lặp idle của game), hoàn toàn không liên quan gì đến việc đang cast phép.
+
+Điều này có nghĩa 11 lần test "thành công" trước đó **chỉ là trùng hợp về
+thời điểm bấm** rơi đúng pha nào của chu kỳ 3 giây, không phải vì field này
+thực sự phân biệt được "đang cast" hay "không cast". Nếu giữ nguyên fix đó,
+sẽ có rủi ro thật: người chơi bấm gesture đúng lúc rơi vào khung hình "dip"
+tự nhiên của chu kỳ - dù hoàn toàn không cast gì - vẫn bị chặn nhầm, tạo ra
+1 bug ngẫu nhiên mới (block sai ngắt quãng) còn khó phát hiện hơn bug gốc.
+
+**Bài học quan trọng nhất từ 3 lần thử**: dù có dữ liệu thật từ log game
+(khác hẳn 2 lần đầu chỉ đoán từ doc), **so sánh 2 nhóm dữ liệu (cast vs
+không-cast) là chưa đủ** - còn phải xác nhận field đó *ổn định theo thời
+gian* khi hoàn toàn không tương tác gì (không chỉ đúng lúc vừa bấm), nếu
+không sẽ nhầm 1 chu kỳ nội tại của animation game với 1 tín hiệu nhân-quả
+thật.
+
+Đã revert lại lần thứ 3 này, quay về đúng `new_action_presses.gesture()`
+nguyên bản không lọc gì thêm (`regen.rs`, mục "Revert" phía trên) - `commit
+message`/code comment ghi rõ cả 3 field đã thử và lý do thất bại của từng
+field, kèm điều kiện bắt buộc trước khi thử field thứ 4: phải có 1 đoạn
+`LogFile` capture **nhiều phút, hoàn toàn không tương tác gì** chứng minh
+field đó đứng yên khi không cast, không chỉ so sánh 2 thời điểm bấm riêng
+lẻ.
+
+## Lần thử thứ 4 - THÀNH CÔNG: xác nhận trễ qua TAE animation ID thay vì đoán field tại đúng khung hình bấm (2026-09-17)
+
+Sau khi 3 field trong `CSChrActionRequestModule`/`CSChrActionFlagModule`
+đều thất bại (xem 2 mục trên), thử dịch ngược `eldenring.exe` bằng Ghidra
+headless rồi IDA Professional 9.3 (2 vòng agent riêng, license IDA đã kích
+hoạt) để tìm điều kiện game tự kiểm tra trước khi cho gesture chạy - tìm ra
+được hàm `PlayGesture` thật (`0x14078a9c0`) và xác định đúng gate của nó là
+`GetManipulatorKind() == 1` (chỉ cho gesture khi `ChrCtrl` đang được điều
+khiển trực tiếp bởi `PadManipulator`, không phải network/replay/AI/cưỡi
+ngựa/đồng hành) - nhưng đối chiếu lại với log thật thì gate này **không
+giải thích được bug**: chơi solo thì luôn ở kind `Pad=1` bất kể có đang cast
+phép hay không, và field `requested_gesture` vẫn được ghi bình thường ngay
+cả lúc bị chặn - mâu thuẫn với giả thuyết. Kết luận: RE tĩnh đã cạn hướng
+hợp lý cho đúng bug này (chi tiết đầy đủ quá trình RE không lưu vào README,
+chỉ lưu trong lịch sử hội thoại/file tại `D:\tmp` lúc điều tra).
+
+**Hướng thắng cuộc**: đổi hẳn chiến lược - thay vì đọc 1 field *tại đúng
+khung hình bấm* để đoán trước kết quả (cách cả 4 lần thử field đều đi),
+chuyển sang **xác nhận sau một khoảng trễ** bằng
+`CSChrTimeActModule::anim_queue[read_idx].anim_id` (TAE animation ID thật
+đang chạy) - field này từng bị gạt bỏ ở mục "Thêm `Regen.PerTick.Trigger=3`"
+(2026-09-10) vì cần 1 bảng map TAE-id↔GESTURE_ID chưa dò được, nhưng lần
+này **không cần bảng map đó nữa**: chỉ cần biết "animation có đổi khác so
+với lúc bấm hay không", không cần biết đổi thành ID gì.
+
+Cơ chế (`confirm_pending_sit`, `regen.rs`): bấm gesture khớp
+`sit_gesture_ids()` không còn chốt `IS_SITTING=true` ngay - chỉ ghi nhận
+"đang chờ xác nhận" (`PENDING_SIT_SINCE_MS`) kèm `anim_id` tại đúng lúc bấm
+(`PENDING_SIT_ANIM_ID`). Sau `SIT_CONFIRM_DELAY_MS` (500ms), đọc lại
+`anim_id` và chốt `IS_SITTING=true` chỉ khi **cả 2 điều kiện** đúng: khác
+với `anim_id` lúc bấm, VÀ khác `0` (idle bình thường). Đứng dậy (bấm lần 2
+khi đang ngồi) vẫn xử lý ngay lập tức như cũ, không qua bước chờ này - đứng
+dậy tự nó đã chắc chắn, không cần xác nhận gì thêm.
+
+Lý do cần **cả 2** điều kiện (bản đầu tiên chỉ check "khác `0`" từng bị
+confirm sai trong lúc test, trước khi sửa thành check kép này):
+- Chỉ "khác `0`" là chưa đủ: lúc bị chặn giữa lúc cast, animation cast
+  chưa kịp đổi gì trong 500ms đầu (vẫn y hệt lúc bấm, mà bản thân ID cast
+  cũng khác `0`) → sai dương nếu chỉ check khác `0`.
+- Chỉ "khác lúc bấm" cũng chưa đủ: nếu delay dài hơn thời gian cast còn
+  lại, animation cast tự nhiên kết thúc và về `0` (idle) trong lúc chờ -
+  `0` vẫn "khác lúc bấm" nhưng không phải ngồi thật.
+- Kết hợp cả 2 xử lý đúng mọi trường hợp đã test.
+
+Xác nhận qua nhiều vòng test trong game bằng `LogFile`: **5/5 lần cast +
+bấm gesture bị chặn đúng** (`is_sitting=false`), **2/2 lần ngồi thật đúng**
+(`is_sitting=true`), **2/2 lần đứng dậy đúng** ngay lập tức - không còn
+false-positive, không phá trường hợp bình thường.
+
+Chi phí hiệu suất: gần như bằng 0 - khi không có gesture nào đang chờ xác
+nhận (>99.99% thời gian chơi), `confirm_pending_sit` chỉ đọc 1 biến atomic
+rồi `return` ngay, không gọi `WorldChrMan::instance()` hay đọc animation gì
+cả.
+
+Đã dọn sạch toàn bộ code debug dùng để điều tra (không giữ lại trong
+codebase, khác với những gì mục trước dự tính): field `any_cancelable`/
+`stay_state`/`possible_cancels`/`gesture_debug` trong `ActionSnapshot`, hàm
+`chr_actions_any_set`, `log_stay_state_changes`, `log_current_anim_changes`
+và 2 static latch đi kèm - chỉ giữ lại `current_anim_id()` (dùng thật bởi
+`confirm_pending_sit`) và 2 dòng log sản phẩm (`pending confirm`/`confirm
+anim_id=... -> is_sitting=...`).
+
+### 2 lần vá thêm sau khi test bấm dồn dập (2026-09-17, cùng ngày)
+
+Test lại sau khi "chốt" bản trên, phát hiện 2 lỗi mới khi bấm gesture nhanh
+nhiều lần liên tiếp (không liên quan gì đến cast phép nữa - đây là nhóm bug
+"rapid re-press" từng bị gác lại ở mục "Lần thử thứ 4" phía trên khi mới
+phát hiện qua test lần đầu):
+
+1. **Chỉ check "khác lúc bấm" chưa đủ khi animation transition đi qua nhiều
+   ID trung gian**: bấm ngồi rồi bấm dồn dập lần 2/3 ngay khi animation đứng
+   dậy còn đang chuyển tiếp (chưa ổn định) có thể bị "bắt trúng" đúng lúc
+   animation đó đang ở 1 ID trung gian khác `0`, khác baseline lúc bấm →
+   confirm sai thành `is_sitting=true` dù nhân vật đang đứng dậy, không phải
+   ngồi. **Sửa**: thêm yêu cầu `anim_id` phải **giữ nguyên ổn định liên tục
+   `ANIM_STABLE_MS`** (300ms → tăng lên 1000ms sau khi cân nhắc animation
+   trung gian quan sát được đổi ID mỗi ~0.5-1s) trước khi tin, thay vì chỉ
+   đọc 1 lần duy nhất tại mốc delay. Thêm `SIT_CONFIRM_TIMEOUT_MS` (3000ms,
+   gấp 3 lần ngưỡng ổn định) để tránh treo "pending" vĩnh viễn nếu animation
+   không bao giờ ổn định.
+2. **Bấm lần 2 trong lúc lần 1 chưa kịp xác nhận xong bị ghi đè baseline
+   sai**: trước đó, 1 lần bấm mới trong lúc đang `pending` bị code hiểu
+   nhầm thành "bắt đầu ngồi mới", ghi đè `PENDING_SIT_ANIM_ID` bằng `anim_id`
+   đọc được ngay lúc bấm 2 - nhưng lúc đó animation ngồi thật **đã bắt đầu
+   chuyển tiếp**, nên khi ngồi ổn định xong, nó không còn "khác" baseline bị
+   ghi đè đó nữa → không bao giờ confirm được, dù nhân vật ngồi thật (không
+   hồi máu). Rồi 1 lần bấm thứ 3 (ý định đứng dậy) lại bị hiểu nhầm tiếp
+   thành "ngồi mới" (vì cờ vẫn `false`) → cuối cùng confirm nhầm đúng lúc
+   đang đứng dậy. **Sửa**: 1 lần bấm lặp lại trong lúc còn `pending` giờ bị
+   **bỏ qua hoàn toàn** (không đụng gì tới baseline/timer đang chờ), để lần
+   bấm đầu tiên tự chạy hết chu trình xác nhận của nó. Nếu `IS_SITTING` sau
+   đó thực sự thành `true`, 1 lần bấm tiếp theo sẽ tự nhiên rơi đúng vào
+   nhánh "đang ngồi rồi → huỷ ngay lập tức" có sẵn, không cần thêm logic gì
+   khác.
+
+Xác nhận lại qua nhiều lần bấm dồn dập (2-3 lần liên tiếp) xen giữa các lần
+ngồi bình thường và 1 lần cast+chặn trong cùng phiên test - toàn bộ log thu
+được đều đúng: các lần bấm lặp lại lúc pending đều bị `ignored`, mọi lần
+ngồi cuối cùng đều `confirm ... -> is_sitting=true` đúng lúc animation ổn
+định ở họ ID ngồi thật, huỷ ngồi đúng ngay lập tức, và cast+chặn vẫn đúng
+`is_sitting=false` (lần này qua nhánh timeout vì `anim_id=0` chưa kịp ổn
+định đủ 1000ms khi hết giờ chờ, nhưng kết luận cuối vẫn đúng).
+
+## Giảm log per-hit trong `hit_hook.rs` và log `Regen.PerTick` - nguồn log lớn nhất trong phiên chơi dài (2026-09-17)
+
+Người dùng chỉ ra: bật `[Logging] LogFile=true` rồi chơi 1 phiên dài (nhiều
+combat) sẽ sinh ra log rất lớn. Rà lại toàn bộ log trong crate, tìm ra thủ
+phạm chính: dòng `HitHook: player dealt {damage} damage (atkId=...
+sourceType=... isSkill=...)` trong `hit_hook.rs::apply_hit_heal` - ghi
+**mỗi khi player đánh trúng bất kỳ thứ gì**, kể cả khi `Regen.PerHit` đang
+tắt hoàn toàn - nặng hơn nhiều so với các log gesture (chỉ ghi khi bấm nút,
+tần suất thấp) hay `Regen.PerTick` (đã dedupe theo thay đổi từ trước). Đây
+là log từ thời mới viết lại `hit_hook.rs` (mục "Viết lại `Regen Per Hit` từ
+đầu bằng Ghidra", 2026-09-12), dùng để xác minh `damage`/`atkId`/
+`sourceType`/`isSkill` đọc đúng lúc đó - không còn giá trị vận hành, dòng
+log "player {source} -> +HP +FP +SP" ngay bên dưới (chỉ ghi khi thực sự có
+hồi máu xảy ra, tần suất thấp hơn nhiều vì phụ thuộc điều kiện
+`Regen.PerHit`) đã đủ cho debug thực tế.
+
+Ban đầu định xoá hẳn, nhưng theo yêu cầu người dùng (muốn giữ khả năng bật
+lại để debug sau này mà không cần viết lại từ đầu) - đã **comment lại**
+thay vì xoá: dòng log, cùng `read_atk_id()`/`HITINFO_ATK_PARAM_ID_OFFSET`
+(chỉ được dùng ở đúng chỗ đó, sẽ thành dead code nếu để active mà không có
+log dùng tới) đều bị comment `//` trong `hit_hook.rs`, kèm chỉ dẫn ngay
+phía trên - cần debug lại thì chỉ cần bỏ comment cả 3 chỗ rồi build lại,
+không cần dò lại offset hay viết lại logic. Vẫn giữ nguyên (active)
+`HITINFO_DAMAGE_OFFSET`/`HITINFO_SOURCE_OBJECT_OFFSET` (còn dùng thật bởi
+logic hồi máu) và dòng log "player {source} -> +HP +FP +SP" (chỉ ghi khi
+thực sự có hồi máu xảy ra).
+
+Cùng lúc đó, người dùng chỉ ra thêm: log `Regen.PerTick` (đã dedupe theo
+thay đổi từ mục "Fix log `Regen.PerTick` spam..." phía trên) **vẫn** sinh
+ra 1 dòng log mỗi khi player di chuyển rồi đứng yên trở lại - vì bản dedupe
+cũ so sánh theo **toàn bộ tuple** `(condition, condition_met, in_combat,
+idle, sitting)`, mà chỉ riêng việc đi rồi dừng cũng đủ làm `idle` nhảy
+`false`→`true`, dù `condition_met` (kết quả hồi máu bật/tắt) không hề đổi
+với `Trigger=1`/`2`. Sửa lại: dedupe chỉ theo `(condition, condition_met)`
+- tức là chỉ log khi **kết quả thật sự thay đổi** (bắt đầu/dừng hồi máu),
+các chi tiết `in_combat`/`idle`/`gesture_active` vẫn đọc mới và in kèm
+trong dòng log đó, chỉ không dùng để quyết định có log hay không nữa.
+
+## Đổi tên tính năng từ "Sitting" sang "Gesture" - tổng quát hoá đúng bản chất (2026-09-17)
+
+Theo yêu cầu người dùng: tính năng `Regen.PerTick.Trigger=4` trước giờ được
+đặt tên/mô tả xoay quanh "ngồi" (`IS_SITTING`, `is_sitting()`,
+`Gesture.SittingId`...), nhưng bản chất thật của nó là "hồi máu khi 1
+gesture cụ thể đang active" - "ngồi" chỉ là **giá trị mặc định** của danh
+sách gesture đó (10 gesture ngồi), không phải giới hạn cứng của tính năng.
+Đặt tên theo đúng bản chất tổng quát hơn giúp rõ ràng hơn cho người dùng
+muốn cấu hình gesture khác (không phải ngồi) cho `Trigger=4`.
+
+Đổi tên (chỉ đổi tên/thuật ngữ, không đổi hành vi mặc định - vẫn hồi máu
+khi 1 trong 10 gesture ngồi active, y hệt trước):
+
+- Ini key: `[General] Gesture.SittingId` → **`[Regen Per Tick]
+  Regen.PerTick.GestureId`** (dời hẳn qua đúng section `[Regen Per Tick]`
+  vì gắn liền với `Trigger=4` ở đó, không còn tách riêng ở `[General]`
+  nữa). Key cũ tự động được `config::migrate()` (cơ chế chung, so khớp với
+  `AutoRegen.ini` template nhúng sẵn trong DLL - xem `lib.rs`) đẩy vào
+  `[Legacy]` như mọi lần đổi key trước đây, không cần code migrate riêng.
+- Comment `Regen.PerTick.Trigger=4` trong ini: "Only while sitting via a
+  gesture" → "Only while a gesture from `Regen.PerTick.GestureId` below is
+  active".
+- Code (`regen.rs`): `IS_SITTING`→`IS_GESTURE_ACTIVE`,
+  `is_sitting()`→`is_gesture_active()`, `PENDING_SIT_*`→`PENDING_GESTURE_*`,
+  `confirm_pending_sit`→`confirm_pending_gesture`,
+  `sit_gesture_ids()`→`gesture_trigger_ids()`,
+  `DEFAULT_SIT_GESTURE_IDS`→`DEFAULT_GESTURE_IDS`,
+  `SIT_CONFIRM_*_MS`→`GESTURE_CONFIRM_*_MS`. Log field `sitting=` trong dòng
+  `Regen.PerTick:` đổi thành `gesture_active=`; log `Gesture: ... ->
+  is_sitting=...` đổi thành `-> is_gesture_active=...`.
+
 ## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,

@@ -16,7 +16,7 @@
 //! both mods share the same config shape and code, rather than AutoRegen
 //! being stuck with the older design it started from.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -219,26 +219,27 @@ pub fn main_player_chr_ins_ptr() -> Option<*const u8> {
 }
 
 /// The pad-input bits read each frame to decide `LAST_ATTACK_WAS_SKILL`,
-/// `IS_SITTING` and `is_idle()` below.
+/// `IS_GESTURE_ACTIVE` and `is_idle()` below.
 ///
-/// `r1`/`r2`/`l1`/`l2` come from `new_action_presses` (fires exactly 1
-/// frame, on the press) - confirmed in-game (2026-09-03) to correlate with
-/// Ash of War/skill hits far more reliably than any `AtkParam` field does
-/// (see AutoRegen's README). `gesture_accepted` comes from
-/// `queued_action_inputs` instead (see `main_player_action_snapshot`) so it
-/// only fires when the current animation actually let the gesture button
-/// through, not just when it was pressed. `requested_gesture` is a plain
-/// value (not a bit), only meaningful the same frame `gesture_accepted` is
+/// `r1`/`r2`/`l1`/`l2`/`new_gesture` come from `new_action_presses` (fires
+/// exactly 1 frame, on the press) - confirmed in-game (2026-09-03) to
+/// correlate with Ash of War/skill hits far more reliably than any
+/// `AtkParam` field does (see AutoRegen's README). `requested_gesture` is a
+/// plain value (not a bit), only meaningful the same frame `new_gesture` is
 /// set. `busy` covers every other way the player can be "not idle" - held
 /// (not just newly-pressed) actions from `action_requests`, plus actual
 /// movement input - read from the same module so idle detection doesn't
 /// need yet another `WorldChrMan::instance()` call of its own.
+///
+/// `new_gesture` alone isn't enough to know a sit actually started (a press
+/// blocked mid-cast still fires it) - see `confirm_pending_gesture` for the
+/// fields that verify what happens next.
 struct ActionSnapshot {
     r1: bool,
     r2: bool,
     l1: bool,
     l2: bool,
-    gesture_accepted: bool,
+    new_gesture: bool,
     requested_gesture: i32,
     busy: bool,
 }
@@ -270,15 +271,7 @@ fn main_player_action_snapshot() -> Option<ActionSnapshot> {
         r2: new_presses.r2(),
         l1: new_presses.l1(),
         l2: new_presses.l2(),
-        // `queued_action_inputs` (not `new_action_presses`) is only set when
-        // the button press was ALSO in `possible_action_inputs` - i.e. the
-        // current animation actually accepted it. Confirmed bug report
-        // (Kolagon, 2026-09-13): pressing the gesture button while mid-cast
-        // (or any other animation the gesture can't interrupt) still set
-        // `new_action_presses.gesture()` for that frame even though the
-        // character never actually sat down - `queued_action_inputs` stays
-        // clear in that case instead.
-        gesture_accepted: action_request.queued_action_inputs.gesture(),
+        new_gesture: new_presses.gesture(),
         requested_gesture: action_request.requested_gesture,
         busy,
     })
@@ -297,7 +290,7 @@ fn main_player_action_snapshot() -> Option<ActionSnapshot> {
 // still reads correctly.
 static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
 
-// Default `Gesture.SittingId` for every "sitting" gesture: Prayer, Desperate
+// Default `Regen.PerTick.GestureId` for every "sitting" gesture: Prayer, Desperate
 // Prayer, Dejection, Patches' Crouch, Crossed Legs, Rest, Sitting Sideways,
 // Dozing Cross-Legged, Spread Out, Balled Up.
 //
@@ -316,16 +309,19 @@ static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
 // rather than hard-coded so users can add/remove entries themselves - e.g.
 // after a future game update adds a new gesture this list hasn't been
 // updated for yet - without needing a new DLL build.
-const DEFAULT_SIT_GESTURE_IDS: &str = "80,90,91,92,93,94,95,97,100,101";
+const DEFAULT_GESTURE_IDS: &str = "80,90,91,92,93,94,95,97,100,101";
 
-/// Parses `Gesture.SittingId` (comma-separated GESTURE_ID values, see
-/// `DEFAULT_SIT_GESTURE_IDS`) fresh from config - only called the 1 frame a
+/// Parses `Regen.PerTick.GestureId` (comma-separated GESTURE_ID values, see
+/// `DEFAULT_GESTURE_IDS`) fresh from config - only called the 1 frame a
 /// gesture is newly requested (see `update_last_attack_input`), not every
 /// frame, so re-parsing instead of caching is cheap. Unparseable entries
 /// (typos, stray commas) are silently skipped rather than failing the whole
-/// list.
-fn sit_gesture_ids() -> Vec<i32> {
-    config::get_string("Gesture.SittingId", DEFAULT_SIT_GESTURE_IDS)
+/// list. Renamed from `Gesture.SittingId` (2026-09-17) - this feature isn't
+/// really about "sitting" specifically, it's "heal while a configured
+/// gesture is active", defaulting to the sitting-family gestures below; the
+/// old key still works via `config::migrate`'s generic `[Legacy]` handling.
+fn gesture_trigger_ids() -> Vec<i32> {
+    config::get_string("Regen.PerTick.GestureId", DEFAULT_GESTURE_IDS)
         .split(',')
         .filter_map(|id| id.trim().parse::<i32>().ok())
         .collect()
@@ -338,7 +334,22 @@ fn sit_gesture_ids() -> Vec<i32> {
 // (movement or any other held action) rather than waiting for a specific
 // "gesture ended" signal - fromsoftware-rs exposes no such signal, and any
 // of those inputs already cancels the sit animation in-game anyway.
-static IS_SITTING: AtomicBool = AtomicBool::new(false);
+static IS_GESTURE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+/// Reads the main player's currently-playing TAE animation ID
+/// (`CSChrTimeActModule::anim_queue[read_idx].anim_id`). `None` if not
+/// resolved yet. `0` = plain on-foot idle (confirmed in-game, 2026-09-17 -
+/// see README) - used by `confirm_pending_gesture` below as the "didn't actually
+/// transition" signal, without needing a full TAE-id -> gesture mapping
+/// table (the approach abandoned for `Regen.PerTick.Trigger=4` itself, see
+/// the "Thêm `Regen.PerTick.Trigger=3`" README entry).
+fn current_anim_id() -> Option<i32> {
+    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
+    let main_player = world_chr_man.main_player.as_ref()?;
+    let time_act = &main_player.chr_ins.modules.time_act;
+    let read_idx = time_act.read_idx;
+    Some(time_act.anim_queue[read_idx as usize % time_act.anim_queue.len()].anim_id)
+}
 
 // Timestamp (`now_ms()`) the player became idle (`busy` went false), or 0
 // while currently busy - backs `is_idle()`'s `IDLE_GRACE_MS` delay below.
@@ -352,41 +363,211 @@ static IDLE_SINCE_MS: AtomicU64 = AtomicU64::new(0);
 // Requested (2026-09-10) after testing Trigger=3 with no delay at all.
 const IDLE_GRACE_MS: u64 = 5000;
 
-/// Updates `LAST_ATTACK_WAS_SKILL`, `IS_SITTING` and `IDLE_SINCE_MS` from
+// Timestamp (`now_ms()`) a gesture press matching `gesture_trigger_ids()` was
+// seen while not already sitting, or 0 while no confirmation is pending -
+// backs `confirm_pending_gesture`'s delayed check below. 0 doubles as "nothing
+// pending" the same way `IDLE_SINCE_MS` doubles as "currently busy".
+static PENDING_GESTURE_SINCE_MS: AtomicU64 = AtomicU64::new(0);
+
+// `current_anim_id()` read at the exact moment `PENDING_GESTURE_SINCE_MS` was
+// set - see `confirm_pending_gesture`. Only meaningful while a confirmation is
+// pending (`PENDING_GESTURE_SINCE_MS != 0`), so its own idle value doesn't need
+// a sentinel.
+static PENDING_GESTURE_ANIM_ID: AtomicI32 = AtomicI32::new(0);
+
+// `current_anim_id()` as of the last frame `confirm_pending_gesture` ran, and
+// the timestamp (`now_ms()`) it last CHANGED - tracks how long the
+// currently-playing animation has held steady, independent of
+// `PENDING_SIT_*` (updated every frame, pending or not, so it's already
+// warmed up whenever a new pending confirmation starts). 0/0 = never
+// observed yet.
+static LAST_SEEN_ANIM_ID: AtomicI32 = AtomicI32::new(0);
+static LAST_SEEN_ANIM_SINCE_MS: AtomicU64 = AtomicU64::new(0);
+
+// Minimum time to wait after a sit-gesture press before even looking -
+// avoids a same-frame read that's technically already "different" purely
+// from timing luck. Real sit/idle animations hold their id far longer than
+// this either way, so this is just a floor, not the actual confirmation
+// signal (see `ANIM_STABLE_MS`).
+const GESTURE_CONFIRM_MIN_WAIT_MS: u64 = 200;
+
+// How long `current_anim_id()` must have held the SAME value before trusting
+// it - see `confirm_pending_gesture`. Added 2026-09-17 after in-game testing
+// caught a real false-positive a single-sample check (the original version
+// of this fix) missed: rapid-pressing gesture 3x (sit, stand-up cancel,
+// sit again) could catch the read exactly mid-transition of the STANDING-UP
+// animation (itself non-zero and different from whatever was playing at
+// the 3rd press) and wrongly confirm sitting while the character was
+// actually finishing standing up. A genuine sit/idle holds its id for
+// seconds; transitional animations observed in-game changed roughly every
+// 0.5-1s - 300ms initially, widened to 1000ms for extra margin against that
+// (the resulting extra healing delay on a real sit is still imperceptible).
+const ANIM_STABLE_MS: u64 = 1000;
+
+// Give up waiting and reject a pending sit if `current_anim_id()` never
+// settles (stops changing) within this long after the press - prevents
+// `PENDING_GESTURE_SINCE_MS` from lingering forever if the animation stays in
+// flux (e.g. repeated interruptions) without ever tripping the `busy`
+// cancel. Kept a comfortable margin above `ANIM_STABLE_MS` (3x) so a
+// slower-settling transition still has room to be confirmed rather than
+// timing out right as it stabilizes.
+const GESTURE_CONFIRM_TIMEOUT_MS: u64 = 3000;
+
+/// Updates `LAST_SEEN_ANIM_ID`/`LAST_SEEN_ANIM_SINCE_MS` from
+/// `current_anim_id()` - called every frame (pending confirmation or not) so
+/// `confirm_pending_gesture` always has an up-to-date "how long has this held
+/// steady" answer instead of only starting to track once a press happens.
+fn track_current_anim() {
+    let Some(anim_id) = current_anim_id() else {
+        return;
+    };
+    if LAST_SEEN_ANIM_ID.swap(anim_id, Ordering::Relaxed) != anim_id {
+        LAST_SEEN_ANIM_SINCE_MS.store(now_ms(), Ordering::Relaxed);
+    }
+}
+
+/// 4th attempt at fixing the Kolagon mid-cast false-positive (see the
+/// investigation note on `ActionSnapshot` and README, 2026-09-14/15/17) -
+/// this one doesn't try to predict from a field read at the exact press
+/// frame (all 3 prior attempts confirmed-failed that way). Instead: a sit
+/// gesture press only starts a PENDING confirmation (`PENDING_GESTURE_SINCE_MS`/
+/// `PENDING_GESTURE_ANIM_ID`) instead of latching `IS_GESTURE_ACTIVE` immediately; once
+/// `current_anim_id()` (via `track_current_anim`) has held STEADY
+/// (`ANIM_STABLE_MS`) at a value that's both non-zero and different from
+/// what was playing at press time, that's trusted as a real transition and
+/// `IS_GESTURE_ACTIVE` is set. Requiring STABILITY (not just a single differing
+/// sample, which an earlier version of this fix used) matters for 2
+/// separate false-positives, both confirmed in-game (2026-09-17, see
+/// README):
+/// - A press blocked mid-cast: the spellcast anim doesn't move for well over
+///   a single sample's delay, so "differs from press-time id" alone
+///   eventually fails once the cast finishes and falls back to idle (`0`) -
+///   but that transient `0` is also technically "different", so a
+///   single-sample check checking only "!= 0" (this fix's 1st version)
+///   already covered this specific case; stability isn't strictly needed
+///   for it.
+/// - Rapid re-presses (sit, stand-up cancel, sit again): a single-sample
+///   check could catch the read exactly mid-transition of the STANDING-UP
+///   animation (non-zero, differs from the 3rd press's id) and wrongly
+///   confirm sitting while the character was still in the middle of
+///   standing up - this is what stability actually guards against; a
+///   genuine settled sit/idle holds its id for seconds, a transition passes
+///   through several ids well under `ANIM_STABLE_MS`.
+///
+/// Called every frame regardless of `new_gesture` since confirmation
+/// resolves on LATER frames than the press itself.
+fn confirm_pending_gesture(busy: bool) {
+    let pending_since = PENDING_GESTURE_SINCE_MS.load(Ordering::Relaxed);
+    if pending_since == 0 {
+        return;
+    }
+    if busy {
+        // Any held movement/action before confirmation already cancels the
+        // attempt in-game - same rule `IS_GESTURE_ACTIVE` itself follows elsewhere.
+        PENDING_GESTURE_SINCE_MS.store(0, Ordering::Relaxed);
+        return;
+    }
+    let elapsed = now_ms().saturating_sub(pending_since);
+    if elapsed < GESTURE_CONFIRM_MIN_WAIT_MS {
+        return;
+    }
+    let press_anim_id = PENDING_GESTURE_ANIM_ID.load(Ordering::Relaxed);
+    let anim_id = LAST_SEEN_ANIM_ID.load(Ordering::Relaxed);
+    let anim_since = LAST_SEEN_ANIM_SINCE_MS.load(Ordering::Relaxed);
+    let stable_for = now_ms().saturating_sub(anim_since);
+    if anim_id != 0 && anim_id != press_anim_id && stable_for >= ANIM_STABLE_MS {
+        PENDING_GESTURE_SINCE_MS.store(0, Ordering::Relaxed);
+        IS_GESTURE_ACTIVE.store(true, Ordering::Relaxed);
+        if config::get_bool("LogFile", false) {
+            logger::log(&format!(
+                "Gesture: confirm anim_id={anim_id} stable_for={stable_for}ms (was {press_anim_id} at press) -> is_gesture_active=true"
+            ));
+        }
+    } else if elapsed >= GESTURE_CONFIRM_TIMEOUT_MS {
+        PENDING_GESTURE_SINCE_MS.store(0, Ordering::Relaxed);
+        IS_GESTURE_ACTIVE.store(false, Ordering::Relaxed);
+        if config::get_bool("LogFile", false) {
+            logger::log(&format!(
+                "Gesture: confirm timed out, anim_id={anim_id} stable_for={stable_for}ms (was {press_anim_id} at press) -> is_gesture_active=false"
+            ));
+        }
+    }
+    // Otherwise: still waiting for `anim_id` to settle - try again next frame.
+}
+
+/// Updates `LAST_ATTACK_WAS_SKILL`, `IS_GESTURE_ACTIVE` and `IDLE_SINCE_MS` from
 /// this frame's action input. No-op if the player isn't resolved yet. Called
 /// every frame, independent of any Regen.PerHit/PerTick config.
 pub fn update_last_attack_input() {
     let Some(snapshot) = main_player_action_snapshot() else {
         return;
     };
+    track_current_anim();
     if snapshot.r1 || snapshot.r2 || snapshot.l1 {
         LAST_ATTACK_WAS_SKILL.store(false, Ordering::Relaxed);
     } else if snapshot.l2 {
         LAST_ATTACK_WAS_SKILL.store(true, Ordering::Relaxed);
     }
 
-    if snapshot.gesture_accepted {
+    if snapshot.new_gesture {
         // A 2nd gesture request while already sitting always cancels/stands
         // up in-game first, whether it's the same gesture or a different one
         // - it never switches straight into the newly-selected gesture.
-        // Since this cancel fires the exact same signal (queued_action_inputs.
+        // Since this cancel fires the exact same signal (new_action_presses.
         // gesture() + requested_gesture=<id>) as starting one, the only way
         // to tell them apart is context: already sitting means this press
         // must be the cancel. Confirmed as a real bug in-game (2026-09-10):
         // without this check, re-pressing a gesture stands the player up but
-        // IS_SITTING stayed true, so PerTick kept healing after they'd
-        // already gotten up.
-        let is_sit_gesture = !IS_SITTING.load(Ordering::Relaxed) && sit_gesture_ids().contains(&snapshot.requested_gesture);
-        IS_SITTING.store(is_sit_gesture, Ordering::Relaxed);
-        if config::get_bool("LogFile", false) {
-            logger::log(&format!(
-                "Gesture: requested_gesture={} -> is_sitting={is_sit_gesture}",
-                snapshot.requested_gesture
-            ));
+        // IS_GESTURE_ACTIVE stayed true, so PerTick kept healing after they'd
+        // already gotten up. This cancel path is immediate, unlike starting
+        // a new sit (see `confirm_pending_gesture`) - standing up is confirmed
+        // by definition, nothing to wait on.
+        if IS_GESTURE_ACTIVE.load(Ordering::Relaxed) {
+            IS_GESTURE_ACTIVE.store(false, Ordering::Relaxed);
+            PENDING_GESTURE_SINCE_MS.store(0, Ordering::Relaxed);
+            if config::get_bool("LogFile", false) {
+                logger::log(&format!(
+                    "Gesture: requested_gesture={} -> is_gesture_active=false (cancel)",
+                    snapshot.requested_gesture
+                ));
+            }
+        } else if PENDING_GESTURE_SINCE_MS.load(Ordering::Relaxed) != 0 {
+            // A repeat press while the FIRST attempt hasn't even been
+            // confirmed yet - ignored, deliberately NOT restarted from this
+            // press. An earlier version restarted `PENDING_GESTURE_ANIM_ID` here,
+            // which broke on a real rapid double-press in-game (2026-09-17):
+            // by the 2nd press the animation had already transitioned partway
+            // into sitting down, so the new baseline captured THAT
+            // in-progress id - once the sit fully settled, it no longer
+            // looked "different" from its own already-transitioning
+            // baseline, so it silently never confirmed at all despite the
+            // character visibly ending up seated. Leaving the ORIGINAL
+            // (pre-transition) baseline in place lets the same pending
+            // attempt confirm correctly once things settle; if the repeat
+            // press was actually meant to stand back up, that's caught for
+            // free once `IS_GESTURE_ACTIVE` does become `true` - the branch above
+            // then cancels it immediately on the next press, same as always.
+            if config::get_bool("LogFile", false) {
+                logger::log(&format!(
+                    "Gesture: requested_gesture={} -> ignored (still pending confirm)",
+                    snapshot.requested_gesture
+                ));
+            }
+        } else if gesture_trigger_ids().contains(&snapshot.requested_gesture) {
+            let press_anim_id = current_anim_id().unwrap_or(0);
+            PENDING_GESTURE_ANIM_ID.store(press_anim_id, Ordering::Relaxed);
+            PENDING_GESTURE_SINCE_MS.store(now_ms().max(1), Ordering::Relaxed);
+            if config::get_bool("LogFile", false) {
+                logger::log(&format!(
+                    "Gesture: requested_gesture={} anim_id={press_anim_id} -> pending confirm",
+                    snapshot.requested_gesture
+                ));
+            }
         }
     } else if snapshot.busy {
-        IS_SITTING.store(false, Ordering::Relaxed);
+        IS_GESTURE_ACTIVE.store(false, Ordering::Relaxed);
     }
+    confirm_pending_gesture(snapshot.busy);
 
     if snapshot.busy {
         IDLE_SINCE_MS.store(0, Ordering::Relaxed);
@@ -404,10 +585,11 @@ pub fn is_idle() -> bool {
     since != 0 && now_ms().saturating_sub(since) >= IDLE_GRACE_MS
 }
 
-/// Whether the player's last-requested gesture is a sitting one and hasn't
-/// been interrupted since (see `IS_SITTING`).
-pub fn is_sitting() -> bool {
-    IS_SITTING.load(Ordering::Relaxed)
+/// Whether the player's last-requested gesture matches
+/// `Regen.PerTick.GestureId` (defaults to the sitting-family gestures) and
+/// hasn't been interrupted since (see `IS_GESTURE_ACTIVE`).
+pub fn is_gesture_active() -> bool {
+    IS_GESTURE_ACTIVE.load(Ordering::Relaxed)
 }
 
 /// Whether the player's currently-playing attack was started by the L2
@@ -492,6 +674,7 @@ pub fn run(ini_path: String) {
 
     let mut elapsed_ms: f64 = 0.0;
     let mut attack_hook_installed = false;
+    let mut last_logged_tick_state: Option<(i32, bool)> = None;
 
     run_recurring_safe(
         cs_task,
@@ -520,7 +703,9 @@ pub fn run(ini_path: String) {
 
             // Regen.PerTick.Trigger picks which player state the tick heal
             // below applies on: 0 = Always, 1 = out of combat only, 2 = in
-            // combat only, 3 = idle only, 4 = sitting (via gesture) only.
+            // combat only, 3 = idle only, 4 = while a configured gesture is
+            // active only (see `Regen.PerTick.GestureId`, defaults to the
+            // sitting-family gestures).
             // Read up front since it also decides whether the attack hook
             // needs to be installed purely to track combat activity, even if
             // Regen Per Hit itself is disabled.
@@ -571,16 +756,32 @@ pub fn run(ini_path: String) {
                 1 => !is_in_combat(),
                 2 => is_in_combat(),
                 3 => is_idle(),
-                4 => is_sitting(),
+                4 => is_gesture_active(),
                 _ => true,
             };
             if config::get_bool("LogFile", false) && condition != 0 {
-                logger::log(&format!(
-                    "Regen.PerTick: trigger={condition} -> condition_met={condition_met} (in_combat={}, idle={}, sitting={})",
-                    is_in_combat(),
-                    is_idle(),
-                    is_sitting()
-                ));
+                // Only log when `condition_met` itself (the actual outcome -
+                // does this tick heal or not) CHANGES, not any time
+                // `in_combat`/`idle`/`gesture_active` shift on their own - an
+                // earlier version deduped on the whole tuple, which still
+                // logged a fresh line every time the player simply moved
+                // then stopped (each toggling `idle` even when it doesn't
+                // change `condition_met` at all, e.g. `Trigger=1`/`2`) -
+                // flooded LogFile over a long session just as badly as the
+                // original per-tick spam this dedup was meant to fix
+                // (reported 2026-09-14, this narrower version 2026-09-17).
+                // The detail fields are still read fresh and included in
+                // whichever line DOES get logged, for context.
+                let state = (condition, condition_met);
+                if last_logged_tick_state != Some(state) {
+                    last_logged_tick_state = Some(state);
+                    let in_combat = is_in_combat();
+                    let idle = is_idle();
+                    let gesture_active = is_gesture_active();
+                    logger::log(&format!(
+                        "Regen.PerTick: trigger={condition} -> condition_met={condition_met} (in_combat={in_combat}, idle={idle}, gesture_active={gesture_active})"
+                    ));
+                }
             }
             if !condition_met {
                 return;
