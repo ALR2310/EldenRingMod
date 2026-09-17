@@ -243,3 +243,21 @@ không có khái niệm "tắt" vì luôn cần 1 hệ số > 0).
   `u8 max_arrow_quantity`) có làm tròn đúng ý muốn không — công thức dùng
   `.round()` trước khi ép kiểu, khác hành vi chính xác của Smithbox Mass
   Edit (không rõ nó dùng round hay truncate).
+
+## Migrate `task.rs`/`player.rs`/`reload.rs` sang dùng chung `common` (2026-09-17)
+
+Xóa hẳn 3 file `src/task.rs`/`src/player.rs`/`src/reload.rs` (bản copy y hệt
+`sometweaks`'s cùng tên) - thay bằng `common::task`/`common::player`/
+`common::reload` (crate `common`, xem README `autoregen` mục "Tách
+`task_hook.rs`.../Gộp crate `engine` ngược vào `shared`", 2026-09-14, để
+biết lý do 5 module này (`task_hook`/`alloc_hook`/`task`/`player`/`reload`)
+nằm trong `common`). `dropmultiplier` (mod mới, cùng workspace) là mod đầu
+tiên dùng thẳng bộ này từ đầu; `RiseArcher` là mod **thứ 3** từng có 1 bản
+copy y hệt (sau `autoregen`, `sometweaks`) - migrate xong thì hết còn bản
+copy nào trùng nhau trong workspace này.
+
+Đổi mọi `crate::task::`/`crate::player::`/`crate::reload::` (và các tham
+chiếu không tiền tố `task::`/`player::`/`reload::` trong `lib.rs`) thành
+`common::task::`/`common::player::`/`common::reload::`. Không đổi hành vi -
+build + release build (`build-mod.ps1 -Mod RiseArcher`) xác nhận giống hệt
+trước migrate.

@@ -255,10 +255,10 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 /// already-applied scale when toggled off mid-session, from the cached
 /// snapshot), which doesn't apply before this module has ever run once.
 pub fn run() {
-    let mut last_seen_generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+    let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("DropRate.Enabled", true) {
-        match crate::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
+        match common::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
             Some(repo) => {
                 logger::log("DropRate: SoloParamRepository instance acquired.");
                 let mode = build_mode();
@@ -273,8 +273,8 @@ pub fn run() {
         logger::log("DropRate.Enabled=false - skipping entirely at startup.");
     }
 
-    let cs_task = crate::task::wait_for_cs_task();
-    let _handle = crate::task::run_recurring_safe(
+    let cs_task = common::task::wait_for_cs_task();
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "DropRate",
         CSTaskGroupIndex::FrameBegin,
@@ -285,13 +285,13 @@ pub fn run() {
             // map shared by every caller, so a second caller checking the
             // same key `reload` already checked this frame would always see
             // `false`, never picking up a reload at all.
-            let generation = crate::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+            let generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
             if generation == last_seen_generation {
                 return;
             }
             last_seen_generation = generation;
 
-            if crate::player::main_player_chr_ins_ptr().is_none() {
+            if common::player::main_player_chr_ins_ptr().is_none() {
                 logger::warn("DropRate: not in-world yet, reload skipped.");
                 return;
             }

@@ -2299,3 +2299,22 @@ gate log chi tiết của mọi module trong `SomeTweaks`: `regen`, `rune`,
 chỗ dùng: `regen/hit_hook.rs`, `regen/mod.rs`, `rune/multiplier.rs`,
 `rune/reward.rs`, `spirit/summon_count.rs`. `config::migrate()` tự đẩy
 `DebugLog` cũ vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL.
+
+## Migrate `task.rs`/`reload.rs` sang dùng chung `common`, thu gọn `player.rs` (2026-09-17)
+
+Xóa hẳn `src/task.rs`/`src/reload.rs` (bản gốc mà `risearcher`/`DropMultiplier`
+từng copy lại) - thay bằng `common::task`/`common::reload` (xem README
+`autoregen`, mục "Tách `task_hook.rs`.../Gộp crate `engine` ngược vào
+`shared`", 2026-09-14). `src/player.rs` **không xóa hẳn** - vẫn còn
+`NewActionPresses`/`main_player_new_action_presses` (đọc bit R1/R2/L1/L2
+cho `Regen.PerHit.ExcludeAow`, riêng của crate này, `common::player` không
+có) - chỉ bỏ `main_player_chr_ins_ptr`/`wait_for_solo_param_repository`
+(2 hàm trùng `common::player` y hệt), đổi mọi chỗ gọi 2 hàm đó sang
+`common::player::*`.
+
+Đổi mọi `crate::task::`/`crate::reload::`/`crate::player::main_player_chr_ins_ptr`/
+`crate::player::wait_for_solo_param_repository` thành tương ứng bên
+`common::`, giữ nguyên `crate::player::main_player_new_action_presses`.
+`lib.rs` bỏ `mod task;`/`mod reload;`, giữ `mod player;` (bản đã thu gọn).
+Không đổi hành vi - build + release build (`build-mod.ps1 -Mod SomeTweaks`)
+xác nhận giống hệt trước migrate.
