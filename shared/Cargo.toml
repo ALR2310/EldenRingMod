@@ -4,10 +4,14 @@ version = "1.0.0"
 edition = "2024"
 publish = false
 
-# Deliberately has NO dependency on `eldenring`/`fromsoftware-shared` - this
-# crate is generic mod-loader plumbing (ini config, file logging, AOB
-# scanning) that has nothing to do with Elden Ring's own reflected engine
-# types. Keeping it free of that dependency means it compiles fast and could
-# be reused for a mod targeting a different game entirely.
+# Does depend on `eldenring`/`fromsoftware-shared` (for task_hook/alloc_hook/
+# task/player/reload - see lib.rs doc comment for why they live here despite
+# that, after briefly being a separate `engine` crate) - a mod that never
+# touches those modules (e.g. weightmultiplier) still only links whatever it
+# actually calls into its final .dll (LTO strips the rest), it just also
+# compiles this dependency once.
 [dependencies]
 chrono.workspace = true
+eldenring.workspace = true
+fromsoftware-shared.workspace = true
+vtable-rs.workspace = true

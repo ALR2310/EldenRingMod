@@ -10,7 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 common = { path = "../../shared" }
-engine = { path = "../../engine" }
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
 chrono.workspace = true

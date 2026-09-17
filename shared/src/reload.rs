@@ -28,9 +28,9 @@ use std::time::Duration;
 use eldenring::cs::CSTaskGroupIndex;
 use eldenring::util::input;
 
-use common::config;
-use common::input::parse_virtual_key;
-use common::logger;
+use crate::config;
+use crate::input::parse_virtual_key;
+use crate::logger;
 
 const VK_F5: i32 = 0x74;
 

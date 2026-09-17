@@ -23,8 +23,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use eldenring::dlkr::DLAllocator;
 
-use common::logger;
-use common::memscan;
+use crate::logger;
+use crate::memscan;
 
 // Logged once (not every call - a caller may hit this on every reload-key
 // press) so a healthy AOB match doesn't spam the log the way a failure

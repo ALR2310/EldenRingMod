@@ -5,7 +5,7 @@
 //!   chance to exactly this %, preserving each item's relative share against
 //!   its row-mates.
 //!
-//! Supports `General.ReloadKey` hot reload via [`engine::reload`], so
+//! Supports `General.ReloadKey` hot reload via [`common::reload`], so
 //! re-reads the ini and recomputes on every press instead of only once at
 //! startup.
 //!
@@ -245,7 +245,7 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 }
 
 /// Applies `Mode`'s selected mode once, then watches `General.ReloadKey`
-/// (via [`engine::reload`]) on the game's own `FrameBegin` task group for
+/// (via [`common::reload`]) on the game's own `FrameBegin` task group for
 /// the rest of the DLL's lifetime, recomputing from the cached original
 /// weights on every press. Meant to run on its own worker thread spawned
 /// from `DllMain`; never returns (except early, if `SoloParamRepository`
@@ -258,10 +258,10 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 /// already-applied scale when toggled off mid-session, from the cached
 /// snapshot), which doesn't apply before this module has ever run once.
 pub fn run() {
-    let mut last_seen_generation = engine::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+    let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("Enabled", true) {
-        match engine::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
+        match common::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
             Some(repo) => {
                 logger::log("DropMultiplier: SoloParamRepository instance acquired.");
                 let mode = build_mode();
@@ -276,25 +276,25 @@ pub fn run() {
         logger::log("Enabled=false - skipping entirely at startup.");
     }
 
-    let cs_task = engine::task::wait_for_cs_task();
-    engine::task::run_recurring_safe(
+    let cs_task = common::task::wait_for_cs_task();
+    common::task::run_recurring_safe(
         cs_task,
         "DropMultiplier",
         CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
-            // Poll `engine::reload::RELOAD_GENERATION` instead of calling
+            // Poll `common::reload::RELOAD_GENERATION` instead of calling
             // `input::is_key_pressed(ReloadKey)` ourselves - see that
             // module's doc comment for why: it debounces per VK code in one
             // map shared by every caller, so a second caller checking the
             // same key `reload` already checked this frame would always see
             // `false`, never picking up a reload at all.
-            let generation = engine::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+            let generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
             if generation == last_seen_generation {
                 return;
             }
             last_seen_generation = generation;
 
-            if engine::player::main_player_chr_ins_ptr().is_none() {
+            if common::player::main_player_chr_ins_ptr().is_none() {
                 logger::warn("DropMultiplier: not in-world yet, reload skipped.");
                 return;
             }
