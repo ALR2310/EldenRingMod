@@ -61,8 +61,12 @@
 //! Ported from [`sometweaks::drop_rate`](../sometweaks) (2026-09-14) into its
 //! own standalone mod - same feature, same algebra, only the ini key names
 //! changed (no `DropRate.` prefix needed when the whole ini is this one
-//! feature) and the shared engine plumbing (`player`/`task`/`reload`) now
-//! comes from the [`engine`] crate instead of this crate's own copy.
+//! feature) and the shared plumbing (`player`/`task`/`reload`) now comes
+//! from [`common`] instead of this crate's own copy. Log lines also don't
+//! prefix themselves with "DropMultiplier:" the way `sometweaks` prefixes
+//! its own lines with a feature name - that's only useful when one log file
+//! is shared by many features; this crate's whole log file already is this
+//! one feature.
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -142,15 +146,7 @@ enum Mode {
     FixedPercent(f64),
 }
 
-/// `Enabled=false` is treated as `Multiplier(1.0)` - a true no-op that
-/// reverts every row to its cached original weights (see [apply]), rather
-/// than merely skipping the rest of this run - values already scaled by a
-/// previous `Enabled=true`/`ReloadKey` press must actually be undone, not
-/// just left as they were.
 fn build_mode() -> Mode {
-    if !config::get_bool("Enabled", true) {
-        return Mode::Multiplier(1.0);
-    }
     match config::get_int("Mode", 0) {
         1 => Mode::FixedPercent(config::get_double("ChancePercent", 50.0).max(0.0)),
         _ => Mode::Multiplier(config::get_double("Multiplier", 2.0).max(0.0)),
@@ -209,7 +205,7 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
     let mut snapshot_guard = ORIGINAL_BASE_POINTS.lock().unwrap();
     let is_first_call = snapshot_guard.is_none();
     if is_first_call {
-        logger::log("DropMultiplier: SoloParamRepository ready, snapshotting ItemLotParam_enemy...");
+        logger::log("SoloParamRepository ready, snapshotting ItemLotParam_enemy...");
     }
     let snapshot = snapshot_guard.get_or_insert_with(|| {
         repo.rows_mut::<ItemLotParam_enemy>()
@@ -217,7 +213,7 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
             .collect()
     });
     if is_first_call {
-        logger::log(&format!("DropMultiplier: snapshotted {} row(s), applying...", snapshot.len()));
+        logger::log(&format!("snapshotted {} row(s), applying...", snapshot.len()));
     }
 
     let mut changed = 0;
@@ -248,33 +244,15 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 /// (via [`common::reload`]) on the game's own `FrameBegin` task group for
 /// the rest of the DLL's lifetime, recomputing from the cached original
 /// weights on every press. Meant to run on its own worker thread spawned
-/// from `DllMain`; never returns (except early, if `SoloParamRepository`
-/// never becomes available).
-///
-/// `Enabled=false` at startup skips touching
-/// `SoloParamRepository`/`ItemLotParam_enemy` entirely, rather than calling
-/// `apply` with a no-op `Multiplier(1.0)` - `build_mode`'s own
-/// `Multiplier(1.0)` fallback exists for the *hot-reload* case (undoing an
-/// already-applied scale when toggled off mid-session, from the cached
-/// snapshot), which doesn't apply before this module has ever run once.
+/// from `DllMain`; never returns.
 pub fn run() {
     let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
-    if config::get_bool("Enabled", true) {
-        match common::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
-            Some(repo) => {
-                logger::log("DropMultiplier: SoloParamRepository instance acquired.");
-                let mode = build_mode();
-                let changed = apply(repo, &mode);
-                log_mode(&mode, changed, "");
-            }
-            None => {
-                logger::error("DropMultiplier: SoloParamRepository never became available, disabled for this session.");
-            }
-        }
-    } else {
-        logger::log("Enabled=false - skipping entirely at startup.");
-    }
+    let repo = common::player::wait_for_solo_param_repository();
+    logger::log("SoloParamRepository instance acquired.");
+    let mode = build_mode();
+    let changed = apply(repo, &mode);
+    log_mode(&mode, changed, "");
 
     let cs_task = common::task::wait_for_cs_task();
     common::task::run_recurring_safe(
@@ -295,11 +273,11 @@ pub fn run() {
             last_seen_generation = generation;
 
             if common::player::main_player_chr_ins_ptr().is_none() {
-                logger::warn("DropMultiplier: not in-world yet, reload skipped.");
+                logger::warn("not in-world yet, reload skipped.");
                 return;
             }
             let Ok(repo) = (unsafe { SoloParamRepository::instance_mut() }) else {
-                logger::warn("DropMultiplier: SoloParamRepository not available on reload, skipped.");
+                logger::warn("SoloParamRepository not available on reload, skipped.");
                 return;
             };
             let mode = build_mode();

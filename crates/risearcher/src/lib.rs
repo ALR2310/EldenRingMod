@@ -73,10 +73,7 @@ fn run() {
     let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     logger::log("RiseArcher: waiting for the player to be in the game world (regulation.bin)...");
-    let Some(repo) = common::player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
-        logger::log("ERROR: SoloParamRepository never became available - RiseArcher disabled for this session.");
-        return;
-    };
+    let repo = common::player::wait_for_solo_param_repository();
     logger::log("RiseArcher: SoloParamRepository ready, applying weapon buffs...");
 
     let Some((weapon_changed, bullet_changed)) = apply_with_retry(repo, Duration::from_secs(30)) else {

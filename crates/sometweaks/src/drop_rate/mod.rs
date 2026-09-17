@@ -245,8 +245,7 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
 /// `General.ReloadKey` on the game's own `FrameBegin` task group for the
 /// rest of the DLL's lifetime, recomputing from the cached original weights
 /// on every press. Meant to run on its own worker thread spawned from
-/// `DllMain`; never returns (except early, if `SoloParamRepository` never
-/// becomes available).
+/// `DllMain`; never returns.
 ///
 /// `DropRate.Enabled=false` at startup skips touching
 /// `SoloParamRepository`/`ItemLotParam_enemy` entirely, rather than calling
@@ -258,17 +257,11 @@ pub fn run() {
     let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("DropRate.Enabled", true) {
-        match common::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
-            Some(repo) => {
-                logger::log("DropRate: SoloParamRepository instance acquired.");
-                let mode = build_mode();
-                let changed = apply(repo, &mode);
-                log_mode(&mode, changed, "");
-            }
-            None => {
-                logger::error("DropRate: SoloParamRepository never became available, disabled for this session.");
-            }
-        }
+        let repo = common::player::wait_for_solo_param_repository();
+        logger::log("DropRate: SoloParamRepository instance acquired.");
+        let mode = build_mode();
+        let changed = apply(repo, &mode);
+        log_mode(&mode, changed, "");
     } else {
         logger::log("DropRate.Enabled=false - skipping entirely at startup.");
     }

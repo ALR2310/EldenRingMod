@@ -72,7 +72,7 @@ fn apply(repo: &mut SoloParamRepository, unlock: bool) -> usize {
 
 /// Applies the param edit once (skipped entirely at startup if
 /// `GraceMenu.UnlockShop=false`, same as `drop_rate`'s own
-/// `DropRate.Enabled` - no reason to wait up to 300s for
+/// `DropRate.Enabled` - no reason to wait (forever, if it comes to that) for
 /// `SoloParamRepository` when nothing wants to touch it yet), then
 /// watches `General.ReloadKey` on the game's own `FrameBegin` task group
 /// for the rest of the DLL's lifetime, re-applying (or restoring, if
@@ -82,15 +82,9 @@ pub fn run() {
     let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
     if config::get_bool("GraceMenu.UnlockShop", false) {
-        match common::player::wait_for_solo_param_repository(Duration::from_secs(300)) {
-            Some(repo) => {
-                let rows = apply(repo, true);
-                logger::log(&format!("GraceMenu.UnlockShop=true applied to {rows} ShopLineupParam row(s)."));
-            }
-            None => {
-                logger::error("GraceMenu: SoloParamRepository never became available, UnlockShop disabled for this session.");
-            }
-        }
+        let repo = common::player::wait_for_solo_param_repository();
+        let rows = apply(repo, true);
+        logger::log(&format!("GraceMenu.UnlockShop=true applied to {rows} ShopLineupParam row(s)."));
     } else {
         logger::log("GraceMenu.UnlockShop=false - skipping entirely at startup.");
     }
