@@ -41,15 +41,15 @@ pub fn wait_for_cs_task() -> &'static CSTaskImp {
                 logger::log("CSTaskImp found.");
                 return instance;
             }
-            Err(err) => {
+            Err(_) => {
                 if !warned && start.elapsed() >= WARN_AFTER {
                     warned = true;
                     logger::error(&format!(
-                        "CSTaskImp not found after {}s ({err:?}) - game may need a mod update, check Nexus.",
+                        "CSTaskImp not found after {}s - game may need a mod update, check Nexus.",
                         WARN_AFTER.as_secs()
                     ));
                 } else {
-                    logger::log(&format!("CSTaskImp not ready yet ({err:?}), retrying in 500ms..."));
+                    logger::log("CSTaskImp not ready yet, retrying in 500ms...");
                 }
                 std::thread::sleep(Duration::from_millis(500));
             }

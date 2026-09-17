@@ -126,7 +126,7 @@ pub fn wait_for_solo_param_repository() -> &'static mut SoloParamRepository {
         }
         if waited - last_reminder >= REMINDER_EVERY {
             last_reminder = waited;
-            crate::logger::log("Still waiting for the player to be in the game world (SoloParamRepository)...");
+            crate::logger::log("SoloParamRepository not found yet, waiting for player to join world...");
         }
         std::thread::sleep(step);
         waited += step;
