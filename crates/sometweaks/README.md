@@ -2318,3 +2318,16 @@ có) - chỉ bỏ `main_player_chr_ins_ptr`/`wait_for_solo_param_repository`
 `lib.rs` bỏ `mod task;`/`mod reload;`, giữ `mod player;` (bản đã thu gọn).
 Không đổi hành vi - build + release build (`build-mod.ps1 -Mod SomeTweaks`)
 xác nhận giống hệt trước migrate.
+
+## Xóa hẳn `player.rs`, dùng `common::player::ActionSnapshot` (2026-09-17, cùng ngày)
+
+Mục ngay trên vừa thu gọn `player.rs` xuống còn đúng `NewActionPresses`/
+`main_player_new_action_presses` - hoá ra 4 field đó (`r1`/`r2`/`l1`/`l2`)
+là **tập con y hệt** của `ActionSnapshot` bên [`autoregen`](../autoregen)
+(xem README của nó, mục cùng ngày) - cùng đọc từ đúng 1 struct
+`CSChrActionRequestModule`. Gộp nốt: xóa hẳn `src/player.rs`, bỏ `mod
+player;` khỏi `lib.rs`, đổi `regen/mod.rs` gọi thẳng
+`common::player::main_player_action_snapshot()` rồi chỉ dùng `.r1`/`.r2`/
+`.l1`/`.l2` (bỏ qua `.new_gesture`/`.requested_gesture`/`.busy`, `sometweaks`
+không cần). Crate này giờ không còn file `player.rs` nào nữa. Không đổi
+hành vi - build + release build xác nhận.

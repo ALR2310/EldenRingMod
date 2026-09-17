@@ -69,7 +69,7 @@ static LAST_ATTACK_WAS_SKILL: AtomicBool = AtomicBool::new(false);
 /// whatever the last press decided) or if the player isn't resolved yet.
 /// Called every frame, independent of any Regen.PerHit config.
 pub fn update_last_attack_input() {
-    let Some(presses) = crate::player::main_player_new_action_presses() else {
+    let Some(presses) = common::player::main_player_action_snapshot() else {
         return;
     };
     if presses.r1 || presses.r2 || presses.l1 {

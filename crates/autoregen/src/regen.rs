@@ -205,64 +205,15 @@ fn show_announcement(text: &str) {
     });
 }
 
-/// The pad-input bits read each frame to decide `LAST_ATTACK_WAS_SKILL`,
-/// `IS_GESTURE_ACTIVE` and `is_idle()` below.
-///
-/// `r1`/`r2`/`l1`/`l2`/`new_gesture` come from `new_action_presses` (fires
-/// exactly 1 frame, on the press) - confirmed in-game (2026-09-03) to
-/// correlate with Ash of War/skill hits far more reliably than any
-/// `AtkParam` field does (see AutoRegen's README). `requested_gesture` is a
-/// plain value (not a bit), only meaningful the same frame `new_gesture` is
-/// set. `busy` covers every other way the player can be "not idle" - held
-/// (not just newly-pressed) actions from `action_requests`, plus actual
-/// movement input - read from the same module so idle detection doesn't
-/// need yet another `WorldChrMan::instance()` call of its own.
-///
-/// `new_gesture` alone isn't enough to know a sit actually started (a press
-/// blocked mid-cast still fires it) - see `confirm_pending_gesture` for the
-/// fields that verify what happens next.
-struct ActionSnapshot {
-    r1: bool,
-    r2: bool,
-    l1: bool,
-    l2: bool,
-    new_gesture: bool,
-    requested_gesture: i32,
-    busy: bool,
-}
-
-/// Reads this frame's action-input snapshot (see [`ActionSnapshot`]) off the
-/// main player's `CSChrActionRequestModule`. `None` if not resolved yet.
-fn main_player_action_snapshot() -> Option<ActionSnapshot> {
-    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
-    let main_player = world_chr_man.main_player.as_ref()?;
-    let action_request = &main_player.chr_ins.modules.action_request;
-    let new_presses = &action_request.new_action_presses;
-    let held = &action_request.action_requests;
-    let busy = action_request.movement_request_flags.raw_input()
-        || held.r1()
-        || held.r2()
-        || held.l1()
-        || held.l2()
-        || held.sp_move()
-        || held.jump()
-        || held.use_item()
-        || held.action()
-        || held.guard()
-        || held.rideon()
-        || held.rideoff()
-        || held.ladderup()
-        || held.ladderdown();
-    Some(ActionSnapshot {
-        r1: new_presses.r1(),
-        r2: new_presses.r2(),
-        l1: new_presses.l1(),
-        l2: new_presses.l2(),
-        new_gesture: new_presses.gesture(),
-        requested_gesture: action_request.requested_gesture,
-        busy,
-    })
-}
+// `LAST_ATTACK_WAS_SKILL`/`IS_GESTURE_ACTIVE`/`is_idle()` below all read
+// `common::player::ActionSnapshot` (moved there 2026-09-17 once
+// `sometweaks::player`'s own narrower version turned out to be a strict
+// subset of the same fields off the same struct - see its doc comment for
+// the full field-by-field rationale, unchanged from when this lived here).
+//
+// `new_gesture` alone isn't enough to know a sit actually started (a press
+// blocked mid-cast still fires it) - see `confirm_pending_gesture` for the
+// fields that verify what happens next.
 
 // Whether the last attack-starting button the player pressed was L2 (Skill/
 // Weapon Art), as opposed to R1/R2/L1 (a plain attack) - in Elden Ring, the
@@ -486,7 +437,7 @@ fn confirm_pending_gesture(busy: bool) {
 /// this frame's action input. No-op if the player isn't resolved yet. Called
 /// every frame, independent of any Regen.PerHit/PerTick config.
 pub fn update_last_attack_input() {
-    let Some(snapshot) = main_player_action_snapshot() else {
+    let Some(snapshot) = common::player::main_player_action_snapshot() else {
         return;
     };
     track_current_anim();

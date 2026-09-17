@@ -3,7 +3,6 @@
 mod drop_rate;
 mod grace_menu;
 mod misc;
-mod player;
 mod regen;
 mod rune;
 mod spirit;
