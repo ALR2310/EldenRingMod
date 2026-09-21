@@ -280,7 +280,7 @@ extern "C" fn on_hit_pre(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: 
 }
 
 fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_void) {
-    let Some(player_ptr) = crate::player::main_player_chr_ins_ptr() else {
+    let Some(player_ptr) = common::player::main_player_chr_ins_ptr() else {
         return;
     };
 

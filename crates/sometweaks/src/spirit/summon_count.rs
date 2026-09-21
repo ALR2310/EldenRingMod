@@ -150,7 +150,7 @@ fn apply(mode: &Mode) -> usize {
     // storage pointer dereferenced while loading/transitioning). Same
     // "is the player actually in the game world" gate every other feature
     // in this crate already uses - see `player.rs`'s own doc comment.
-    if crate::player::main_player_chr_ins_ptr().is_none() {
+    if common::player::main_player_chr_ins_ptr().is_none() {
         return 0;
     }
 
@@ -188,11 +188,11 @@ fn apply(mode: &Mode) -> usize {
 /// approach. Meant to run on its own worker thread spawned from
 /// `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
 
-    let _handle = crate::task::run_recurring_safe(
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "Spirit.Summon",
         CSTaskGroupIndex::FrameBegin,

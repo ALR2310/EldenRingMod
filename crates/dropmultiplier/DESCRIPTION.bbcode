@@ -1,0 +1,37 @@
+A DLL mod that lets you multiply enemy item-drop chances, or set them to a fixed percent instead. Fully configurable via its config file.
+
+[size=4][b]Features[/b][/size]
+[list]
+[*]Multiply every enemy drop's chance by a configurable factor, or force it to a fixed percent instead - your choice preserves each item's share relative to its drop-table row-mates.[/*]
+[*]Hotkey to reload the ini without restarting the game.[/*]
+[/list]
+
+[b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
+
+[size=4][b]Installation[/b][/size]
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\DropMultiplier.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]DropMultiplier.dll[/b] and [b]DropMultiplier.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]1.0.0[/b]
+[list]
+[*]Multiplies or fixes enemy item-drop chances.[/*]
+[/list]
+[/spoiler]

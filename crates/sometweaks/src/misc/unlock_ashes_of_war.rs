@@ -27,7 +27,6 @@
 //! `drop_rate` needs for its much smaller single-field edit; restart the
 //! game with `UnlockAshesOfWar=false` to go back to vanilla.
 
-use std::time::Duration;
 
 use eldenring::cs::{EquipParamGem, EquipParamWeapon, SoloParamRepository};
 
@@ -96,9 +95,9 @@ fn apply(repo: &mut SoloParamRepository) -> (usize, usize) {
     (weapons, gems)
 }
 
-/// Applies the param edits once, waiting (up to 300s) for
-/// `SoloParamRepository` to actually be populated
-/// (`player::wait_for_solo_param_repository`). Meant to run on its own
+/// Applies the param edits once, waiting (forever - see
+/// `common::player::wait_for_solo_param_repository`) for
+/// `SoloParamRepository` to actually be populated. Meant to run on its own
 /// worker thread spawned from `DllMain`; returns once done (no tick/hotkey
 /// loop for this module).
 pub fn run() {
@@ -107,10 +106,7 @@ pub fn run() {
         return;
     }
 
-    let Some(repo) = crate::player::wait_for_solo_param_repository(Duration::from_secs(300)) else {
-        logger::error("UnlockAshesOfWar: SoloParamRepository never became available, disabled for this session.");
-        return;
-    };
+    let repo = common::player::wait_for_solo_param_repository();
 
     let (weapons, gems) = apply(repo);
     logger::log(&format!(

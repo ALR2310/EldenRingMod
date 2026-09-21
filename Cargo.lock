@@ -31,7 +31,6 @@ dependencies = [
  "common",
  "eldenring",
  "fromsoftware-shared",
- "vtable-rs",
 ]
 
 [[package]]
@@ -104,6 +103,9 @@ name = "common"
 version = "1.0.0"
 dependencies = [
  "chrono",
+ "eldenring",
+ "fromsoftware-shared",
+ "vtable-rs",
 ]
 
 [[package]]
@@ -126,6 +128,15 @@ name = "derive_pod"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2ea6706d74fca54e15f1d40b5cf7fe7f764aaec61352a9fcec58fe27e042fc8"
+
+[[package]]
+name = "dropmultiplier"
+version = "1.0.0"
+dependencies = [
+ "common",
+ "eldenring",
+ "fromsoftware-shared",
+]
 
 [[package]]
 name = "eldenring"

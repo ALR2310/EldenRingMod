@@ -130,10 +130,10 @@ pub fn run() {
     let applied = apply_code_patches();
     logger::log(&format!("TorrentAnywhere: {applied}/3 code patch(es) applied."));
 
-    let cs_task = crate::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
     let mut elapsed_ms: f64 = 0.0;
 
-    let _handle = crate::task::run_recurring_safe(
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "TorrentAnywhere",
         CSTaskGroupIndex::FrameBegin,

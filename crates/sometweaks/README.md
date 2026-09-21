@@ -2299,3 +2299,59 @@ gate log chi tiết của mọi module trong `SomeTweaks`: `regen`, `rune`,
 chỗ dùng: `regen/hit_hook.rs`, `regen/mod.rs`, `rune/multiplier.rs`,
 `rune/reward.rs`, `spirit/summon_count.rs`. `config::migrate()` tự đẩy
 `DebugLog` cũ vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL.
+
+## Migrate `task.rs`/`reload.rs` sang dùng chung `common`, thu gọn `player.rs` (2026-09-17)
+
+Xóa hẳn `src/task.rs`/`src/reload.rs` (bản gốc mà `risearcher`/`DropMultiplier`
+từng copy lại) - thay bằng `common::task`/`common::reload` (xem README
+`autoregen`, mục "Tách `task_hook.rs`.../Gộp crate `engine` ngược vào
+`shared`", 2026-09-14). `src/player.rs` **không xóa hẳn** - vẫn còn
+`NewActionPresses`/`main_player_new_action_presses` (đọc bit R1/R2/L1/L2
+cho `Regen.PerHit.ExcludeAow`, riêng của crate này, `common::player` không
+có) - chỉ bỏ `main_player_chr_ins_ptr`/`wait_for_solo_param_repository`
+(2 hàm trùng `common::player` y hệt), đổi mọi chỗ gọi 2 hàm đó sang
+`common::player::*`.
+
+Đổi mọi `crate::task::`/`crate::reload::`/`crate::player::main_player_chr_ins_ptr`/
+`crate::player::wait_for_solo_param_repository` thành tương ứng bên
+`common::`, giữ nguyên `crate::player::main_player_new_action_presses`.
+`lib.rs` bỏ `mod task;`/`mod reload;`, giữ `mod player;` (bản đã thu gọn).
+Không đổi hành vi - build + release build (`build-mod.ps1 -Mod SomeTweaks`)
+xác nhận giống hệt trước migrate.
+
+## Xóa hẳn `player.rs`, dùng `common::player::ActionSnapshot` (2026-09-17, cùng ngày)
+
+Mục ngay trên vừa thu gọn `player.rs` xuống còn đúng `NewActionPresses`/
+`main_player_new_action_presses` - hoá ra 4 field đó (`r1`/`r2`/`l1`/`l2`)
+là **tập con y hệt** của `ActionSnapshot` bên [`autoregen`](../autoregen)
+(xem README của nó, mục cùng ngày) - cùng đọc từ đúng 1 struct
+`CSChrActionRequestModule`. Gộp nốt: xóa hẳn `src/player.rs`, bỏ `mod
+player;` khỏi `lib.rs`, đổi `regen/mod.rs` gọi thẳng
+`common::player::main_player_action_snapshot()` rồi chỉ dùng `.r1`/`.r2`/
+`.l1`/`.l2` (bỏ qua `.new_gesture`/`.requested_gesture`/`.busy`, `sometweaks`
+không cần). Crate này giờ không còn file `player.rs` nào nữa. Không đổi
+hành vi - build + release build xác nhận.
+
+## Fix race condition: `wait_for_solo_param_repository` bỏ cuộc sau 5 phút chờ vào world (2026-09-17)
+
+Phát hiện khi test `DropMultiplier` (mod port từ chính `drop_rate` của
+crate này, xem README của nó cùng ngày): `common::player::
+wait_for_solo_param_repository` (khi đó còn nhận `timeout`) hard-code chờ
+tối đa 300s rồi bỏ cuộc - nếu người chơi mở game xong bận việc khác >5 phút
+mới thật sự vào world, mọi tính năng đợi `SoloParamRepository` trong crate
+này (`drop_rate`, `misc::unlock_ashes_of_war`, `misc::unlock_enchantments`,
+`grace_menu::unlock_shop` - cả 4 chỗ đều gọi cùng hàm này với cùng
+`Duration::from_secs(300)`) sẽ bị tắt cho session đó, chỉ phục hồi được nếu
+biết tự bấm `ReloadKey` (và chỉ `drop_rate`/`unlock_shop` có hotkey watch để
+phục hồi được - `unlock_ashes_of_war`/`unlock_enchantments` không hot-reload
+nên tắt luôn, không có đường quay lại).
+
+Sửa tại hàm dùng chung: bỏ hẳn tham số `timeout`, chờ **vô hạn** (giống
+`common::task::wait_for_cs_task` không bao giờ bỏ cuộc), chỉ log nhắc nhở
+mỗi 30s thay vì 1 dòng `ERROR` rồi im lặng mãi. Cả 4 call site trong crate
+này đổi từ `match .../let Some(repo) = ... else { ... return/log lỗi }`
+thành gọi thẳng `let repo = common::player::wait_for_solo_param_repository();`
+- không còn nhánh lỗi nào để viết nữa, vì hàm giờ không bao giờ trả về
+"thất bại". Build + release build xác nhận không đổi hành vi khi vào world
+bình thường (dưới 5 phút vẫn hoạt động y hệt, chỉ khác là không còn giới
+hạn thời gian chờ).

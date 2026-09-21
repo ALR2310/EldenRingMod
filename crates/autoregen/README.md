@@ -618,6 +618,91 @@ xem `lib.rs`.
 vào `[Legacy]` ở lần chạy đầu sau khi cập nhật DLL - cần tự copy giá trị đã
 tùy chỉnh sang `[Logging] LogFile` mới trong `AutoRegen.ini`.
 
+## Tách `task_hook.rs`/`alloc_hook.rs`/`wait_for_cs_task`/`run_recurring_safe` ra crate `engine` (2026-09-14)
+
+Xóa hẳn `src/task_hook.rs`/`src/alloc_hook.rs` khỏi crate này, cùng
+`wait_for_cs_task`/`run_recurring_safe` nội bộ trong `regen.rs` và
+`main_player_chr_ins_ptr` - chuyển nguyên bản (không đổi logic/AOB pattern)
+sang crate share mới **[`engine`](../../engine)** ở gốc workspace, ngang
+hàng với [`shared`](../../shared) (`common`). Lý do: lúc port tính năng
+`Drop Rate` của [`sometweaks`](../sometweaks) ra mod riêng
+([`DropMultiplier`](../dropmultiplier), cùng ngày), nhận ra bộ 4 thứ này
+(vốn chỉ ở `autoregen`, viết ra để giải quyết đúng vấn đề `rva::get()`
+version-lock - xem mục "AOB thay `rva::get()`..." phía trên) sắp phải copy
+lần thứ 2 (`DropMultiplier`) trong khi `sometweaks`/`risearcher` cũng đang
+tự mang 2 bản `task.rs`/`player.rs`/`reload.rs` gần như y hệt nhau (chỉ khác
+là bản của họ **chưa** có cải tiến AOB, vẫn còn dính `rva::get()`) - tách ra
+1 lần trước khi nhân bản thêm, thay vì tiếp tục copy-paste mỗi lần 1 mod mới
+cần.
+
+`engine` khác `common`: `common` **cố tình** không phụ thuộc
+`eldenring`/`fromsoftware-shared` (xem comment đầu `Cargo.toml` của nó -
+plumbing tổng quát, có thể tái dùng cho mod ở game khác); `engine` thì
+ngược lại, tồn tại **chính vì** cần phụ thuộc 2 crate đó để nói chuyện với
+struct/singleton thật của game, chỉ tách khỏi từng mod chứ không tách khỏi
+`eldenring`. Nội dung crate mới (4 module, xem doc comment `engine/src/lib.rs`):
+
+- `task_hook`/`alloc_hook`: y hệt bản cũ của `autoregen`, không đổi 1 dòng
+  AOB pattern nào.
+- `task`: gộp `wait_for_cs_task()` (bản mới nhất của `autoregen`, tra
+  `CSTaskImp::instance()` theo tên, không qua `wait_for_instance()`/RVA) với
+  chữ ký `run_recurring_safe(cs_task, tag, group, f)` có tham số `tag` từ
+  `sometweaks`/`risearcher`'s `task.rs` (bản `autoregen` cũ không có `tag`,
+  chỉ dùng cho 1 tính năng duy nhất nên không cần) - **quan trọng**: đây là
+  bản `wait_for_cs_task` **mới hơn, an toàn hơn** bản `sometweaks`/
+  `risearcher` đang dùng (bản đó vẫn gọi `wait_for_system_init_until_ready`
+  + `CSTaskImp::wait_for_instance` retry `InvalidRva` - còn dính `rva::get()`
+  1 lớp sâu hơn), nên 2 mod đó khi migrate sang `engine` sau này sẽ tự động
+  được nâng cấp luôn, không chỉ gọn code.
+- `player`: `main_player_chr_ins_ptr`/`wait_for_solo_param_repository` -
+  giữ nguyên từ `sometweaks::player`/`risearcher::player` (giống hệt nhau ở
+  cả 2 nơi), bỏ `NewActionPresses`/`main_player_new_action_presses` (chi
+  tiết riêng của `Regen.PerHit.ExcludeAow`, không phải nhu cầu chung).
+- `reload`: watch `ReloadKey` + `RELOAD_GENERATION`, giữ nguyên từ
+  `sometweaks::reload`/`risearcher::reload`, chỉ đổi để dùng
+  `engine::task` nội bộ thay vì tự có bản riêng.
+
+`autoregen` (crate này) migrate xong, dùng thẳng `engine::task_hook`/
+`engine::alloc_hook`/`engine::task::{wait_for_cs_task, run_recurring_safe}`/
+`engine::player::main_player_chr_ins_ptr` - build lại xác nhận không đổi
+hành vi. **`sometweaks`/`risearcher` chưa migrate** (vẫn giữ bản `task.rs`/
+`player.rs`/`reload.rs` riêng, cũ hơn) - để dành làm sau, không bắt buộc
+ngay; `DropMultiplier` (mod mới) dùng thẳng `engine` ngay từ đầu, không tự
+viết bản riêng nào.
+
+## Gộp crate `engine` ngược vào `shared` (`common`) (2026-09-14, cùng ngày)
+
+Đảo ngược quyết định ở mục ngay trên - `engine` (crate riêng, mới tách được
+vài giờ) gộp lại vào [`shared`](../../shared) (`common`), không còn tồn tại
+độc lập nữa. Lý do: bàn lại với người dùng về việc gọn thư mục (`shared`/
+`engine` đều nằm ở gốc workspace, muốn nhóm chung 1 chỗ) - cân nhắc giữa
+"gộp thành 1 crate" và "2 crate con trong `shared/`", ban đầu nghiêng về
+giữ tách biệt vì lo `weightmultiplier` (mod duy nhất không cần
+`eldenring`) sẽ bị kéo thêm dependency không cần thiết nếu gộp.
+
+Test thật (build `WeightMultiplier` cả trước/sau khi gộp, so kích thước
+file): **kích thước `.dll` cuối cùng không đổi** (272896 byte cả 2 lần) -
+workspace này đã bật `lto = true`/`codegen-units = 1` từ trước, nên code
+không dùng tới (toàn bộ `task_hook`/`alloc_hook`/`task`/`player`/`reload`,
+với `weightmultiplier` không gọi dòng nào) bị linker cắt bỏ khỏi output
+cuối cùng, bất kể có "khai" dependency đó hay không. Cái giá thật sự của
+việc gộp chỉ là: build riêng lẻ 1 mod không dùng các module đó (`cargo
+build -p weightmultiplier` từ cache sạch) giờ cũng phải compile
+`eldenring`/`fromsoftware-shared` một lần - không ảnh hưởng gì tới sản phẩm
+cuối, chỉ hơi chậm hơn ở build riêng lẻ lần đầu. Đánh đổi này được người
+dùng chấp nhận để đổi lấy cấu trúc thư mục gọn hơn (không cần nhớ "cái nào
+ở `shared/`, cái nào ở `engine/`").
+
+Thực hiện: dời nguyên 5 file (`task_hook.rs`/`alloc_hook.rs`/`task.rs`/
+`player.rs`/`reload.rs`) từ `engine/src/` vào `shared/src/`, đổi
+`use common::X` nội bộ trong các file đó thành `use crate::X` (giờ cùng 1
+crate), thêm `eldenring`/`fromsoftware-shared`/`vtable-rs` vào
+`[dependencies]` của `shared/Cargo.toml`, xóa hẳn thư mục `engine/` +
+entry trong `members` của `Cargo.toml` gốc. `autoregen`/`dropmultiplier`
+đổi mọi `engine::X` thành `common::X`, bỏ dòng `engine = { path = ... }`
+trong `Cargo.toml` của cả 2. Build + `cargo test --workspace` xác nhận
+không đổi hành vi.
+
 ## Fix log `Regen.PerTick` spam mỗi frame/interval dù giá trị không đổi (2026-09-14)
 
 Người dùng phát hiện `AutoRegen.log` (khi bật `[Logging] LogFile`) bị dòng
@@ -911,7 +996,41 @@ khi 1 trong 10 gesture ngồi active, y hệt trước):
   `Regen.PerTick:` đổi thành `gesture_active=`; log `Gesture: ... ->
   is_sitting=...` đổi thành `-> is_gesture_active=...`.
 
-## Lịch sử dịch ngược (bản C++ gốc, không còn khớp code hiện tại)
+## Gộp `ActionSnapshot` với `sometweaks::player::NewActionPresses` vào `common::player` (2026-09-17)
+
+Xóa hẳn struct `ActionSnapshot` + hàm `main_player_action_snapshot()` nội
+bộ trong `regen.rs`, chuyển nguyên bản sang `common::player` (đổi tên
+`common::player::ActionSnapshot`/`common::player::main_player_action_snapshot`).
+Lý do: nhận ra `sometweaks::player::NewActionPresses` (4 field `r1`/`r2`/
+`l1`/`l2`, dùng cho `Regen.PerHit.ExcludeAow`) chỉ là **tập con đúng y hệt**
+của `ActionSnapshot` (cùng tên field, cùng đọc từ đúng 1 struct
+`CSChrActionRequestModule` của game) - 2 mod đang tự đọc riêng cùng 1 dữ
+liệu cho 2 mục đích khác nhau (phân loại đòn Skill/thường ở `sometweaks`;
+idle/gesture detection ở `autoregen`), gộp làm 1 để không còn đọc trùng.
+
+`sometweaks::player.rs` sau khi gộp **không còn field/hàm nào riêng nữa** -
+xóa hẳn cả file, gọi thẳng `common::player::main_player_action_snapshot()`
+rồi chỉ dùng `.r1`/`.r2`/`.l1`/`.l2` (bỏ qua `.new_gesture`/
+`.requested_gesture`/`.busy` không cần). Không đổi hành vi gameplay ở cả 2
+mod - build + release build (`build-mod.ps1`) xác nhận cho cả `AutoRegen`
+lẫn `SomeTweaks`.
+
+## Chuyển `show_announcement` sang `common::announce`, thêm banner cho `common::reload` (2026-09-17)
+
+Xóa hẳn `show_announcement` nội bộ trong `regen.rs` (từng thêm ngày
+2026-09-10, mục "Thông báo trong game khi bấm `ReloadKey`") - chuyển
+nguyên bản (không đổi logic) sang `common::announce::show_announcement`.
+Lý do: `dropmultiplier` muốn có banner xác nhận reload y hệt `AutoRegen`
+nhưng chưa có cách nào dùng lại, vì hàm này trước đó chỉ là hàm riêng
+(`fn`, không `pub`) trong `regen.rs`.
+
+`AutoRegen` tự gọi `common::announce::show_announcement("AutoRegen: config
+reloaded")` tại đúng chỗ cũ (tick loop của nó tự đọc `ReloadKey` riêng,
+không qua `common::reload::run()`) - không đổi hành vi. Nhân tiện thêm
+banner **"Config reloaded"** (chung, không ghi tên mod) vào chính
+`common::reload::run()` - watcher `ReloadKey` dùng chung mà
+`dropmultiplier`/`sometweaks`/`risearcher` đều gọi - nên cả 3 mod đó giờ
+cũng tự động có banner reload, không cần tự thêm gì riêng.
 
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
 tên project gốc là "AshesEverywhere" theo PDB path còn sót lại trong file).
