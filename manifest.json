@@ -92,6 +92,10 @@
       {
         "version": "1.1",
         "commit": "5bb1237557aa2dba5b0d0a81ddfca0af3690a924"
+      },
+      {
+        "version": "2.0.0",
+        "commit": "6770a2e7c98607d3d73a87d3a92d03879ccb8b57"
       }
     ]
   },
@@ -128,6 +132,19 @@
       {
         "version": "unknown",
         "commit": "5bb1237557aa2dba5b0d0a81ddfca0af3690a924"
+      }
+    ]
+  },
+  {
+    "id": "11075",
+    "internalId": "18610093304643",
+    "name": "DropMultiplier",
+    "crate": "dropmultiplier",
+    "modFileId": "18610093344772",
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": "6770a2e7c98607d3d73a87d3a92d03879ccb8b57"
       }
     ]
   }
