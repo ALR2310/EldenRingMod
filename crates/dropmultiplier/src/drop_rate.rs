@@ -1,16 +1,13 @@
 //! Adjusts enemy item-drop weights in `ItemLotParam_enemy`, two mutually
-//! exclusive ways picked by `DropRate.Mode` (never both at once, unlike an
-//! earlier version of this module that let `DropChancePercent > 0` silently
-//! override `DropRateMultiplier`):
-//! - `DropRate.Mode=0`: `DropRate.Multiplier` scales every real item's own
-//!   weight by a factor.
-//! - `DropRate.Mode=1`: `DropRate.ChancePercent` forces every row's combined
-//!   "any real item" chance to exactly this %, preserving each item's
-//!   relative share against its row-mates.
+//! exclusive ways picked by `Mode` (never both at once):
+//! - `Mode=0`: `Multiplier` scales every real item's own weight by a factor.
+//! - `Mode=1`: `ChancePercent` forces every row's combined "any real item"
+//!   chance to exactly this %, preserving each item's relative share against
+//!   its row-mates.
 //!
-//! Unlike `RiseArcher`'s one-shot-only param edits, this module supports
-//! `General.ReloadKey` hot reload, so re-reads the ini and recomputes on
-//! every press instead of only once at startup.
+//! Supports `General.ReloadKey` hot reload via [`common::reload`], so
+//! re-reads the ini and recomputes on every press instead of only once at
+//! startup.
 //!
 //! FromSoft's item-lot roll is a weighted lottery **relative to the row's own
 //! total**: each of a row's up to 8 slots holds a weight
@@ -38,11 +35,11 @@
 //! change nothing - the ratios that decide the roll are unaffected when
 //! numerator and denominator scale together. Only slots holding a real item
 //! (`lot_item_id0N != 0`) are scaled; a "nothing" slot's weight is left
-//! untouched (`DropRateMultiplier`) or used as the fixed pivot to solve for
-//! the new item weight (`DropChancePercent`).
+//! untouched (`Multiplier`) or used as the fixed pivot to solve for the new
+//! item weight (`ChancePercent`).
 //!
-//! `DropChancePercent`'s algebra, per row: with `itemSum` = the row's own
-//! total real-item weight and `otherSum` = its "nothing" slot's weight
+//! `ChancePercent`'s algebra, per row: with `itemSum` = the row's own total
+//! real-item weight and `otherSum` = its "nothing" slot's weight
 //! (unchanged), solving `target = itemSum_new / (itemSum_new + otherSum)`
 //! for `itemSum_new` gives `itemSum_new = target * otherSum / (1 - target)`;
 //! every real item's weight is then scaled by `itemSum_new / itemSum`,
@@ -60,6 +57,16 @@
 //! any edit, to recompute from on every `ReloadKey` press - recomputing from
 //! the already-modified live values would compound (2x then reload at 2x
 //! again would become 4x, not stay at 2x).
+//!
+//! Ported from [`sometweaks::drop_rate`](../sometweaks) (2026-09-14) into its
+//! own standalone mod - same feature, same algebra, only the ini key names
+//! changed (no `DropRate.` prefix needed when the whole ini is this one
+//! feature) and the shared plumbing (`player`/`task`/`reload`) now comes
+//! from [`common`] instead of this crate's own copy. Log lines also don't
+//! prefix themselves with "DropMultiplier:" the way `sometweaks` prefixes
+//! its own lines with a feature name - that's only useful when one log file
+//! is shared by many features; this crate's whole log file already is this
+//! one feature.
 
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -127,30 +134,22 @@ fn clamp_u16(value: f64) -> u16 {
 }
 
 /// The two mutually exclusive ways to adjust drop weights, selected by
-/// `DropRate.Mode` - see the module doc comment for the algebra behind
+/// `Mode` - see the module doc comment for the algebra behind
 /// [Mode::FixedPercent].
 enum Mode {
-    /// `DropRate.Mode=0`: scale every real item's own weight by `factor`
-    /// (`DropRate.Multiplier`).
+    /// `Mode=0`: scale every real item's own weight by `factor`
+    /// (`Multiplier`).
     Multiplier(f64),
-    /// `DropRate.Mode=1`: force every row's combined "any real item" chance
-    /// to exactly this percent (`DropRate.ChancePercent`, `0.0..=100.0`),
-    /// preserving each item's share relative to its row-mates.
+    /// `Mode=1`: force every row's combined "any real item" chance to
+    /// exactly this percent (`ChancePercent`, `0.0..=100.0`), preserving
+    /// each item's share relative to its row-mates.
     FixedPercent(f64),
 }
 
-/// `DropRate.Enabled=false` is treated as `Multiplier(1.0)` - a true no-op
-/// that reverts every row to its cached original weights (see [apply]),
-/// rather than merely skipping the rest of this run - values already
-/// scaled by a previous `Enabled=true`/`ReloadKey` press must actually be
-/// undone, not just left as they were.
 fn build_mode() -> Mode {
-    if !config::get_bool("DropRate.Enabled", true) {
-        return Mode::Multiplier(1.0);
-    }
-    match config::get_int("DropRate.Mode", 0) {
-        1 => Mode::FixedPercent(config::get_double("DropRate.ChancePercent", 50.0).max(0.0)),
-        _ => Mode::Multiplier(config::get_double("DropRate.Multiplier", 2.0).max(0.0)),
+    match config::get_int("Mode", 0) {
+        1 => Mode::FixedPercent(config::get_double("ChancePercent", 50.0).max(0.0)),
+        _ => Mode::Multiplier(config::get_double("Multiplier", 2.0).max(0.0)),
     }
 }
 
@@ -206,7 +205,7 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
     let mut snapshot_guard = ORIGINAL_BASE_POINTS.lock().unwrap();
     let is_first_call = snapshot_guard.is_none();
     if is_first_call {
-        logger::log("DropRate: SoloParamRepository ready, snapshotting ItemLotParam_enemy...");
+        logger::log("SoloParamRepository ready, snapshotting ItemLotParam_enemy...");
     }
     let snapshot = snapshot_guard.get_or_insert_with(|| {
         repo.rows_mut::<ItemLotParam_enemy>()
@@ -214,7 +213,7 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
             .collect()
     });
     if is_first_call {
-        logger::log(&format!("DropRate: snapshotted {} row(s), applying...", snapshot.len()));
+        logger::log(&format!("snapshotted {} row(s), applying...", snapshot.len()));
     }
 
     let mut changed = 0;
@@ -232,47 +231,36 @@ fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
 
 fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
     match mode {
-        Mode::Multiplier(factor) => logger::log(&format!(
-            "DropRate.Multiplier={factor:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."
-        )),
+        Mode::Multiplier(factor) => {
+            logger::log(&format!("Multiplier={factor:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."))
+        }
         Mode::FixedPercent(percent) => logger::log(&format!(
-            "DropRate.ChancePercent={percent:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."
+            "ChancePercent={percent:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."
         )),
     }
 }
 
-/// Applies `DropRate.Mode`'s selected mode once, then watches
-/// `General.ReloadKey` on the game's own `FrameBegin` task group for the
-/// rest of the DLL's lifetime, recomputing from the cached original weights
-/// on every press. Meant to run on its own worker thread spawned from
-/// `DllMain`; never returns.
-///
-/// `DropRate.Enabled=false` at startup skips touching
-/// `SoloParamRepository`/`ItemLotParam_enemy` entirely, rather than calling
-/// `apply` with a no-op `Multiplier(1.0)` - `build_mode`'s own
-/// `Multiplier(1.0)` fallback exists for the *hot-reload* case (undoing an
-/// already-applied scale when toggled off mid-session, from the cached
-/// snapshot), which doesn't apply before this module has ever run once.
+/// Applies `Mode`'s selected mode once, then watches `General.ReloadKey`
+/// (via [`common::reload`]) on the game's own `FrameBegin` task group for
+/// the rest of the DLL's lifetime, recomputing from the cached original
+/// weights on every press. Meant to run on its own worker thread spawned
+/// from `DllMain`; never returns.
 pub fn run() {
     let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
 
-    if config::get_bool("DropRate.Enabled", true) {
-        let repo = common::player::wait_for_solo_param_repository();
-        logger::log("DropRate: SoloParamRepository instance acquired.");
-        let mode = build_mode();
-        let changed = apply(repo, &mode);
-        log_mode(&mode, changed, "");
-    } else {
-        logger::log("DropRate.Enabled=false - skipping entirely at startup.");
-    }
+    let repo = common::player::wait_for_solo_param_repository();
+    logger::log("SoloParamRepository instance acquired.");
+    let mode = build_mode();
+    let changed = apply(repo, &mode);
+    log_mode(&mode, changed, "");
 
     let cs_task = common::task::wait_for_cs_task();
-    let _handle = common::task::run_recurring_safe(
+    common::task::run_recurring_safe(
         cs_task,
-        "DropRate",
+        "DropMultiplier",
         CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
-            // Poll `reload::RELOAD_GENERATION` instead of calling
+            // Poll `common::reload::RELOAD_GENERATION` instead of calling
             // `input::is_key_pressed(ReloadKey)` ourselves - see that
             // module's doc comment for why: it debounces per VK code in one
             // map shared by every caller, so a second caller checking the
@@ -285,11 +273,11 @@ pub fn run() {
             last_seen_generation = generation;
 
             if common::player::main_player_chr_ins_ptr().is_none() {
-                logger::warn("DropRate: not in-world yet, reload skipped.");
+                logger::warn("not in-world yet, reload skipped.");
                 return;
             }
             let Ok(repo) = (unsafe { SoloParamRepository::instance_mut() }) else {
-                logger::warn("DropRate: SoloParamRepository not available on reload, skipped.");
+                logger::warn("SoloParamRepository not available on reload, skipped.");
                 return;
             };
             let mode = build_mode();

@@ -1,18 +1,17 @@
 //! Resolves the game's global runtime heap allocator without touching
 //! `eldenring::rva::get()`'s version-gated `runtime_heap_allocator` RVA -
 //! same story as `task_hook.rs` (see its doc comment), for a different call
-//! site: `regen.rs`'s `show_announcement` needs
-//! `DLAllocator::runtime_heap_allocator()` to build a `DLString` for the
-//! reload banner, and that function panics on any game version
-//! `fromsoftware-rs` wasn't last published for, exactly like `register_task`
-//! did before `task_hook.rs` existed.
+//! site: anything that needs `DLAllocator::runtime_heap_allocator()` to
+//! build a `DLString` (e.g. an in-game announcement banner) hits the same
+//! panic on any game version `fromsoftware-rs` wasn't last published for,
+//! exactly like `register_task` did before `task_hook.rs` existed.
 //!
 //! Unlike `WorldChrMan`/`CSTaskImp`, this global isn't a Dantelion2-reflected
 //! singleton (no `#[shared::singleton(...)]` on `DLAllocator`), so the
-//! name-based reflection trick `regen.rs::wait_for_cs_task` uses doesn't
-//! apply - resolving it needs a byte anchor into actual game code instead.
-//! That global turns out to be read from hundreds of inlined call sites
-//! across the executable (it's DLKR's one heap allocator, used practically
+//! name-based reflection trick `task::wait_for_cs_task` uses doesn't apply -
+//! resolving it needs a byte anchor into actual game code instead. That
+//! global turns out to be read from hundreds of inlined call sites across
+//! the executable (it's DLKR's one heap allocator, used practically
 //! everywhere), but exactly one of them is a small, self-contained "read or
 //! lazily construct" wrapper function with its own prologue/epilogue -
 //! verified (2026-09-11) unique in `.text` and byte-identical (aside from
@@ -24,12 +23,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use eldenring::dlkr::DLAllocator;
 
-use common::logger;
-use common::memscan;
+use crate::logger;
+use crate::memscan;
 
-// Logged once (not every call - `show_announcement` calls this on every
-// reload-key press) so a healthy AOB match doesn't spam the log the way a
-// failure legitimately should.
+// Logged once (not every call - a caller may hit this on every reload-key
+// press) so a healthy AOB match doesn't spam the log the way a failure
+// legitimately should.
 static LOGGED_SUCCESS: AtomicBool = AtomicBool::new(false);
 
 // `sub rsp,0x28; call <ctor?>; mov rax,[rip+X] (the global we want);

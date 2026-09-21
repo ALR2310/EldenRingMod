@@ -34,11 +34,11 @@ fn heal_summons(percent_fraction: f64) {
 /// `FrameBegin` task group. Meant to run on its own worker thread spawned
 /// from `DllMain`; never returns.
 pub fn run() {
-    let cs_task = crate::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
 
-    let _handle = crate::task::run_recurring_safe(
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "Spirit.Regen",
         CSTaskGroupIndex::FrameBegin,

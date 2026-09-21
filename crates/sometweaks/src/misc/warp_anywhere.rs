@@ -128,10 +128,10 @@ pub fn run() {
         }
     };
 
-    let cs_task = crate::task::wait_for_cs_task();
+    let cs_task = common::task::wait_for_cs_task();
     let mut logged_once = false;
 
-    let _handle = crate::task::run_recurring_safe(
+    let _handle = common::task::run_recurring_safe(
         cs_task,
         "WarpAnywhere",
         CSTaskGroupIndex::FrameBegin,
