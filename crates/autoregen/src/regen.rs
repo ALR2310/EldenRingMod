@@ -322,10 +322,14 @@ const ANIM_STABLE_MS: u64 = 1000;
 // settles (stops changing) within this long after the press - prevents
 // `PENDING_GESTURE_SINCE_MS` from lingering forever if the animation stays in
 // flux (e.g. repeated interruptions) without ever tripping the `busy`
-// cancel. Kept a comfortable margin above `ANIM_STABLE_MS` (3x) so a
-// slower-settling transition still has room to be confirmed rather than
-// timing out right as it stabilizes.
-const GESTURE_CONFIRM_TIMEOUT_MS: u64 = 3000;
+// cancel. Kept a comfortable margin above `ANIM_STABLE_MS` (originally 3x,
+// widened to 6x - see the 2026-09-22 README entry): Kolagon reported regen
+// silently failing to start after running in cycles or a sharp turn right
+// before sitting - the turn/stop animation was still settling when the sit
+// gesture pressed, so it could still be mid-transition past the old 3000ms
+// budget, timing this confirmation out before the sit animation itself ever
+// got a chance to stabilize.
+const GESTURE_CONFIRM_TIMEOUT_MS: u64 = 6000;
 
 /// Updates `LAST_SEEN_ANIM_ID`/`LAST_SEEN_ANIM_SINCE_MS` from
 /// `current_anim_id()` - called every frame (pending confirmation or not) so
