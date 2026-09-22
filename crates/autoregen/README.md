@@ -1032,6 +1032,26 @@ banner **"Config reloaded"** (chung, không ghi tên mod) vào chính
 `dropmultiplier`/`sometweaks`/`risearcher` đều gọi - nên cả 3 mod đó giờ
 cũng tự động có banner reload, không cần tự thêm gì riêng.
 
+## Nới `GESTURE_CONFIRM_TIMEOUT_MS` 3000ms → 6000ms - fix regen không hồi sau khi quay gấp trước khi ngồi (2026-09-22)
+
+Kolagon báo trên Nexus: nếu chạy vòng cua hoặc quay gấp ngay trước khi dùng
+gesture ngồi, regen thỉnh thoảng không hồi. Nguyên nhân: cơ chế xác nhận ở
+`confirm_pending_gesture` (xem mục "Lần thử thứ 4" 2026-09-17) chờ
+`current_anim_id()` đổi khác giá trị lúc bấm phím và giữ ổn định
+`ANIM_STABLE_MS` (1000ms), rồi mới coi là ngồi thật. Nếu vừa quay gấp/đổi
+hướng xong mới bấm gesture, animation xoay người/dừng lại vẫn đang chạy dở
+lúc bấm phím - animation đó có thể mất hơn 3000ms để ổn định, nên
+`GESTURE_CONFIRM_TIMEOUT_MS` cũ hết hạn trước khi animation ngồi kịp ổn
+định, khiến xác nhận bị huỷ và `IS_GESTURE_ACTIVE` không bao giờ thành
+`true` cho lần ngồi đó.
+
+Đã nới `GESTURE_CONFIRM_TIMEOUT_MS` từ 3000ms lên 6000ms (giữ nguyên margin
+tỉ lệ ~6x so với `ANIM_STABLE_MS` thay vì 3x cũ) để animation xoay/dừng có
+đủ thời gian ổn định trước khi bị coi là timeout. Không ảnh hưởng độ trễ
+của trường hợp ngồi bình thường (đứng yên rồi bấm) - vẫn xác nhận sau
+~`ANIM_STABLE_MS` như cũ, chỉ nới hạn chót cho trường hợp animation chuyển
+tiếp dài hơn bình thường.
+
 Mod ban đầu viết lại từ việc dịch ngược `AutoRecovery.dll` (một mod có sẵn,
 tên project gốc là "AshesEverywhere" theo PDB path còn sót lại trong file).
 Giữ lại phần dưới đây vì offset/AOB/điểm hook vẫn còn giá trị tham khảo, dù
