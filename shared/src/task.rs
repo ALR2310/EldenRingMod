@@ -22,8 +22,14 @@ use eldenring::fd4::FD4TaskData;
 use fromsoftware_shared::FromStatic;
 
 use crate::logger;
+use crate::memscan::CachedAddr;
 
 use crate::task_hook;
+
+// `CSTaskImp` never moves once constructed - cached so a mod registering
+// several tasks (e.g. `common::reload` + its own feature) waits for it
+// once and logs "found" once, instead of every thread polling on its own.
+static CS_TASK: CachedAddr = CachedAddr::new();
 
 const WARN_AFTER: Duration = Duration::from_secs(15);
 
@@ -33,6 +39,12 @@ const WARN_AFTER: Duration = Duration::from_secs(15);
 /// usually means the game needs a mod update rather than just being slow to
 /// start. Never gives up.
 pub fn wait_for_cs_task() -> &'static CSTaskImp {
+    let addr = CS_TASK.get_or_resolve(|| Some(poll_cs_task() as *const CSTaskImp as usize));
+    // `poll_cs_task` never gives up, so the cache is always filled here.
+    unsafe { &*(addr.expect("poll_cs_task never returns None") as *const CSTaskImp) }
+}
+
+fn poll_cs_task() -> &'static CSTaskImp {
     let start = Instant::now();
     let mut warned = false;
     loop {
@@ -69,9 +81,13 @@ pub fn run_recurring_safe<F>(cs_task: &'static CSTaskImp, tag: &'static str, gro
 where
     F: FnMut(&FD4TaskData) + 'static + Send,
 {
-    task_hook::run_recurring(cs_task, group, move |data: &FD4TaskData| {
+    let installed = task_hook::run_recurring(cs_task, group, move |data: &FD4TaskData| {
         if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(data))).is_err() {
             logger::error(&format!("{tag}: tick panicked, skipped this frame."));
         }
-    })
+    });
+    if installed {
+        logger::log(&format!("{tag}: task registered."));
+    }
+    installed
 }

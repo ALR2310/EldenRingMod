@@ -19,17 +19,18 @@
 //! (`eldenring` 0.14.0's RVA 0x4842d40) and a 1.17.0 exe (`fromsoftware-rs`
 //! commit `acb2a19`'s RVA 0x4846dc0).
 
-use std::sync::atomic::{AtomicBool, Ordering};
-
 use eldenring::dlkr::DLAllocator;
 
 use crate::logger;
-use crate::memscan;
+use crate::memscan::{self, CachedAddr};
 
-// Logged once (not every call - a caller may hit this on every reload-key
-// press) so a healthy AOB match doesn't spam the log the way a failure
-// legitimately should.
-static LOGGED_SUCCESS: AtomicBool = AtomicBool::new(false);
+// Address of the global *variable* holding the allocator pointer, resolved
+// from the AOB match once per process (a caller may hit this on every
+// reload-key press). Only the variable's address is cached, not its value:
+// the code is there as soon as the pattern matches, but the game may not
+// have constructed the allocator yet, so a still-null instance must be
+// re-read next call rather than cached forever.
+static GLOBAL_PTR_ADDR: CachedAddr = CachedAddr::new();
 
 // `sub rsp,0x28; call <ctor?>; mov rax,[rip+X] (the global we want);
 // test rax,rax; jnz +0xc; call <lazy-init>; mov [rip+Y],rax;
@@ -45,24 +46,26 @@ const LOAD_INSTR_OFFSET: usize = 9; // "48 8b 05 <disp32>" (7 bytes) starts here
 /// found or the global is still null - callers should treat that like any
 /// other AOB-based feature failing, not fatal.
 pub fn runtime_heap_allocator() -> Option<&'static DLAllocator> {
-    let Some(matched) = memscan::find_pattern_in_module(GETTER_PATTERN) else {
-        logger::log("AllocHook: runtime_heap_allocator getter pattern not found.");
-        return None;
-    };
+    let global_ptr_addr = GLOBAL_PTR_ADDR.get_or_resolve(|| {
+        let Some(matched) = memscan::find_pattern_in_module(GETTER_PATTERN) else {
+            logger::log("AllocHook: runtime_heap_allocator getter pattern not found.");
+            return None;
+        };
+        logger::log("Allocator AOB found.");
+        unsafe {
+            let load_instr = matched.add(LOAD_INSTR_OFFSET);
+            // "48 8b 05" is 3 bytes, disp32 follows - the whole instruction
+            // is 7 bytes, rip-relative from the byte right after it.
+            let disp32 = i32::from_le_bytes(*(load_instr.add(3) as *const [u8; 4]));
+            Some(load_instr.add(7).offset(disp32 as isize) as usize)
+        }
+    })? as *const *const DLAllocator;
 
     unsafe {
-        let load_instr = matched.add(LOAD_INSTR_OFFSET);
-        // "48 8b 05" is 3 bytes, disp32 follows - the whole instruction is 7
-        // bytes, rip-relative from the byte right after it.
-        let disp32 = i32::from_le_bytes(*(load_instr.add(3) as *const [u8; 4]));
-        let global_ptr_addr = load_instr.add(7).offset(disp32 as isize) as *const *const DLAllocator;
         let instance_ptr = *global_ptr_addr;
         if instance_ptr.is_null() {
             logger::log("AllocHook: runtime_heap_allocator resolved but its instance is still null.");
             return None;
-        }
-        if LOGGED_SUCCESS.compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
-            logger::log("Allocator AOB found.");
         }
         Some(&*instance_ptr)
     }
