@@ -25,9 +25,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\PassiveRunes.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // The log is always on (overwritten every run) so [Logging] LogFile
-        // has something to write to even when it's off by default - same
-        // convention as SomeTweaks.
+        // [Logging] LogFile gates the log file entirely - see common::logger.
         logger::init(&dir, "PassiveRunes.log");
         logger::install_panic_hook();
         logger::log("Activating PassiveRunes...");
@@ -37,7 +35,12 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        rune::run(ini_path);
+        // `common::reload` owns `General.ReloadKey` watching for the whole
+        // DLL (see its module doc comment) and shows the in-game "Config
+        // reloaded" banner - `rune::run` just re-reads its keys every tick.
+        std::thread::spawn(move || common::reload::run(ini_path));
+
+        rune::run();
     });
 
     true
