@@ -48,3 +48,25 @@ gitignore, không commit). Nếu API trả về thiếu 1 vài version cũ so v�
 tế trên trang web (đã xảy ra 1 lần, 2026-09-03) - đó là do giới hạn của
 API, không phải version đó không tồn tại - hỏi lại người dùng xác nhận
 qua trang web thật trước khi tự xoá bất kỳ mục changelog cũ nào.
+
+## Kiểm tra `shared/` (`common`) trước khi viết helper mới
+
+Trước khi viết 1 hàm/struct/module mới (helper gate "đã vào game", chờ
+singleton, đăng ký task, quét AOB, đọc/ghi config, log, banner thông
+báo...), **luôn tìm xem đã có sẵn chưa** - trước hết trong `shared/src`
+(crate `common`, mọi mod dùng chung), rồi đến các mod khác trong `crates/`
+(có thể đã tự viết 1 bản chưa kịp đưa lên `common`). Tìm theo cả tên lẫn
+chức năng (vd. grep `main_player`, `WorldChrMan`, `instance()`), không chỉ
+theo đúng tên định đặt.
+
+- Đã có trong `common` → dùng luôn, không tự viết bản riêng.
+- Có ở 1 mod khác nhưng chưa ở `common`, và mod đang sửa cũng cần → đề
+  xuất đưa lên `common` thay vì copy thêm 1 bản.
+- Chỉ viết mới khi chắc chắn không có gì tương đương; nếu bản sẵn có
+  không đủ (vd. chỉ đọc, cần ghi), nói rõ lý do trong comment.
+
+Ví dụ đã xảy ra (2026-09-23): tự viết `in_game()` trong
+`passiverunes/src/rune.rs` trong khi `common::player::main_player_chr_ins_ptr()`
+đã làm đúng việc đó và được `DropMultiplier`/`SomeTweaks`/`AutoRegen` dùng
+sẵn.
+
