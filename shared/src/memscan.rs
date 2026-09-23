@@ -8,6 +8,7 @@
 //! wildcard byte.
 
 use std::ffi::c_void;
+use std::sync::Mutex;
 
 unsafe extern "system" {
     fn GetModuleHandleA(lp_module_name: *const u8) -> *mut c_void;
@@ -72,6 +73,39 @@ fn find_pattern(haystack: &[u8], pattern: &[PatternByte]) -> Option<usize> {
         return Some(i);
     }
     None
+}
+
+/// A process-lifetime cache for one resolved address (an AOB match, or
+/// anything derived from one). Code addresses in the game exe never move
+/// once found - ASLR only picks the module base once, at process start - so
+/// scanning the same pattern again (once per registered task, once per
+/// reload banner, ...) is pure wasted work.
+///
+/// Only a *successful* resolve is cached: a miss (e.g. racing Arxan's
+/// unpacking at startup) leaves the cache empty so the next caller scans
+/// again instead of being locked into the failure. A `Mutex` rather than a
+/// `OnceLock` so that when several threads ask at once (e.g. a mod's
+/// `common::reload` thread and its feature thread both registering a task
+/// at startup), the later ones block until the first finishes and then
+/// reuse its result, instead of all scanning in parallel.
+pub struct CachedAddr(Mutex<Option<usize>>);
+
+impl CachedAddr {
+    pub const fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    /// Returns the cached address, or runs `resolve` (holding the lock, so
+    /// concurrent callers wait for it) and caches its result if it's
+    /// `Some`. `resolve` only runs when nothing is cached yet - callers can
+    /// log "found" inside it to get exactly one line per process.
+    pub fn get_or_resolve(&self, resolve: impl FnOnce() -> Option<usize>) -> Option<usize> {
+        let mut cached = self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if cached.is_none() {
+            *cached = resolve();
+        }
+        *cached
+    }
 }
 
 /// Retries [find_pattern_in_module] every `retry_interval` until it matches

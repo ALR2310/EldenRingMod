@@ -39,7 +39,11 @@ use eldenring::fd4::FD4TaskData;
 use vtable_rs::VPtr;
 
 use crate::logger;
-use crate::memscan;
+use crate::memscan::{self, CachedAddr};
+
+// Resolved once per process and shared by every task a mod registers (see
+// [CachedAddr] for why re-scanning would be wasted work).
+static REGISTER_TASK_ADDR: CachedAddr = CachedAddr::new();
 
 const REGISTER_TASK_PATTERN: &str = "48 89 5c 24 08 57 48 83 ec 40 48 8d 4c 24 20 49 8b d8 8b fa e8 ?? ?? ?? ?? 48 8b 0d ?? ?? ?? ?? 48 85 c9 75 2e 48 8d 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? 4c 8b c8 4c 8d 05 ?? ?? ?? ?? ba b4 00 00 00 48 8d 0d ?? ?? ?? ?? e8 ?? ?? ?? ?? 48 8b 0d";
 
@@ -98,15 +102,18 @@ pub fn run_recurring<F>(cs_task: &'static CSTaskImp, group: CSTaskGroupIndex, cl
 where
     F: FnMut(&FD4TaskData) + 'static + Send,
 {
-    let Some(register_task_addr) = memscan::wait_for_pattern_in_module(
-        REGISTER_TASK_PATTERN,
-        Duration::from_millis(500),
-        Duration::from_secs(60),
-    ) else {
+    let Some(register_task_addr) = REGISTER_TASK_ADDR.get_or_resolve(|| {
+        let addr = memscan::wait_for_pattern_in_module(
+            REGISTER_TASK_PATTERN,
+            Duration::from_millis(500),
+            Duration::from_secs(60),
+        )?;
+        logger::log("register_task AOB found.");
+        Some(addr as usize)
+    }) else {
         logger::error("Could not locate the game's task-registration function (AOB pattern not found) - task NOT installed.");
         return false;
     };
-    logger::log("register_task AOB found.");
 
     let task: &'static Task = Box::leak(Box::new(Task {
         vftable: Default::default(),
