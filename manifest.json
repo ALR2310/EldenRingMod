@@ -124,6 +124,10 @@
       {
         "version": "2.2",
         "commit": "89498b2ffe602a64ae9b37f42ff24a22ed981b6a"
+      },
+      {
+        "version": "2.1.0",
+        "commit": "33d7f078267a02b7e3445f45ac45d577e58e9b5e"
       }
     ]
   },
