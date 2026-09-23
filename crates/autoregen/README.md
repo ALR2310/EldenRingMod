@@ -1344,3 +1344,21 @@ build-customization riêng (`masm.targets`) như bản C++, không cần lo thê
 FFI phức tạp nào cả. Toàn bộ kỹ thuật patch 12-byte + trampoline + phân loại
 nguồn sát thương qua vtable vẫn giữ nguyên logic, chỉ đổi ngôn ngữ viết. Chi
 tiết xem `src/regen/attack_hook.rs`.
+
+## `LogFile=false` giờ không tạo file log nữa - sửa trong `common::logger` (2026-09-23)
+
+Người dùng phát hiện (qua PassiveRunes): `LogFile=false` nhưng file `.log`
+vẫn được tạo. Đúng là trước đó `logger::init` được gọi vô điều kiện trong
+`lib.rs` - file luôn tạo, `LogFile` chỉ gate log chi tiết - trái với tên
+key và với cách RiseArcher/RuneMultiplier vốn làm. Người dùng xác nhận hành
+vi đúng: `LogFile=true` mới tạo file; muốn có log sẵn thì deploy với mặc
+định `LogFile=true` (mod này mặc định `true`).
+
+Sửa tập trung trong `shared/src/logger.rs`: `init` chỉ ghi nhớ đường dẫn,
+file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, `LogFile`
+đọc lại mỗi lần ghi - bật/tắt bằng `ReloadKey` có hiệu lực ngay. Comment
+"log is always on" trong `lib.rs` đã bỏ; mô tả key trong ini đổi thành
+"Write AutoRegen.log next to the DLL (for troubleshooting). Off = no log
+file". Các mục cũ hơn trong README nói "file log luôn được tạo bất kể
+`LogFile`" giờ đã lỗi thời.
+

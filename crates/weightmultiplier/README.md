@@ -204,3 +204,21 @@ LogFile=true` (đồng bộ tên section/key logging chung, xem README của
 `WeightMultiplier.ini` đổi section: `[General]` (mới, chứa `ReloadKey` +
 `LoadDelay`), `[Features]` (đổi tên từ không-section-cụ-thể, chứa
 `Mode`/`Multiplier`/`FixedValue`), `[Logging]` (mới, chứa `LogFile`).
+
+## `LogFile=false` giờ không tạo file log nữa - sửa trong `common::logger` (2026-09-23)
+
+Người dùng phát hiện (qua PassiveRunes): `LogFile=false` nhưng file `.log`
+vẫn được tạo. Đúng là trước đó `logger::init` được gọi vô điều kiện trong
+`lib.rs` - file luôn tạo, `LogFile` chỉ gate log chi tiết - trái với tên
+key và với cách RiseArcher/RuneMultiplier vốn làm. Người dùng xác nhận hành
+vi đúng: `LogFile=true` mới tạo file; muốn có log sẵn thì deploy với mặc
+định `LogFile=true` (mod này mặc định `true`).
+
+Sửa tập trung trong `shared/src/logger.rs`: `init` chỉ ghi nhớ đường dẫn,
+file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, `LogFile`
+đọc lại mỗi lần ghi - bật/tắt bằng `ReloadKey` có hiệu lực ngay. Comment
+"log is always on" trong `lib.rs` đã bỏ; mô tả key trong ini đổi thành
+"Write WeightMultiplier.log next to the DLL (for troubleshooting). Off = no log
+file". Các mục cũ hơn trong README nói "file log luôn được tạo bất kể
+`LogFile`" giờ đã lỗi thời.
+

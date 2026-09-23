@@ -23,10 +23,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\AutoRegen.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // The log is always on (overwritten every run) - AutoRegen's
-        // original convention: no separate flag to remember to flip, and no
-        // accumulation across play sessions. [Logging] LogFile only gates the
-        // extra per-hit damage/heal dump in attack_hook, not this base log.
+        // [Logging] LogFile gates the log file entirely - see common::logger.
         logger::init(&dir, "AutoRegen.log");
         logger::install_panic_hook();
         logger::log("Activating AutoRegen...");

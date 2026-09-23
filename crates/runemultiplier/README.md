@@ -249,3 +249,20 @@ này vẫn gate việc **có tạo file log hay không** (khác `AutoRegen`/
 `SomeTweaks` - `RuneMultiplier.log` chỉ được tạo khi bật, xem `lib.rs`), chỉ
 đổi tên. `config::migrate()` tự đẩy `DebugLog` cũ vào `[Legacy]` ở lần chạy
 đầu sau khi cập nhật DLL.
+
+## `LogFile` giờ do `common::logger` tự gate - bỏ điều kiện riêng quanh `logger::init` (2026-09-23)
+
+Mod này vốn đã đúng hành vi "`LogFile=false` thì không tạo file" (tự bọc
+`logger::init` trong `if config::get_bool("LogFile", false)`), nhưng phần
+lớn mod khác trong workspace thì không - `logger::init` gọi vô điều kiện nên
+file log luôn được tạo, `LogFile` chỉ gate log chi tiết. Người dùng phát
+hiện qua PassiveRunes và xác nhận hành vi đúng phải là như mod này: muốn có
+log sẵn thì để mặc định `LogFile=true` khi deploy.
+
+Sửa tập trung trong `shared/src/logger.rs`: `init` chỉ ghi nhớ đường dẫn,
+file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, và
+`LogFile` được đọc lại mỗi lần ghi - nên bật/tắt bằng `ReloadKey` có hiệu
+lực ngay. Vì vậy bỏ điều kiện riêng quanh `logger::init` trong `lib.rs` và đoạn re-init sau reload trong `hook.rs` (tham số `dir` của `hook::run` bỏ luôn) - giờ gọi thẳng như mọi mod khác. Mô tả key trong ini đổi thành
+"Write RuneMultiplier.log next to the DLL (for troubleshooting). Off = no log
+file". Không đổi hành vi với người dùng.
+

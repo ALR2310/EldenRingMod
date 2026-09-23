@@ -33,9 +33,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\RiseArcher.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        if config::get_bool("LogFile", false) {
-            logger::init(&dir, "RiseArcher.log");
-        }
+        // [Logging] LogFile gates the log file entirely - see common::logger.
+        logger::init(&dir, "RiseArcher.log");
         logger::install_panic_hook();
         logger::log("Activating RiseArcher...");
         if migrated > 0 {
