@@ -36,8 +36,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         let ini_path = format!("{dir}\\SomeTweaks.ini");
         let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
 
-        // The log is always on (overwritten every run) regardless of
-        // [Logging] LogFile - same convention as AutoRegen.
+        // [Logging] LogFile gates the log file entirely - see common::logger.
         logger::init(&dir, "SomeTweaks.log");
         logger::install_panic_hook();
         logger::log("Activating SomeTweaks...");

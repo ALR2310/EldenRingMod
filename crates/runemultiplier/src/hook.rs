@@ -298,7 +298,7 @@ where
 /// `RuneMultiplier.ini` on each press. Meant to run on its own worker thread
 /// spawned from `DllMain`; never returns (except early, if the hook fails to
 /// install).
-pub fn run(ini_path: String, dir: String) {
+pub fn run(ini_path: String) {
     init_multiplier();
 
     let debug_log = config::get_bool("LogFile", false);
@@ -319,9 +319,6 @@ pub fn run(ini_path: String, dir: String) {
             let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
-                if config::get_bool("LogFile", false) {
-                    logger::init(&dir, "RuneMultiplier.log"); // no-op if already initialized; starts logging if just turned on
-                }
                 init_multiplier();
                 logger::log("Config reloaded (hotkey pressed).");
             }

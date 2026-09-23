@@ -1,25 +1,52 @@
+//! Per-mod log file, gated entirely by the ini's `[Logging] LogFile` key
+//! (2026-09-23): `LogFile=false` means no file is created or written at
+//! all, `LogFile=true` creates it (truncating any previous run's log) on
+//! the first line written. Checked on every write, so flipping the key with
+//! `ReloadKey` takes effect immediately - turning it on mid-session starts
+//! the file then, turning it off stops writing.
+//!
+//! Before this, every mod except RiseArcher/RuneMultiplier called `init`
+//! unconditionally, so the file was always created and `LogFile` only gated
+//! a mod's own verbose lines - not what the key's name says. A mod that
+//! wants a log out of the box ships with `LogFile=true` as its default.
+
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::sync::{LazyLock, Mutex, Once};
 
-static LOG_FILE: LazyLock<Mutex<Option<File>>> = LazyLock::new(|| Mutex::new(None));
+use crate::config;
+
+struct LogState {
+    /// Set by [init]; `None` means `init` hasn't run yet.
+    path: Option<String>,
+    /// Opened lazily by the first write with `LogFile` on.
+    file: Option<File>,
+}
+
+static LOG: LazyLock<Mutex<LogState>> = LazyLock::new(|| Mutex::new(LogState { path: None, file: None }));
 static PANIC_HOOK_INSTALLED: Once = Once::new();
 
-/// Opens `file_name` (e.g. "AutoRegen.log") in `log_dir`, truncating any
-/// previous run's log. No-op if already initialized (safe to call again
-/// after a hot reload flips a mod's own DebugLog on/off).
+/// Records where the log goes (`file_name`, e.g. "AutoRegen.log", in
+/// `log_dir`) without touching the disk - the file is only created by the
+/// first line written while `LogFile` is on (see module doc). Call after
+/// the ini is loaded. No-op if already initialized.
 pub fn init(log_dir: &str, file_name: &str) {
-    let mut guard = LOG_FILE.lock().unwrap();
-    if guard.is_some() {
-        return;
+    let mut guard = LOG.lock().unwrap();
+    if guard.path.is_none() {
+        guard.path = Some(format!("{log_dir}\\{file_name}"));
     }
-    let _ = fs::create_dir_all(log_dir);
-    let path = format!("{log_dir}\\{file_name}");
+}
+
+/// Creates (truncating) and opens the log file at `path`.
+fn open(path: &str) -> Option<File> {
+    if let Some(dir) = std::path::Path::new(path).parent() {
+        let _ = fs::create_dir_all(dir);
+    }
 
     // Truncate any previous run's log first, as a separate open/close from
     // the handle kept below - `File::create` always starts the file at 0
     // bytes.
-    let _ = File::create(&path);
+    let _ = File::create(path);
 
     // Kept open in *append* mode rather than a plain write handle: append
     // mode re-resolves the true end-of-file at every write, so if something
@@ -28,17 +55,25 @@ pub fn init(log_dir: &str, file_name: &str) {
     // at the real end of the file instead of at this handle's old cached
     // write position (which, on a plain write handle, gets zero-padded up to
     // the stale offset).
-    if let Ok(file) = OpenOptions::new().create(true).append(true).open(&path) {
-        *guard = Some(file);
-    }
+    OpenOptions::new().create(true).append(true).open(path).ok()
 }
 
 /// Writes one line as `[timestamp] [LEVEL] message`. `level` is padded to a
 /// fixed 5 characters so every line's message column starts at the same
 /// offset, which is what makes a log skimmable at a glance (2026-08-28).
 fn write_line(level: &str, message: &str) {
-    let mut guard = LOG_FILE.lock().unwrap();
-    if let Some(file) = guard.as_mut() {
+    // Read before taking the log lock - never hold both at once.
+    if !config::get_bool("LogFile", false) {
+        return;
+    }
+    let mut guard = LOG.lock().unwrap();
+    if guard.file.is_none() {
+        let Some(path) = guard.path.clone() else {
+            return;
+        };
+        guard.file = open(&path);
+    }
+    if let Some(file) = guard.file.as_mut() {
         let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
         let _ = writeln!(file, "[{now}] [{level:<5}] {message}");
     }
