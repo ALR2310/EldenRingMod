@@ -38,7 +38,7 @@ Mod ID theo từng mod trong workspace này (game domain luôn là `eldenring`):
 
 - `autoregen` → 10548
 - `runemultiplier` → 10630
-- `weightmultiplier` → 10549 (Reduction Weight)
+- `weightmultiplier` → 10549 (Weight Multiplier)
 - `passiverunes` → 10528
 - `risearcher` → 5807
 - `sometweaks` → **chưa có, chưa đăng lên Nexus**

@@ -98,7 +98,7 @@
   {
     "id": "10549",
     "internalId": "18610093304117",
-    "name": "Reduction Weight",
+    "name": "Weight Multiplier",
     "crate": "weightmultiplier",
     "deploys": [
       {
