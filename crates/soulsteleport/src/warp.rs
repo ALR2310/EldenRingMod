@@ -37,9 +37,16 @@ use fromsoftware_shared::FromStatic;
 use common::input::parse_virtual_key;
 use common::{announce, config, logger, memscan};
 
+use crate::steam::SteamMessages;
+use crate::sync;
+
 const VK_F7: i32 = 0x76;
 const VK_F8: i32 = 0x77;
 const VK_F9: i32 = 0x78;
+const VK_F10: i32 = 0x79;
+
+// ~10s at 60fps - Steam is up long before the player can reach the world.
+const STEAM_LOAD_ATTEMPTS: u32 = 600;
 
 // sub_14067BA20 in 2.7.1.0. The `cmp byte [rcx+0xB28], 0` tail pins the
 // GameMan field layout the function (and the offsets below) assume.
@@ -66,18 +73,21 @@ type SetCustomSpawnFn = unsafe extern "C" fn(position: *const Vec4, orientation:
 #[repr(C, align(16))]
 struct Vec4([f32; 4]);
 
+/// A map block + block-local position (what `PlayerIns.current_block_id` /
+/// `block_position` hold for the main player), i.e. exactly what the game's
+/// own custom-spawn warp takes.
 #[derive(Clone, Copy)]
-struct SavedSpot {
-    block_id: i32,
-    x: f32,
-    y: f32,
-    z: f32,
-    yaw: f32,
+pub struct Spot {
+    pub block_id: i32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub yaw: f32,
 }
 
-static SAVED: Mutex<Option<SavedSpot>> = Mutex::new(None);
+static SAVED: Mutex<Option<Spot>> = Mutex::new(None);
 
-struct GameFns {
+pub struct GameFns {
     request_move_map: RequestMoveMapFn,
     set_custom_spawn: SetCustomSpawnFn,
     /// Address of the static holding the `GameMan*` (not GameMan itself -
@@ -103,20 +113,22 @@ fn resolve_game_fns() -> Option<GameFns> {
     })
 }
 
-fn save_current_spot() {
-    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
-        return;
-    };
-    let Some(player) = world_chr_man.main_player.as_ref() else {
-        return;
-    };
+fn current_spot() -> Option<Spot> {
+    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
+    let player = world_chr_man.main_player.as_ref()?;
     let pos = &player.block_position;
-    let spot = SavedSpot {
+    Some(Spot {
         block_id: player.current_block_id.0,
         x: pos.x,
         y: pos.y,
         z: pos.z,
         yaw: pos.yaw,
+    })
+}
+
+fn save_current_spot() {
+    let Some(spot) = current_spot() else {
+        return;
     };
     *SAVED.lock().unwrap() = Some(spot);
     logger::log(&format!(
@@ -126,20 +138,18 @@ fn save_current_spot() {
     announce::show_announcement("Teleport spot saved");
 }
 
-fn warp_to_saved(fns: &GameFns) {
-    let Some(spot) = *SAVED.lock().unwrap() else {
-        announce::show_announcement("No teleport spot saved yet");
-        return;
-    };
+/// Asks the game to move-map to `spot` (loading screen, then spawn exactly
+/// there). Returns false if not in the world yet / GameMan not allocated.
+pub fn warp_to(fns: &GameFns, spot: &Spot) -> bool {
     // Same "actually in the world" gate as every other mod here - warping
     // from a loading screen or the title menu is not something to test.
     if common::player::main_player_chr_ins_ptr().is_none() {
-        return;
+        return false;
     }
     let game_man = unsafe { *fns.game_man_static };
     if game_man == 0 {
         logger::error("Warp: GameMan not allocated yet.");
-        return;
+        return false;
     }
 
     let mut normalized_block = 0i32;
@@ -150,20 +160,50 @@ fn warp_to_saved(fns: &GameFns) {
     unsafe {
         (fns.request_move_map)(&mut normalized_block, &spot.block_id, 0);
         (fns.set_custom_spawn)(&position, &orientation);
+        *((game_man + GAME_MAN_WARP_REQUESTED) as *mut bool) = true;
     }
-    unsafe { *((game_man + GAME_MAN_WARP_REQUESTED) as *mut bool) = true };
 
     logger::log(&format!(
         "Warp requested: block {:#010X} (normalized {:#010X}) local ({:.2}, {:.2}, {:.2})",
         spot.block_id, normalized_block, spot.x, spot.y, spot.z
     ));
+    true
 }
 
-/// Logs every entry of `WorldChrMan.player_chr_set` - you plus every
-/// connected player the game has a `PlayerIns` for. Research aid for the
-/// SoulsChat addon: in Seamless Co-op, does a player far away (unloaded area)
-/// still have an entry here, with a `current_block_id`/`block_position` that
-/// keeps updating? If so no network sync of positions is needed.
+fn warp_to_saved(fns: &GameFns) {
+    let Some(spot) = *SAVED.lock().unwrap() else {
+        announce::show_announcement("No teleport spot saved yet");
+        return;
+    };
+    warp_to(fns, &spot);
+}
+
+/// Test stand-in for the future `/teleport <player>`: warps to the partner
+/// whose synced position arrived most recently.
+fn warp_to_partner(fns: &GameFns) {
+    let Some((steam_id, remote)) = sync::fresh_remote_spots()
+        .into_iter()
+        .max_by_key(|(_, r)| r.received)
+    else {
+        announce::show_announcement("No partner position received yet");
+        logger::log("Warp to partner: no fresh position from any partner.");
+        return;
+    };
+    // No offset needed: the game itself pushes apart 2 characters spawned
+    // on top of each other (confirmed by the user in-game).
+    let spot = remote.spot;
+    logger::log(&format!(
+        "Warp to partner '{}' ({steam_id}), position {:.1}s old.",
+        remote.character_name,
+        remote.received.elapsed().as_secs_f32()
+    ));
+    if warp_to(fns, &spot) {
+        announce::show_announcement(&format!("Teleporting to {}", remote.character_name));
+    }
+}
+
+/// Logs every entry of `WorldChrMan.player_chr_set`, `CSSessionManager`'s
+/// session members, and every synced partner position. Research/debug aid.
 fn list_players() {
     let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
         return;
@@ -176,16 +216,16 @@ fn list_players() {
         let name = String::from_utf16_lossy(&name[..name_len]);
         let block_pos = &player.block_position;
         let havok = &player.chr_ins.modules.physics.position;
-        // First co-op test (2026-09-24): `PlayerIns.current_block_id` /
+        // Co-op test (2026-09-24): `PlayerIns.current_block_id` /
         // `block_position` are only maintained for the main player (-1 / 0
-        // for a Seamless Co-op partner), but the havok position is live for
-        // both. `ChrIns`'s own block/chunk fields might still carry the
-        // partner's block - logged to find out.
+        // for a Seamless Co-op partner), and a far partner's havok position
+        // drops to 0 - hence the network sync in `sync`.
         let chr = &player.chr_ins;
         let chunk = &chr.chunk_position;
         logger::log(&format!(
-            "Player #{count}: '{name}' type {:?} block {:#010X} local ({:.2}, {:.2}, {:.2}) havok ({:.2}, {:.2}, {:.2})              | chr block {:#010X} origin {:#010X} chunk ({:.2}, {:.2}, {:.2})",
-            player.chr_ins.chr_type,
+            "Player #{count}: '{name}' type {:?} block {:#010X} local ({:.2}, {:.2}, {:.2}) \
+             havok ({:.2}, {:.2}, {:.2}) | chr block {:#010X} origin {:#010X} chunk ({:.2}, {:.2}, {:.2})",
+            chr.chr_type,
             player.current_block_id.0,
             block_pos.x,
             block_pos.y,
@@ -201,11 +241,37 @@ fn list_players() {
         ));
     }
     logger::log(&format!("player_chr_set: {count} player(s)."));
-    announce::show_announcement(&format!("Logged {count} player(s)"));
+
+    let peers = sync::session_peers();
+    for peer in &peers {
+        logger::log(&format!(
+            "Session: {} '{}'{}",
+            peer.steam_id,
+            peer.steam_name,
+            if peer.is_local { " (local)" } else { "" }
+        ));
+    }
+    let remote = sync::fresh_remote_spots();
+    for (steam_id, r) in &remote {
+        logger::log(&format!(
+            "Synced: {steam_id} '{}' block {:#010X} local ({:.2}, {:.2}, {:.2}) - {:.1}s old",
+            r.character_name,
+            r.spot.block_id,
+            r.spot.x,
+            r.spot.y,
+            r.spot.z,
+            r.received.elapsed().as_secs_f32()
+        ));
+    }
+    announce::show_announcement(&format!(
+        "{count} loaded, {} in session, {} synced",
+        peers.len(),
+        remote.len()
+    ));
 }
 
-/// Registers the per-frame hotkey watcher. Meant to run on its own worker
-/// thread spawned from `DllMain`; never returns.
+/// Registers the per-frame hotkey watcher + position sync. Meant to run on
+/// its own worker thread spawned from `DllMain`; never returns.
 pub fn run() {
     let Some(fns) = resolve_game_fns() else {
         logger::error("Warp functions not found (AOB) - game update may need a mod update. SoulsTeleport disabled.");
@@ -217,18 +283,39 @@ pub fn run() {
     ));
 
     let cs_task = common::task::wait_for_cs_task();
+    // Steam's messaging interface may not exist yet this early - retried
+    // from the task until it does (logged once either way).
+    let mut syncer: Option<sync::Syncer> = None;
+    let mut steam_attempts = 0u32;
     common::task::run_recurring_safe(cs_task, "Teleport", CSTaskGroupIndex::FrameBegin, move |_data: &FD4TaskData| {
+        if syncer.is_none() && steam_attempts < STEAM_LOAD_ATTEMPTS {
+            steam_attempts += 1;
+            if let Some(steam) = SteamMessages::load() {
+                logger::log("Steam networking messages ready - position sync on.");
+                syncer = Some(sync::Syncer::new(steam));
+            } else if steam_attempts == STEAM_LOAD_ATTEMPTS {
+                logger::error("Steam networking messages unavailable - position sync off.");
+            }
+        }
+        if let Some(syncer) = syncer.as_mut() {
+            syncer.tick();
+        }
+
         let save_key = parse_virtual_key(&config::get_string("SaveKey", "F7"), VK_F7);
         let warp_key = parse_virtual_key(&config::get_string("WarpKey", "F8"), VK_F8);
+        let list_key = parse_virtual_key(&config::get_string("ListPlayersKey", "F9"), VK_F9);
+        let partner_key = parse_virtual_key(&config::get_string("WarpToPartnerKey", "F10"), VK_F10);
         if input::is_key_pressed(save_key) {
             save_current_spot();
         }
         if input::is_key_pressed(warp_key) {
             warp_to_saved(&fns);
         }
-        let list_key = parse_virtual_key(&config::get_string("ListPlayersKey", "F9"), VK_F9);
         if input::is_key_pressed(list_key) {
             list_players();
+        }
+        if input::is_key_pressed(partner_key) {
+            warp_to_partner(&fns);
         }
     });
 
