@@ -30,8 +30,9 @@ changelog). Cấu trúc:
     "name": "Auto Regen",       // TÊN HIỂN THỊ TRÊN NEXUS - CHỈ để hiển thị
                                  // cho người dùng đọc, KHÔNG được suy ra tên
                                  // thư mục crate từ field này (từng sai thật:
-                                 // mod 10549 hiển thị "Reduction Weight" trên
-                                 // Nexus nhưng nằm ở crates/weightmultiplier)
+                                 // mod 10549 từng hiển thị "Reduction Weight"
+                                 // trên Nexus nhưng nằm ở crates/weightmultiplier;
+                                 // nay đã đổi tên thành "Weight Multiplier")
     "crate": "autoregen",       // tên thư mục thật dưới crates/ - dùng field
                                  // này để tìm file, KHÔNG suy đoán từ "name"
     "deploys": [                // LỊCH SỬ deploy - luôn APPEND, không ghi đè.
