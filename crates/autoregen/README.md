@@ -1362,3 +1362,27 @@ file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, `L
 file". Các mục cũ hơn trong README nói "file log luôn được tạo bất kể
 `LogFile`" giờ đã lỗi thời.
 
+
+## Đường dẫn DLL có ký tự không phải ASCII làm mod bỏ qua ini - sửa `common::dll_dir` (2026-09-24)
+
+Người dùng (DoctorHigh, Nexus, load qua ME3) báo: sửa `AutoRegen.ini` thế
+nào mod cũng dùng mặc định. Profile ME3 của họ nằm ở
+`D:\Start\eld-MOD\重回巅峰MOD v1.17.1(2026.9.8 内测)`; Process Monitor cho
+thấy game tìm `AutoRegen.ini` ở 1 đường dẫn bị lỗi font. Đây không phải
+issue #296 của ME3 (config hardcode), mà là bug của chính mình.
+
+Nguyên nhân: `dll_dir()` gọi `GetModuleFileNameA` - trả đường dẫn theo code
+page ANSI của hệ thống (GBK trên máy tiếng Trung, `?` cho ký tự ngoài code
+page trên máy Latin) - rồi lại giải mã bằng `String::from_utf8_lossy`. Mọi
+tên thư mục không phải ASCII (tiếng Trung, cả chữ tiếng Việt có dấu như
+`Tiếng Việt`) đều hỏng, không tìm thấy ini, nên âm thầm dùng mặc định
+(file ini/log mặc định cũng không tạo được). Test của mình với ME3 không
+lộ bug vì đường dẫn toàn ASCII. Đã tái hiện trên máy dev bằng 1 exe probe
+gọi `dll_dir(0)` từ `D:\tmp\重回巅峰MOD 内测 Tiếng Việt\`: trước fix ra
+`D:\tmp\????MOD ?? Ti?ng Vi?t`, sau fix ra đúng đường dẫn.
+
+Sửa trong `shared/src/lib.rs`: đổi sang `GetModuleFileNameW` +
+`String::from_utf16_lossy`, buffer bắt đầu từ 260 và tăng gấp đôi (tối đa
+32768) khi bị cắt, nên đường dẫn dài cũng không bị cắt nữa.
+`config`/`logger` đã dùng `std::fs` (Unicode sẵn) nên không cần đổi. Fix
+áp dụng cho mọi mod dùng `common::dll_dir`.
