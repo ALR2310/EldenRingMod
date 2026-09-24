@@ -60,6 +60,10 @@
       {
         "version": "2.6.2",
         "commit": "1af3bd2917fe30b8164754fa18bec5ae04a70cf0"
+      },
+      {
+        "version": "2.6.3",
+        "commit": "58fd9c6439242f9760bb3b1dbe0d690938b2c6c0"
       }
     ]
   },
