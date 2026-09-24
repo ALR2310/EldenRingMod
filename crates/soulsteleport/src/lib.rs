@@ -1,5 +1,7 @@
 #![allow(non_snake_case)] // crate name is "SoulsTeleport" to control the output DLL's filename
 
+mod steam;
+mod sync;
 mod warp;
 
 use common::{config, dll_dir, logger};

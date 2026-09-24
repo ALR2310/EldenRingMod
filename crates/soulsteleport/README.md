@@ -169,3 +169,65 @@ Sửa: đổi sang `eldenring::util::input::is_key_pressed` (fromsoftware-rs,
 `GetKeyState` - trạng thái phím theo luồng, chỉ cập nhật khi cửa sổ của chính
 process nhận phím), giống `common::reload`. `common::input::is_key_pressed`
 cũng được sửa riêng cho các mod poll từ thread thường (xem WeightMultiplier).
+
+## Đồng bộ vị trí qua Steam P2P + `WarpToPartnerKey` (2026-09-24)
+
+Theo kết luận test lần 2 (ở xa là mất tọa độ), thêm đồng bộ vị trí:
+
+- `src/steam.rs`: binding tối thiểu tới `ISteamNetworkingMessages`, lấy bằng
+  `GetProcAddress` từ `steam_api64.dll` mà game đã nạp sẵn (flat C API - không
+  cần Steamworks SDK/crate). Chỉ đọc 2 trường đầu của
+  `SteamNetworkingMessage_t` (con trỏ + kích thước payload), giải phóng qua
+  export `SteamAPI_SteamNetworkingMessage_t_Release` - không phụ thuộc layout
+  sâu hơn của struct. Người gửi nằm luôn trong payload thay vì đọc
+  `m_identityPeer`.
+- `src/sync.rs`: mỗi 500 ms gửi block + tọa độ trong block + yaw + tên nhân vật
+  của chính mình (gói 66 byte, magic `STP1`) tới mọi người khác trong
+  `CSSessionManager.players` (singleton tra theo tên - không khoá version;
+  mỗi entry có `steam_id`, `steam_name`, `is_local_player`), unreliable, kênh
+  riêng `0x5354` (SoulsChat dùng 42 - không đụng nhau). Nhận mỗi frame, lưu
+  theo SteamID; quá 5 s không có gói mới thì coi như không biết.
+  `AcceptSessionWithUser` được gọi lại mỗi lần gửi, để gói từ 1 người chưa
+  từng gửi cho mình không bị Steam bỏ.
+- `WarpToPartnerKey` (mặc định `F10`): warp tới đồng đội có vị trí nhận mới
+  nhất, đúng tọa độ của họ - bản thử thay cho `/teleport <player>` trước khi
+  hook SoulsChat. (Bản nháp đầu lệch `+1` m theo trục x để không đứng lồng
+  vào nhau - đã bỏ: game tự đẩy 2 nhân vật đè lên nhau ra.)
+- `F9` log thêm danh sách `Session:` (SteamID, tên Steam, `(local)`) và
+  `Synced:` (vị trí nhận được, bao nhiêu giây trước).
+- `warp.rs`: tách `warp_to(fns, &Spot)` dùng chung cho `F8` và `F10`;
+  `SavedSpot` → `Spot` (pub, dùng chung với `sync`).
+
+Chưa chạy thử. Chưa biết Seamless Co-op có dùng `CSSessionManager.players`
+của game hay tự quản lý phiên riêng - `F9` sẽ cho biết.
+
+**Quyết định thiết kế (2026-09-24):** gửi vị trí định kỳ 500 ms cho mọi người
+chỉ là **cách tạm cho giai đoạn test** (đơn giản, luôn có sẵn dữ liệu để
+khảo sát). Bản thật phải làm kiểu **hỏi khi cần**: `/teleport X` gửi gói
+`WHERE` tới SteamID của X, máy X trả `HERE` với vị trí lúc đó, rồi mới warp;
+quá ~2 s không trả lời thì báo lỗi. Lý do: không phát vị trí liên tục khi
+chẳng ai teleport, vị trí luôn mới nhất, và không lộ vị trí của người chơi cho
+mọi người cài mod (sau có thể thêm tuỳ chọn chặn người khác teleport tới mình).
+
+## Test Seamless Co-op lần 3: teleport tới đồng đội ở xa - THÀNH CÔNG (2026-09-24)
+
+2 instance (host `AnLe -2` / Steam `ALRIP`, join `ALR` / Steam `BinPham`):
+- `CSSessionManager.players` **có dùng được trong Seamless Co-op** - cả 2 bên
+  liệt kê đúng người trong phiên, đánh dấu đúng `(local)`.
+- Đồng bộ chạy 2 chiều; vị trí nhận được chỉ cũ 0.0-0.4 s.
+- Khi ở xa (host `m60_42_37`, join `m60_46_40`): `Synced:` trên máy host khớp
+  đúng tọa độ người join tự log.
+- Host bấm `F10` → màn loading → xuất hiện cạnh `ALR` ở `m60_46_40`. **Phiên
+  co-op vẫn giữ nguyên sau khi warp** - ghi thẳng `warp_requested` (không gọi
+  `sub_1405F89C0`) không làm rớt phiên, đúng như lo ngại ban đầu cần tránh.
+
+Toàn bộ luồng "lấy vị trí đồng đội → warp qua loading → đứng cạnh họ" đã
+chứng minh chạy được. Còn lại: đổi sang kiểu hỏi khi cần (WHERE/HERE), lọc
+chỉ cho teleport tới đồng đội, và nối vào lệnh chat của SoulsChat.
+
+Lưu ý từ lần test này: `CSSessionManager` còn liệt kê cả người lạ
+(`cyan desan`, `TAMARI`, `wingobear`) và `player_chr_set` có cả kẻ xâm nhập
+(`Fire Knight`, `chr_type Duelist`) - do chưa đổi `cooppassword` của Seamless
+Co-op, người lạ vào được phiên. Bản test broadcast đã gửi vị trí cho cả họ
+(không cài mod nên gói bị bỏ qua) - thêm 1 lý do cho kiểu hỏi khi cần, và cho
+việc lọc: chỉ đồng đội (host + người co-op), không phải invader/người lạ.
