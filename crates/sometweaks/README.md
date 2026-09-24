@@ -2373,3 +2373,14 @@ file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, `L
 file". Các mục cũ hơn trong README nói "file log luôn được tạo bất kể
 `LogFile`" giờ đã lỗi thời.
 
+
+## Đường dẫn DLL có ký tự không phải ASCII làm mod bỏ qua ini - sửa `common::dll_dir` (2026-09-24)
+
+Bug phát hiện qua AutoRegen (người dùng ME3, thư mục profile tên tiếng
+Trung): `common::dll_dir()` dùng `GetModuleFileNameA` (code page ANSI) rồi
+giải mã như UTF-8, nên đường dẫn có ký tự không phải ASCII (tiếng Trung,
+tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL, và mod âm
+thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
+`from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
+`dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
+`crates/autoregen/README.md`.

@@ -49,19 +49,32 @@ pub mod task_hook;
 use std::ffi::c_void;
 
 unsafe extern "system" {
-    fn GetModuleFileNameA(hmodule: *mut c_void, lp_filename: *mut u8, n_size: u32) -> u32;
+    fn GetModuleFileNameW(hmodule: *mut c_void, lp_filename: *mut u16, n_size: u32) -> u32;
 }
 
 /// Directory the calling DLL itself was loaded from - not the process's
 /// current working directory, which mod loaders don't always set to the game
 /// folder. Falls back to "." if the WinAPI call fails for any reason.
+///
+/// Uses the wide (UTF-16) API: the old `GetModuleFileNameA` returned the path
+/// in the system ANSI code page, which was then decoded as UTF-8 - any
+/// non-ASCII folder name (Chinese, Vietnamese diacritics...) came out garbled
+/// and the ini next to the DLL was never found.
 pub fn dll_dir(hmodule: u64) -> String {
-    let mut buf = [0u8; 260]; // MAX_PATH
-    let len = unsafe { GetModuleFileNameA(hmodule as *mut c_void, buf.as_mut_ptr(), buf.len() as u32) };
+    // Start at MAX_PATH and grow: the call truncates (returning n_size) when
+    // the buffer is too small, which long-path installs can hit.
+    let mut buf = vec![0u16; 260];
+    let len = loop {
+        let n = unsafe { GetModuleFileNameW(hmodule as *mut c_void, buf.as_mut_ptr(), buf.len() as u32) };
+        if (n as usize) < buf.len() || buf.len() >= 32768 {
+            break n as usize;
+        }
+        buf.resize(buf.len() * 2, 0);
+    };
     if len == 0 {
         return ".".to_string();
     }
-    let path = String::from_utf8_lossy(&buf[..len as usize]).into_owned();
+    let path = String::from_utf16_lossy(&buf[..len]);
     match path.rfind('\\') {
         Some(idx) => path[..idx].to_string(),
         None => ".".to_string(),
