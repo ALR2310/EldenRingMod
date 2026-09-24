@@ -104,6 +104,57 @@
             "problemMatcher": "$rustc"
         },
         {
+            "label": "Cargo: Build DropMultiplier (Release)",
+            "detail": "Builds DropMultiplier (release), then copies DropMultiplier.dll + DropMultiplier.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "DropMultiplier"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build InfiniteAilment (Release)",
+            "detail": "Builds InfiniteAilment (release), then copies InfiniteAilment.dll + InfiniteAilment.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "InfiniteAilment"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build SoulsTeleport (Release)",
+            "detail": "Builds SoulsTeleport (release), then copies SoulsTeleport.dll + SoulsTeleport.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "SoulsTeleport"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
             "label": "Cargo: Build All (Release)",
             "detail": "Runs every per-mod build task - build/ ends up with every mod's .dll + .ini",
             "dependsOrder": "sequence",
@@ -113,7 +164,10 @@
                 "Cargo: Build PassiveRunes (Release)",
                 "Cargo: Build RuneMultiplier (Release)",
                 "Cargo: Build WeightMultiplier (Release)",
-                "Cargo: Build RiseArcher (Release)"
+                "Cargo: Build RiseArcher (Release)",
+                "Cargo: Build DropMultiplier (Release)",
+                "Cargo: Build InfiniteAilment (Release)",
+                "Cargo: Build SoulsTeleport (Release)"
             ],
             "group": "build",
             "problemMatcher": []
