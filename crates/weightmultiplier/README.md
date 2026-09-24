@@ -233,3 +233,21 @@ thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNa
 `from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
 `dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
 `crates/autoregen/README.md`.
+
+## `ReloadKey` chỉ nhận khi đang ở cửa sổ game - sửa `common::input::is_key_pressed` (2026-09-24)
+
+Phát hiện khi test SoulsTeleport với 2 instance game trên 1 máy:
+`common::input::is_key_pressed` dùng `GetAsyncKeyState(vk) & 1` - bit "đã bấm
+từ lần gọi trước" là cờ chung toàn hệ thống, process nào gọi trước thì xoá
+mất, và phím còn kích hoạt cả khi đang gõ ở ứng dụng khác (vd. bấm `F5` trong
+trình duyệt cũng reload config của mod). Mod này là mod duy nhất (ngoài
+SoulsTeleport, nay đã chuyển sang fromsoftware-rs) dùng hàm đó, vì nó poll
+`ReloadKey` từ 1 thread thường (không có task của game để dùng
+`GetKeyState` như các mod khác).
+
+Sửa trong `shared/src/input.rs`: chỉ poll khi cửa sổ đang focus thuộc chính
+process game; tự giữ trạng thái lên/xuống cho từng phím; lần poll đầu sau khi
+focus lại chỉ ghi nhận trạng thái (không bắn phím đã bấm ở app khác trước
+khi alt-tab về). Vẫn bắt được cú bấm ngắn hơn chu kỳ poll 100ms nhờ bit thấp.
+Hệ quả với người dùng: bấm `ReloadKey` khi đang ở ngoài game sẽ không còn
+reload nữa - đúng với ý định ban đầu.

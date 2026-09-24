@@ -4,17 +4,70 @@
 //! `eldenring::util::input::is_key_pressed`, registered on the game's own
 //! per-frame task scheduler - not an option here).
 
+use std::ffi::c_void;
+use std::sync::atomic::{AtomicU8, Ordering};
+
 #[link(name = "user32")]
 unsafe extern "system" {
     fn GetAsyncKeyState(v_key: i32) -> i16;
+    fn GetForegroundWindow() -> *mut c_void;
+    fn GetWindowThreadProcessId(hwnd: *mut c_void, process_id: *mut u32) -> u32;
+}
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetCurrentProcessId() -> u32;
+}
+
+// Per-VK state kept between polls (one DLL = one copy, like every other
+// static in this crate).
+const KEY_RESYNC: u8 = 0; // unknown - (re)gained focus, next poll only records
+const KEY_UP: u8 = 1;
+const KEY_DOWN: u8 = 2;
+static KEY_STATE: [AtomicU8; 256] = [const { AtomicU8::new(KEY_RESYNC) }; 256];
+
+fn game_window_has_focus() -> bool {
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.is_null() {
+        return false;
+    }
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    pid == unsafe { GetCurrentProcessId() }
 }
 
 /// Whether `vk` was pressed since the last call to this function for the
-/// same key - edge-triggered via `GetAsyncKeyState`'s low bit, which Windows
-/// tracks and clears per call, so no state of our own to maintain. Meant to
-/// be polled periodically from a plain thread loop (e.g. every 100ms).
+/// same key, while this process's own window had focus. Meant to be polled
+/// periodically from a plain thread loop (e.g. every 100ms).
+///
+/// Used to be just `GetAsyncKeyState(vk) & 1` (2026-09-24 fix). That low
+/// "pressed since last call" bit is one system-wide flag, cleared by whichever
+/// process calls first - with 2 game instances on one PC (Seamless Co-op
+/// testing), the host's own poll kept consuming presses meant for the other
+/// window, and a hotkey also fired while typing in any other app. Now:
+/// - never polls at all while another process's window is focused (so it
+///   can't consume a press meant for that window either);
+/// - on (re)gaining focus, the first poll only records the key's state, so a
+///   press made in another app before alt-tabbing back doesn't fire;
+/// - fires on the low bit (catches a tap shorter than the poll interval) or
+///   on an up -> down transition seen by our own per-key state.
 pub fn is_key_pressed(vk: i32) -> bool {
-    (unsafe { GetAsyncKeyState(vk) } & 1) != 0
+    let Some(state) = usize::try_from(vk).ok().and_then(|i| KEY_STATE.get(i)) else {
+        return false;
+    };
+    if !game_window_has_focus() {
+        state.store(KEY_RESYNC, Ordering::Relaxed);
+        return false;
+    }
+    let raw = unsafe { GetAsyncKeyState(vk) };
+    let down = raw < 0; // high bit: held right now
+    let tapped = raw & 1 != 0;
+    let previous = state.swap(if down { KEY_DOWN } else { KEY_UP }, Ordering::Relaxed);
+    match previous {
+        KEY_RESYNC => false,
+        KEY_UP => down || tapped,
+        _ => tapped && !down, // released and pressed again between polls
+    }
 }
 
 /// Parses, in order of precedence: a raw virtual-key code in hex ("0x2D") or
