@@ -1,0 +1,220 @@
+//! Offline proof-of-concept for "warp to an exact position, with a loading
+//! screen" - the mechanism a future SoulsChat `/teleport <player>` addon
+//! needs (see README). `SaveKey` remembers the main player's current block +
+//! block-local position; `WarpKey` asks the game to move-map back there.
+//!
+//! Reuses the game's own sequence, found by static analysis of eldenring.exe
+//! 2.7.1.0 (the game calls it when a multiplayer session ends, to put you back
+//! where you stood - sub_1405F36E0/sub_1405F34A0):
+//! 1. `RequestMoveMap` (sub_14067BA20) - writes `GameMan.move_map_target`,
+//!    normalizing overworld (area 50..88) block ids the way the engine expects.
+//! 2. `SetCustomSpawn` (sub_14067B970) - writes `GameMan+0xC90` (block-local
+//!    position, w = 1.0), `+0xCA0` (orientation) and sets the `+0xCB0` flag the
+//!    post-load spawn resolver (sub_140AFE280) checks before falling back to
+//!    region/grace spawn points.
+//! 3. `GameMan.warp_requested = true` - done directly rather than through the
+//!    game's own trigger (sub_1405F89C0), which also calls into the session
+//!    manager when online and might drop a Seamless Co-op session.
+//!
+//! No version lock: both functions are found by AOB (same unique pattern in
+//! exe 2.6.2.0, 2.7.0.0 and 2.7.1.0), and the `GameMan` static itself is read
+//! off `SetCustomSpawn`'s own `mov rax, [rip+disp32]` - fromsoftware-rs's
+//! `GameMan::instance()` goes through its version-gated RVA table and panics
+//! on any exe it has no table for (it did, on 2.7.0.0).
+
+use std::sync::Mutex;
+
+use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
+use eldenring::fd4::FD4TaskData;
+use fromsoftware_shared::FromStatic;
+
+use common::input::{self, parse_virtual_key};
+use common::{announce, config, logger, memscan};
+
+const VK_F7: i32 = 0x76;
+const VK_F8: i32 = 0x77;
+const VK_F9: i32 = 0x78;
+
+// sub_14067BA20 in 2.7.1.0. The `cmp byte [rcx+0xB28], 0` tail pins the
+// GameMan field layout the function (and the offsets below) assume.
+const AOB_REQUEST_MOVE_MAP: &str =
+    "40 53 48 83 EC 20 8B 02 48 8B D9 89 01 48 8B 0D ?? ?? ?? ?? 80 B9 28 0B 00 00 00";
+// sub_14067B970 in 2.7.1.0 - writes +0xC90 / +0xCA0 and sets the +0xCB0 flag.
+const AOB_SET_CUSTOM_SPAWN: &str = "0F 28 01 48 8B 05 ?? ?? ?? ?? 0F 11 80 90 0C 00 00 \
+     0F 28 02 0F 11 80 A0 0C 00 00 C6 80 B0 0C 00 00 01";
+// Offset of `mov rax, [rip+disp32]`'s disp32 within AOB_SET_CUSTOM_SPAWN, and
+// of the instruction right after it (what disp32 is relative to).
+const GAME_MAN_DISP_OFFSET: usize = 6;
+const GAME_MAN_NEXT_INSN_OFFSET: usize = 10;
+
+/// `GameMan.warp_requested` (fromsoftware-rs `cs/game_man.rs`; the game's
+/// own setter sub_14067BCF0 is `mov [rax+10h], cl`).
+const GAME_MAN_WARP_REQUESTED: usize = 0x10;
+
+// sub_14067BA20(out, &block, unused) -> out
+type RequestMoveMapFn = unsafe extern "C" fn(out: *mut i32, block: *const i32, unused: u64) -> *mut i32;
+// sub_14067B970(&position, &orientation) - both read with `movaps`, so the
+// pointers must be 16-byte aligned (see [Vec4]).
+type SetCustomSpawnFn = unsafe extern "C" fn(position: *const Vec4, orientation: *const Vec4) -> u64;
+
+#[repr(C, align(16))]
+struct Vec4([f32; 4]);
+
+#[derive(Clone, Copy)]
+struct SavedSpot {
+    block_id: i32,
+    x: f32,
+    y: f32,
+    z: f32,
+    yaw: f32,
+}
+
+static SAVED: Mutex<Option<SavedSpot>> = Mutex::new(None);
+
+struct GameFns {
+    request_move_map: RequestMoveMapFn,
+    set_custom_spawn: SetCustomSpawnFn,
+    /// Address of the static holding the `GameMan*` (not GameMan itself -
+    /// that's only allocated once the game boots far enough).
+    game_man_static: *const usize,
+}
+
+// Raw pointers aren't Send by default; these are process-lifetime addresses
+// inside eldenring.exe's image, read only from the game's own task thread.
+unsafe impl Send for GameFns {}
+
+fn resolve_game_fns() -> Option<GameFns> {
+    let request_move_map = memscan::find_pattern_in_module(AOB_REQUEST_MOVE_MAP)?;
+    let set_custom_spawn = memscan::find_pattern_in_module(AOB_SET_CUSTOM_SPAWN)?;
+    let game_man_static = unsafe {
+        let disp = (set_custom_spawn.add(GAME_MAN_DISP_OFFSET) as *const i32).read_unaligned();
+        set_custom_spawn.add(GAME_MAN_NEXT_INSN_OFFSET).offset(disp as isize) as *const usize
+    };
+    Some(GameFns {
+        request_move_map: unsafe { std::mem::transmute::<*mut u8, RequestMoveMapFn>(request_move_map) },
+        set_custom_spawn: unsafe { std::mem::transmute::<*mut u8, SetCustomSpawnFn>(set_custom_spawn) },
+        game_man_static,
+    })
+}
+
+fn save_current_spot() {
+    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
+        return;
+    };
+    let Some(player) = world_chr_man.main_player.as_ref() else {
+        return;
+    };
+    let pos = &player.block_position;
+    let spot = SavedSpot {
+        block_id: player.current_block_id.0,
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        yaw: pos.yaw,
+    };
+    *SAVED.lock().unwrap() = Some(spot);
+    logger::log(&format!(
+        "Saved spot: block {:#010X} local ({:.2}, {:.2}, {:.2}) yaw {:.3}",
+        spot.block_id, spot.x, spot.y, spot.z, spot.yaw
+    ));
+    announce::show_announcement("Teleport spot saved");
+}
+
+fn warp_to_saved(fns: &GameFns) {
+    let Some(spot) = *SAVED.lock().unwrap() else {
+        announce::show_announcement("No teleport spot saved yet");
+        return;
+    };
+    // Same "actually in the world" gate as every other mod here - warping
+    // from a loading screen or the title menu is not something to test.
+    if common::player::main_player_chr_ins_ptr().is_none() {
+        return;
+    }
+    let game_man = unsafe { *fns.game_man_static };
+    if game_man == 0 {
+        logger::error("Warp: GameMan not allocated yet.");
+        return;
+    }
+
+    let mut normalized_block = 0i32;
+    let position = Vec4([spot.x, spot.y, spot.z, 1.0]);
+    // Same layout the game builds for multiplay_join_orientation in
+    // sub_1406FC370: (0, yaw, 0, 0).
+    let orientation = Vec4([0.0, spot.yaw, 0.0, 0.0]);
+    unsafe {
+        (fns.request_move_map)(&mut normalized_block, &spot.block_id, 0);
+        (fns.set_custom_spawn)(&position, &orientation);
+    }
+    unsafe { *((game_man + GAME_MAN_WARP_REQUESTED) as *mut bool) = true };
+
+    logger::log(&format!(
+        "Warp requested: block {:#010X} (normalized {:#010X}) local ({:.2}, {:.2}, {:.2})",
+        spot.block_id, normalized_block, spot.x, spot.y, spot.z
+    ));
+}
+
+/// Logs every entry of `WorldChrMan.player_chr_set` - you plus every
+/// connected player the game has a `PlayerIns` for. Research aid for the
+/// SoulsChat addon: in Seamless Co-op, does a player far away (unloaded area)
+/// still have an entry here, with a `current_block_id`/`block_position` that
+/// keeps updating? If so no network sync of positions is needed.
+fn list_players() {
+    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
+        return;
+    };
+    let mut count = 0;
+    for player in world_chr_man.player_chr_set.characters() {
+        count += 1;
+        let name = unsafe { player.player_game_data.as_ref() }.character_name;
+        let name_len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+        let name = String::from_utf16_lossy(&name[..name_len]);
+        let block_pos = &player.block_position;
+        let havok = &player.chr_ins.modules.physics.position;
+        logger::log(&format!(
+            "Player #{count}: '{name}' type {:?} block {:#010X} local ({:.2}, {:.2}, {:.2}) havok ({:.2}, {:.2}, {:.2})",
+            player.chr_ins.chr_type,
+            player.current_block_id.0,
+            block_pos.x,
+            block_pos.y,
+            block_pos.z,
+            havok.0,
+            havok.1,
+            havok.2,
+        ));
+    }
+    logger::log(&format!("player_chr_set: {count} player(s)."));
+    announce::show_announcement(&format!("Logged {count} player(s)"));
+}
+
+/// Registers the per-frame hotkey watcher. Meant to run on its own worker
+/// thread spawned from `DllMain`; never returns.
+pub fn run() {
+    let Some(fns) = resolve_game_fns() else {
+        logger::error("Warp functions not found (AOB) - game update may need a mod update. SoulsTeleport disabled.");
+        return;
+    };
+    logger::log(&format!(
+        "Warp functions found (AOB), GameMan static at {:#X}.",
+        fns.game_man_static as usize
+    ));
+
+    let cs_task = common::task::wait_for_cs_task();
+    common::task::run_recurring_safe(cs_task, "Teleport", CSTaskGroupIndex::FrameBegin, move |_data: &FD4TaskData| {
+        let save_key = parse_virtual_key(&config::get_string("SaveKey", "F7"), VK_F7);
+        let warp_key = parse_virtual_key(&config::get_string("WarpKey", "F8"), VK_F8);
+        if input::is_key_pressed(save_key) {
+            save_current_spot();
+        }
+        if input::is_key_pressed(warp_key) {
+            warp_to_saved(&fns);
+        }
+        let list_key = parse_virtual_key(&config::get_string("ListPlayersKey", "F9"), VK_F9);
+        if input::is_key_pressed(list_key) {
+            list_players();
+        }
+    });
+
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+    }
+}
