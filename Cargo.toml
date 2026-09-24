@@ -7,8 +7,8 @@ members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverun
 # own engine structures (WorldChrMan/ChrIns/CSTaskImp/...), used instead of hand
 # rolled AOB scanning + manual offsets. Declared once here so every mod crate
 # builds against the exact same version.
-eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
-fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "16d266146bcc7e896ac0d9a2c020e0d4c07baf52" }
+eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
+fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Builds the fake C++ vtable `fromsoftware-shared`'s own
 # `SharedTaskImpExt::run_recurring` uses to masquerade a Rust closure as a
