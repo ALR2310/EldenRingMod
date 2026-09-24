@@ -531,6 +531,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "soulsteleport"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "eldenring",
+ "fromsoftware-shared",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
