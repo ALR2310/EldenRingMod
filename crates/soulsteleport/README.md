@@ -120,3 +120,52 @@ dự án phát triển thật, đặt tên theo hướng addon cho SoulsChat. Đ
 `TeleportTest.ini` → `SoulsTeleport.ini`, log `SoulsTeleport.log`. Key ini
 giữ nguyên (`SaveKey`/`WarpKey`/`ListPlayersKey`). Các mục phía trên viết
 lúc còn tên TeleportTest - nội dung kỹ thuật vẫn đúng.
+
+## Test Seamless Co-op lần 1: 2 người đứng gần nhau (2026-09-24)
+
+2 instance trên 1 máy (tài khoản Steam thứ 2 chạy trong Sandboxie), cùng
+phiên Seamless Co-op, đứng cạnh nhau ở `m60_42_37`. `F9` ra:
+
+```
+Player #1: 'AnLe -2' type Local block 0x3C2A2500 local (15.28, 110.75, 113.58) havok (7.28, 6.75, 1.58)
+Player #2: 'ALR'     type Local block 0xFFFFFFFF local (0.00, 0.00, 0.00)     havok (8.13, 6.67, 1.52)
+```
+
+Kết luận:
+- Đồng đội **có** trong `player_chr_set`.
+- `PlayerIns.current_block_id` / `block_position` **chỉ được cập nhật cho
+  chính mình** - của đồng đội là `-1` / `0`, không dùng được.
+- Tọa độ Havok (`CSChrPhysicsModule.position`) của đồng đội **vẫn sống và
+  chính xác** (cách nhau ~0.9 m, khớp thực tế).
+- Seamless Co-op báo cả 2 là `chr_type Local` (không phải phantom).
+
+Hệ quả: khi ở gần, đích warp tính được từ chính mình:
+`block = block của mình`, `local = local của mình + (havok đồng đội - havok của mình)`.
+Khi ở xa thì chưa biết - có thể Havok của đồng đội nằm ngoài vùng Havok
+đang load. Đã thêm vào log `F9` các trường của `ChrIns`: `block_id`,
+`block_origin`, `chunk_position` - biết đâu các trường này còn giữ block
+của đồng đội. Cần test lần 2: 2 người ở rất xa nhau.
+
+## Test Seamless Co-op lần 2: ở xa → mất tọa độ; sửa bắt phím (2026-09-24)
+
+Log lần 2 (host `AnLe -2`, người join `ALR`):
+- Gần nhau: Havok của `ALR` cập nhật liên tục (`(7.66, 6.59, 6.53)` →
+  `(6.28, 6.62, 6.57)` khi người join nhích đi).
+- Sau khi người join dịch chuyển đi xa: `ALR` **vẫn còn** trong
+  `player_chr_set` nhưng Havok về `(0, 0, 0)` - máy host không còn biết vị trí.
+- `ChrIns.block_id` của `ALR` luôn `0x3C2A2500` kể cả khi đã đi xa (không đáng
+  tin), `chunk_position` luôn `0`.
+
+→ **Kết luận: addon phải tự gửi vị trí qua mạng.** Mỗi instance đọc block +
+tọa độ của chính mình (`PlayerIns.current_block_id`/`block_position` - luôn
+đúng cho main player) rồi gửi cho người khác; công thức Havok ở mục trên chỉ
+còn là dự phòng khi ở gần.
+
+Cũng trong lần test này: bấm `F9` ở cửa sổ người join nhưng log lại ra ở host,
+log của bản join (trong sandbox) không có dòng nào. Nguyên nhân: mod dùng
+`common::input::is_key_pressed` (`GetAsyncKeyState & 1`) - bit "đã bấm từ lần
+gọi trước" là cờ chung toàn hệ thống, instance nào poll trước thì "ăn" mất.
+Sửa: đổi sang `eldenring::util::input::is_key_pressed` (fromsoftware-rs,
+`GetKeyState` - trạng thái phím theo luồng, chỉ cập nhật khi cửa sổ của chính
+process nhận phím), giống `common::reload`. `common::input::is_key_pressed`
+cũng được sửa riêng cho các mod poll từ thread thường (xem WeightMultiplier).
