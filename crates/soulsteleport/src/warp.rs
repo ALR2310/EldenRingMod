@@ -26,9 +26,15 @@ use std::sync::Mutex;
 
 use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
 use eldenring::fd4::FD4TaskData;
+// Not `common::input::is_key_pressed`: that one polls from a plain thread
+// via `GetAsyncKeyState`, which (before 2026-09-24) let 2 game instances on
+// one PC steal each other's presses. This runs on the game's own task, where
+// fromsoftware-rs's `GetKeyState`-based poll only sees keys sent to this
+// process's own window - same as `common::reload` uses.
+use eldenring::util::input;
 use fromsoftware_shared::FromStatic;
 
-use common::input::{self, parse_virtual_key};
+use common::input::parse_virtual_key;
 use common::{announce, config, logger, memscan};
 
 const VK_F7: i32 = 0x76;
@@ -170,8 +176,15 @@ fn list_players() {
         let name = String::from_utf16_lossy(&name[..name_len]);
         let block_pos = &player.block_position;
         let havok = &player.chr_ins.modules.physics.position;
+        // First co-op test (2026-09-24): `PlayerIns.current_block_id` /
+        // `block_position` are only maintained for the main player (-1 / 0
+        // for a Seamless Co-op partner), but the havok position is live for
+        // both. `ChrIns`'s own block/chunk fields might still carry the
+        // partner's block - logged to find out.
+        let chr = &player.chr_ins;
+        let chunk = &chr.chunk_position;
         logger::log(&format!(
-            "Player #{count}: '{name}' type {:?} block {:#010X} local ({:.2}, {:.2}, {:.2}) havok ({:.2}, {:.2}, {:.2})",
+            "Player #{count}: '{name}' type {:?} block {:#010X} local ({:.2}, {:.2}, {:.2}) havok ({:.2}, {:.2}, {:.2})              | chr block {:#010X} origin {:#010X} chunk ({:.2}, {:.2}, {:.2})",
             player.chr_ins.chr_type,
             player.current_block_id.0,
             block_pos.x,
@@ -180,6 +193,11 @@ fn list_players() {
             havok.0,
             havok.1,
             havok.2,
+            chr.block_id.0,
+            chr.block_origin.0,
+            chunk.0,
+            chunk.1,
+            chunk.2,
         ));
     }
     logger::log(&format!("player_chr_set: {count} player(s)."));
