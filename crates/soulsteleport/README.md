@@ -720,3 +720,14 @@ bộ nhớ từng bản game; chưa test phiên từ 3 người.
 bên được hỏi trả đúng request đó; cả 2 log **không** có dòng
 `Dropped a packet claiming to be from ...` → đọc `m_identityPeer` ở offset 16
 là đúng layout. Sẵn sàng phát hành 1.0.0.
+
+## Phát hành 1.0.0 lên Nexus - mod 11119 (2026-09-25)
+
+Người dùng tự tạo trang "Souls Teleport" (game-scoped 11119, internal
+`18610093304687`; API không có endpoint tạo trang mod). Trang chưa có file
+nào nên file đầu tiên tạo bằng `POST /v3/mod-files` (`createModFile`,
+`mod_id` = internal id) thay vì `createModFileVersion` như các lần cập nhật:
+file Main `SoulsTeleport` 1.0.0 (id `18610093344994`, nhóm file `8024916`),
+primary download, `update_mod_version`; changelog "Initial release.". Gói
+build từ commit `b6b2047`. `manifest.json` đã có entry, `CLAUDE.md` + memory
+có mod ID - bản sau deploy bằng skill `deploy-nexus-mod` như các mod khác.
