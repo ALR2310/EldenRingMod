@@ -42,7 +42,7 @@ Mod ID theo từng mod trong workspace này (game domain luôn là `eldenring`):
 - `passiverunes` → 10528
 - `risearcher` → 5807
 - `sometweaks` → **chưa có, chưa đăng lên Nexus**
-- `soulsteleport` → **chưa có, chưa đăng lên Nexus** (sắp đăng, tên hiển thị "Souls Teleport")
+- `soulsteleport` → 11119 (Souls Teleport)
 
 Key API cá nhân của người dùng lưu ở `.secrets/nexus_api_key.txt` (đã
 gitignore, không commit). Nếu API trả về thiếu 1 vài version cũ so với thực
