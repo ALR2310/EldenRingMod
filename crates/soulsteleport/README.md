@@ -606,3 +606,19 @@ imgui-sys 0.12). Scale theo độ phân giải: 1080 px → 1.0 → 1; 1440 px �
 `scale_all_sizes`, đặt lại `mouse_cursor_scale = gốc × scale` không làm tròn.
 
 Log `Menu diag` đã gỡ sau khi người dùng xác nhận hết lỗi (2026-09-25).
+
+## Chuẩn bị phát hành 1.0.0 (2026-09-25)
+
+Người dùng xác nhận mọi thứ đã ổn (con trỏ hiện ở mọi cỡ cửa sổ). Việc làm để
+chuẩn bị phát hành:
+- Gỡ log chẩn đoán `Menu diag`.
+- `Cargo.toml` version `0.1.0` → `1.0.0` (Nexus chưa có trang mod này, nên
+  không có changelog thật để đối chiếu - bản đầu tiên).
+- `DESCRIPTION.bbcode` mới theo khung của các mod khác: giới thiệu, Features,
+  Requirements (Seamless Co-op - Nexus mod 510, đã kiểm tra qua API; mọi
+  người muốn teleport tới đều phải cài mod), Usage, Installation, Credits (ghi
+  công Noto Sans + giấy phép OFL, hudhook, Dear ImGui), Changelog 1.0.0.
+- `scripts/build-mod.ps1`: khi `-Zip`, gói thêm mọi `*.txt` trong
+  `crates/<crate>/assets/` - để `NotoSans-OFL.txt` luôn đi kèm font nhúng như
+  OFL yêu cầu. Các mod khác không có thư mục `assets/` nên zip không đổi (đã
+  thử với AutoRegen).

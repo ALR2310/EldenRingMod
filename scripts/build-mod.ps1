@@ -97,7 +97,15 @@ if ($Zip) {
     if (Test-Path $ZipPath) {
         Remove-Item $ZipPath -Force
     }
-    Compress-Archive -Path $BuildDllPath, $BuildIniPath -DestinationPath $ZipPath -Force
+    # License/notice files that must ship with the mod (e.g. SoulsTeleport's
+    # embedded Noto Sans font: SIL OFL 1.1 requires the license to travel
+    # with it) - any *.txt in the crate's assets/ folder goes into the zip.
+    $ZipItems = @($BuildDllPath, $BuildIniPath)
+    $AssetsDir = Join-Path $CrateDir "assets"
+    if (Test-Path $AssetsDir) {
+        $ZipItems += Get-ChildItem -Path $AssetsDir -Filter "*.txt" -File | ForEach-Object { $_.FullName }
+    }
+    Compress-Archive -Path $ZipItems -DestinationPath $ZipPath -Force
 
     Write-Host "==> $ZipPath ready" -ForegroundColor Green
 }
