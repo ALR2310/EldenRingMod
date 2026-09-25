@@ -1,7 +1,5 @@
-//! Offline proof-of-concept for "warp to an exact position, with a loading
-//! screen" - the mechanism a future SoulsChat `/teleport <player>` addon
-//! needs (see README). `SaveKey` remembers the main player's current block +
-//! block-local position; `WarpKey` asks the game to move-map back there.
+//! "Warp to an exact position, with a loading screen" - used to land right
+//! next to a co-op partner picked in the menu (see `ui`, `net`, README).
 //!
 //! Reuses the game's own sequence, found by static analysis of eldenring.exe
 //! 2.7.1.0 (the game calls it when a multiplayer session ends, to put you back
@@ -22,28 +20,29 @@
 //! `GameMan::instance()` goes through its version-gated RVA table and panics
 //! on any exe it has no table for (it did, on 2.7.0.0).
 
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
-use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
+use eldenring::cs::CSTaskGroupIndex;
 use eldenring::fd4::FD4TaskData;
-// Not `common::input::is_key_pressed`: that one polls from a plain thread
-// via `GetAsyncKeyState`, which (before 2026-09-24) let 2 game instances on
-// one PC steal each other's presses. This runs on the game's own task, where
-// fromsoftware-rs's `GetKeyState`-based poll only sees keys sent to this
-// process's own window - same as `common::reload` uses.
-use eldenring::util::input;
-use fromsoftware_shared::FromStatic;
 
-use common::input::parse_virtual_key;
-use common::{announce, config, logger, memscan};
+// `common::input`, not fromsoftware-rs's `eldenring::util::input`: that one
+// uses `GetKeyState`, which called from the game's task thread (no input
+// queue of its own) reflects the whole desktop's key state - co-op test 4
+// (2026-09-24): one hotkey press in 1 window made BOTH game instances warp.
+// `common::input::is_key_pressed` checks that this process owns the
+// foreground window before even polling.
+use common::input::{self, parse_virtual_key};
+use common::{config, logger, memscan};
 
+use crate::net::{self, Net};
+use crate::party;
+use crate::ui;
 use crate::steam::SteamMessages;
-use crate::sync;
 
-const VK_F7: i32 = 0x76;
-const VK_F8: i32 = 0x77;
-const VK_F9: i32 = 0x78;
-const VK_F10: i32 = 0x79;
+const VK_TAB: i32 = 0x09;
+
+const MENU_REFRESH_EVERY: Duration = Duration::from_millis(500);
 
 // ~10s at 60fps - Steam is up long before the player can reach the world.
 const STEAM_LOAD_ATTEMPTS: u32 = 600;
@@ -85,7 +84,21 @@ pub struct Spot {
     pub yaw: f32,
 }
 
-static SAVED: Mutex<Option<Spot>> = Mutex::new(None);
+/// Address of the static holding the `GameMan*`, once resolved - lets
+/// other modules ask [warp_pending] without a [GameFns].
+static GAME_MAN_STATIC: AtomicUsize = AtomicUsize::new(0);
+
+/// Whether a move-map (ours, or the game's own: fast travel, death...) is
+/// requested and not yet picked up - i.e. a loading screen is imminent or
+/// under way. `false` if GameMan isn't known/allocated yet.
+pub fn warp_pending() -> bool {
+    let static_addr = GAME_MAN_STATIC.load(Ordering::Relaxed);
+    if static_addr == 0 {
+        return false;
+    }
+    let game_man = unsafe { *(static_addr as *const usize) };
+    game_man != 0 && unsafe { *((game_man + GAME_MAN_WARP_REQUESTED) as *const bool) }
+}
 
 pub struct GameFns {
     request_move_map: RequestMoveMapFn,
@@ -113,37 +126,12 @@ fn resolve_game_fns() -> Option<GameFns> {
     })
 }
 
-fn current_spot() -> Option<Spot> {
-    let world_chr_man = unsafe { WorldChrMan::instance() }.ok()?;
-    let player = world_chr_man.main_player.as_ref()?;
-    let pos = &player.block_position;
-    Some(Spot {
-        block_id: player.current_block_id.0,
-        x: pos.x,
-        y: pos.y,
-        z: pos.z,
-        yaw: pos.yaw,
-    })
-}
-
-fn save_current_spot() {
-    let Some(spot) = current_spot() else {
-        return;
-    };
-    *SAVED.lock().unwrap() = Some(spot);
-    logger::log(&format!(
-        "Saved spot: block {:#010X} local ({:.2}, {:.2}, {:.2}) yaw {:.3}",
-        spot.block_id, spot.x, spot.y, spot.z, spot.yaw
-    ));
-    announce::show_announcement("Teleport spot saved");
-}
-
 /// Asks the game to move-map to `spot` (loading screen, then spawn exactly
 /// there). Returns false if not in the world yet / GameMan not allocated.
 pub fn warp_to(fns: &GameFns, spot: &Spot) -> bool {
     // Same "actually in the world" gate as every other mod here - warping
     // from a loading screen or the title menu is not something to test.
-    if common::player::main_player_chr_ins_ptr().is_none() {
+    if common::player::main_player_chr_ins_ptr().is_none() || warp_pending() {
         return false;
     }
     let game_man = unsafe { *fns.game_man_static };
@@ -170,108 +158,71 @@ pub fn warp_to(fns: &GameFns, spot: &Spot) -> bool {
     true
 }
 
-fn warp_to_saved(fns: &GameFns) {
-    let Some(spot) = *SAVED.lock().unwrap() else {
-        announce::show_announcement("No teleport spot saved yet");
+/// Asks the partner the player clicked in the menu for their current
+/// position; the warp happens once `HERE` arrives (see [handle_net_event]).
+fn request_partner_position(net: &mut Net, steam_id: u64) {
+    let members = party::members();
+    let Some(own) = party::own_steam_id(&members) else {
+        ui::set_status("Not in a co-op session.");
         return;
     };
-    warp_to(fns, &spot);
-}
-
-/// Test stand-in for the future `/teleport <player>`: warps to the partner
-/// whose synced position arrived most recently.
-fn warp_to_partner(fns: &GameFns) {
-    let Some((steam_id, remote)) = sync::fresh_remote_spots()
-        .into_iter()
-        .max_by_key(|(_, r)| r.received)
-    else {
-        announce::show_announcement("No partner position received yet");
-        logger::log("Warp to partner: no fresh position from any partner.");
+    // Re-checked here, not just when the list was drawn: the partner may have
+    // left, or turned out hostile, since.
+    let Some(target) = members.iter().find(|m| m.steam_id == steam_id && m.is_teleport_target()) else {
+        ui::set_status("That player is no longer available.");
         return;
     };
-    // No offset needed: the game itself pushes apart 2 characters spawned
-    // on top of each other (confirmed by the user in-game).
-    let spot = remote.spot;
-    logger::log(&format!(
-        "Warp to partner '{}' ({steam_id}), position {:.1}s old.",
-        remote.character_name,
-        remote.received.elapsed().as_secs_f32()
-    ));
-    if warp_to(fns, &spot) {
-        announce::show_announcement(&format!("Teleporting to {}", remote.character_name));
+    ui::with_shared(|s| {
+        s.set_status(format!("Locating {}...", target.display_name()));
+        s.busy = true;
+    });
+    net.request(own, target);
+}
+
+/// Refreshes the partner list the menu shows (only while it's open).
+fn refresh_menu_snapshot() {
+    let members = party::members();
+    let in_session = party::own_steam_id(&members).is_some();
+    let partners = members
+        .iter()
+        .filter(|m| m.is_teleport_target())
+        .map(|m| ui::PartnerRow {
+            steam_id: m.steam_id,
+            character_name: m.display_name().to_string(),
+            steam_name: m.steam_name.clone(),
+            role: m.role(),
+        })
+        .collect();
+    ui::with_shared(|s| {
+        s.in_session = in_session;
+        s.partners = partners;
+    });
+}
+
+fn handle_net_event(fns: &GameFns, event: net::Event) {
+    match event {
+        net::Event::Arrived { character_name, spot } => {
+            ui::with_shared(|s| s.busy = false);
+            // No offset: the game itself pushes apart 2 characters spawned on
+            // top of each other (confirmed by the user in-game).
+            if warp_to(fns, &spot) {
+                ui::set_status(format!("Teleporting to {character_name}..."));
+                ui::MENU_OPEN.store(false, Ordering::Relaxed);
+            } else {
+                ui::set_status("Can't teleport right now (loading or not in the world).");
+            }
+        }
+        net::Event::TimedOut { target_name } => {
+            ui::with_shared(|s| {
+                s.busy = false;
+                s.set_status(format!("{target_name} did not respond."));
+            });
+        }
     }
 }
 
-/// Logs every entry of `WorldChrMan.player_chr_set`, `CSSessionManager`'s
-/// session members, and every synced partner position. Research/debug aid.
-fn list_players() {
-    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
-        return;
-    };
-    let mut count = 0;
-    for player in world_chr_man.player_chr_set.characters() {
-        count += 1;
-        let name = unsafe { player.player_game_data.as_ref() }.character_name;
-        let name_len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
-        let name = String::from_utf16_lossy(&name[..name_len]);
-        let block_pos = &player.block_position;
-        let havok = &player.chr_ins.modules.physics.position;
-        // Co-op test (2026-09-24): `PlayerIns.current_block_id` /
-        // `block_position` are only maintained for the main player (-1 / 0
-        // for a Seamless Co-op partner), and a far partner's havok position
-        // drops to 0 - hence the network sync in `sync`.
-        let chr = &player.chr_ins;
-        let chunk = &chr.chunk_position;
-        logger::log(&format!(
-            "Player #{count}: '{name}' type {:?} block {:#010X} local ({:.2}, {:.2}, {:.2}) \
-             havok ({:.2}, {:.2}, {:.2}) | chr block {:#010X} origin {:#010X} chunk ({:.2}, {:.2}, {:.2})",
-            chr.chr_type,
-            player.current_block_id.0,
-            block_pos.x,
-            block_pos.y,
-            block_pos.z,
-            havok.0,
-            havok.1,
-            havok.2,
-            chr.block_id.0,
-            chr.block_origin.0,
-            chunk.0,
-            chunk.1,
-            chunk.2,
-        ));
-    }
-    logger::log(&format!("player_chr_set: {count} player(s)."));
-
-    let peers = sync::session_peers();
-    for peer in &peers {
-        logger::log(&format!(
-            "Session: {} '{}'{}",
-            peer.steam_id,
-            peer.steam_name,
-            if peer.is_local { " (local)" } else { "" }
-        ));
-    }
-    let remote = sync::fresh_remote_spots();
-    for (steam_id, r) in &remote {
-        logger::log(&format!(
-            "Synced: {steam_id} '{}' block {:#010X} local ({:.2}, {:.2}, {:.2}) - {:.1}s old",
-            r.character_name,
-            r.spot.block_id,
-            r.spot.x,
-            r.spot.y,
-            r.spot.z,
-            r.received.elapsed().as_secs_f32()
-        ));
-    }
-    announce::show_announcement(&format!(
-        "{count} loaded, {} in session, {} synced",
-        peers.len(),
-        remote.len()
-    ));
-}
-
-/// Registers the per-frame hotkey watcher + position sync. Meant to run on
-/// its own worker thread spawned from `DllMain`; never returns.
+/// Registers the per-frame hotkey watcher + position requests. Meant to run
+/// on its own worker thread spawned from `DllMain`; never returns.
 pub fn run() {
     let Some(fns) = resolve_game_fns() else {
         logger::error("Warp functions not found (AOB) - game update may need a mod update. SoulsTeleport disabled.");
@@ -281,41 +232,43 @@ pub fn run() {
         "Warp functions found (AOB), GameMan static at {:#X}.",
         fns.game_man_static as usize
     ));
+    GAME_MAN_STATIC.store(fns.game_man_static as usize, Ordering::Relaxed);
 
     let cs_task = common::task::wait_for_cs_task();
     // Steam's messaging interface may not exist yet this early - retried
     // from the task until it does (logged once either way).
-    let mut syncer: Option<sync::Syncer> = None;
+    let mut net: Option<Net> = None;
     let mut steam_attempts = 0u32;
+    let mut last_snapshot: Option<Instant> = None;
     common::task::run_recurring_safe(cs_task, "Teleport", CSTaskGroupIndex::FrameBegin, move |_data: &FD4TaskData| {
-        if syncer.is_none() && steam_attempts < STEAM_LOAD_ATTEMPTS {
+        if net.is_none() && steam_attempts < STEAM_LOAD_ATTEMPTS {
             steam_attempts += 1;
             if let Some(steam) = SteamMessages::load() {
-                logger::log("Steam networking messages ready - position sync on.");
-                syncer = Some(sync::Syncer::new(steam));
+                logger::log("Steam networking messages ready - teleport to partner on.");
+                net = Some(Net::new(steam));
             } else if steam_attempts == STEAM_LOAD_ATTEMPTS {
-                logger::error("Steam networking messages unavailable - position sync off.");
+                logger::error("Steam networking messages unavailable - teleport to partner off.");
             }
         }
-        if let Some(syncer) = syncer.as_mut() {
-            syncer.tick();
+        if let Some(event) = net.as_mut().and_then(Net::tick) {
+            handle_net_event(&fns, event);
         }
 
-        let save_key = parse_virtual_key(&config::get_string("SaveKey", "F7"), VK_F7);
-        let warp_key = parse_virtual_key(&config::get_string("WarpKey", "F8"), VK_F8);
-        let list_key = parse_virtual_key(&config::get_string("ListPlayersKey", "F9"), VK_F9);
-        let partner_key = parse_virtual_key(&config::get_string("WarpToPartnerKey", "F10"), VK_F10);
-        if input::is_key_pressed(save_key) {
-            save_current_spot();
+        let menu_key = parse_virtual_key(&config::get_string("MenuKey", "0x09"), VK_TAB);
+        if input::is_key_pressed(menu_key) {
+            ui::toggle();
         }
-        if input::is_key_pressed(warp_key) {
-            warp_to_saved(&fns);
+        if ui::MENU_OPEN.load(Ordering::Relaxed)
+            && last_snapshot.is_none_or(|t: Instant| t.elapsed() >= MENU_REFRESH_EVERY)
+        {
+            last_snapshot = Some(Instant::now());
+            refresh_menu_snapshot();
         }
-        if input::is_key_pressed(list_key) {
-            list_players();
-        }
-        if input::is_key_pressed(partner_key) {
-            warp_to_partner(&fns);
+        if let Some(steam_id) = ui::REQUEST.lock().unwrap().take() {
+            match net.as_mut() {
+                Some(net) => request_partner_position(net, steam_id),
+                None => ui::set_status("Steam networking unavailable."),
+            }
         }
     });
 

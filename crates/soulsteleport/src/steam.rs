@@ -47,8 +47,10 @@ struct SteamNetworkingMessage {
     size: i32,
 }
 
-// k_nSteamNetworkingSend_Unreliable | k_nSteamNetworkingSend_AutoRestartBrokenSession
-pub const SEND_UNRELIABLE_AUTO_RESTART: i32 = 32;
+// k_nSteamNetworkingSend_Reliable | k_nSteamNetworkingSend_AutoRestartBrokenSession.
+// Reliable (like SoulsChat's own messages): a teleport is 1 WHERE + 1 HERE,
+// so a dropped packet would otherwise just mean waiting out the timeout.
+pub const SEND_RELIABLE_AUTO_RESTART: i32 = 8 | 32;
 
 type GetInterfaceFn = unsafe extern "C" fn() -> *mut c_void;
 type SendMessageToUserFn = unsafe extern "C" fn(
@@ -119,7 +121,7 @@ impl SteamMessages {
                 &identity,
                 payload.as_ptr(),
                 payload.len() as u32,
-                SEND_UNRELIABLE_AUTO_RESTART,
+                SEND_RELIABLE_AUTO_RESTART,
                 channel,
             )
         }
