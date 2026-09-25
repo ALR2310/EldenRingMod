@@ -714,3 +714,9 @@ Giới hạn đã biết, để sau 1.0.0: chưa chặn teleport khi người ki
 Torrent trên không / trong trận boss / đang chết; cấu trúc đọc qua
 fromsoftware-rs (danh sách phiên, vị trí, `protocol_state`) phụ thuộc bố cục
 bộ nhớ từng bản game; chưa test phiên từ 3 người.
+
+Đã test lại trong game sau review (2026-09-25): teleport vẫn chạy đúng. Log:
+`WHERE` với request id ngẫu nhiên (`1185497997`) → `HERE` sau 28 ms → warp;
+bên được hỏi trả đúng request đó; cả 2 log **không** có dòng
+`Dropped a packet claiming to be from ...` → đọc `m_identityPeer` ở offset 16
+là đúng layout. Sẵn sàng phát hành 1.0.0.
