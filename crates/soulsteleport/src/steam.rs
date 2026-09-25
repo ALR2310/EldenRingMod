@@ -33,18 +33,33 @@ impl SteamNetworkingIdentity {
         data[..8].copy_from_slice(&steam_id.to_le_bytes());
         Self { kind: IDENTITY_TYPE_STEAM_ID, size: 8, data }
     }
+
+    fn steam_id(&self) -> Option<u64> {
+        (self.kind == IDENTITY_TYPE_STEAM_ID).then(|| u64::from_le_bytes(self.data[..8].try_into().unwrap()))
+    }
 }
 
-/// Only the leading fields of `SteamNetworkingMessage_t` are read (payload
-/// pointer + size, both stable since the struct was introduced); releasing
-/// goes through the exported `SteamAPI_SteamNetworkingMessage_t_Release`
-/// rather than the struct's own function-pointer field, so no deeper layout
-/// assumption is needed. The sender is identified by a field in our own
-/// payload instead of `m_identityPeer`.
+/// Only the leading fields of `SteamNetworkingMessage_t` are read
+/// (steamnetworkingtypes.h, unchanged since the struct was introduced):
+/// payload pointer, size, connection handle, and `m_identityPeer` - the
+/// sender as authenticated by Steam, used to reject packets that claim to be
+/// from someone else (review 2026-09-25: the sender used to be taken from our
+/// own payload only, which anyone can write). Releasing goes through the
+/// exported `SteamAPI_SteamNetworkingMessage_t_Release`, not the struct's own
+/// function pointer, so no deeper layout assumption is needed.
 #[repr(C)]
 struct SteamNetworkingMessage {
     data: *const u8,
     size: i32,
+    conn: u32,
+    identity_peer: SteamNetworkingIdentity,
+}
+
+/// A received message: payload + the sender's SteamID as Steam reports it
+/// (`None` if the peer isn't identified by a SteamID).
+pub struct Received {
+    pub payload: Vec<u8>,
+    pub sender: Option<u64>,
 }
 
 // k_nSteamNetworkingSend_Reliable | k_nSteamNetworkingSend_AutoRestartBrokenSession.
@@ -135,9 +150,9 @@ impl SteamMessages {
         unsafe { (self.accept)(self.iface, &identity) };
     }
 
-    /// Drains every pending message on `channel`, copying each payload out
-    /// before releasing it back to Steam.
-    pub fn receive_all(&self, channel: i32) -> Vec<Vec<u8>> {
+    /// Drains every pending message on `channel`, copying each payload (and
+    /// its Steam-reported sender) out before releasing it back to Steam.
+    pub fn receive_all(&self, channel: i32) -> Vec<Received> {
         const BATCH: usize = 16;
         let mut out = Vec::new();
         loop {
@@ -150,7 +165,10 @@ impl SteamMessages {
                 unsafe {
                     let m = &*message;
                     if !m.data.is_null() && m.size > 0 {
-                        out.push(std::slice::from_raw_parts(m.data, m.size as usize).to_vec());
+                        out.push(Received {
+                            payload: std::slice::from_raw_parts(m.data, m.size as usize).to_vec(),
+                            sender: m.identity_peer.steam_id(),
+                        });
                     }
                     (self.release)(message);
                 }

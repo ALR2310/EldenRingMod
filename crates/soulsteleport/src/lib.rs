@@ -40,6 +40,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
+        ui::set_ini_path(ini_path.clone());
         ui::install();
 
         warp::run();

@@ -17,7 +17,7 @@ use hudhook::mh::{MH_ApplyQueued, MhHook};
 use hudhook::windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use hudhook::{BeforeWndProc, Hudhook, ImguiRenderLoop, MessageFilter, RenderContext};
 
-use common::logger;
+use common::{config, logger};
 
 pub static MENU_OPEN: AtomicBool = AtomicBool::new(false);
 
@@ -106,7 +106,26 @@ const CJK_FONT_FILES: [&str; 5] = ["msyh.ttc", "msjh.ttc", "meiryo.ttc", "msgoth
 /// Font is rasterized once at this size (big enough to stay sharp when
 /// scaled up on 4K) and shown at `FONT_AT_1080P * scale` via
 /// `font_global_scale`.
-const FONT_RASTER_SIZE: f32 = 40.0;
+const FONT_RASTER_BASE: f32 = 40.0;
+const FONT_RASTER_MAX: f32 = 64.0;
+
+/// `MenuScale` ini key: extra multiplier on top of the automatic resolution
+/// scale (1.0 = as designed). Applies to text, widgets and the menu's size,
+/// not its position (see [MenuRenderLoop::render]). Read once at startup.
+const KEY_MENU_SCALE: &str = "MenuScale";
+const MENU_SCALE_MIN: f32 = 0.5;
+const MENU_SCALE_MAX: f32 = 3.0;
+
+fn menu_scale() -> f32 {
+    let v = config::get_double(KEY_MENU_SCALE, 1.0) as f32;
+    if v.is_finite() { v.clamp(MENU_SCALE_MIN, MENU_SCALE_MAX) } else { 1.0 }
+}
+
+/// Raster size for the font atlas: bigger when `MenuScale` makes the text
+/// bigger, so it stays sharp (capped - the atlas also holds CJK glyphs).
+fn font_raster_size() -> f32 {
+    (FONT_RASTER_BASE * menu_scale()).clamp(FONT_RASTER_BASE, FONT_RASTER_MAX)
+}
 /// Menu is laid out for a 1080p game window; everything scales with the
 /// game window's height from there.
 const REFERENCE_HEIGHT: f32 = 1080.0;
@@ -116,18 +135,68 @@ const MAX_SCALE: f32 = 3.0;
 const WINDOW_SIZE_AT_1080P: [f32; 2] = [420.0, 360.0];
 const WINDOW_POS_AT_1080P: [f32; 2] = [60.0, 60.0];
 
+/// Where the menu's position/size is remembered: `[Menu]` in the ini, in
+/// 1080p units (divided by the UI scale) so a saved layout still fits after
+/// changing resolution. -1 = default layout.
+const KEY_X: &str = "MenuX";
+const KEY_Y: &str = "MenuY";
+const KEY_W: &str = "MenuWidth";
+const KEY_H: &str = "MenuHeight";
+
+static INI_PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Tells the menu which ini to save its layout into. Call before [install].
+pub fn set_ini_path(path: String) {
+    let _ = INI_PATH.set(path);
+}
+
+/// Saved layout (1080p units), falling back to the default for any value
+/// that's missing, -1, or not a sane size.
+fn saved_layout() -> ([f32; 2], [f32; 2]) {
+    let read = |key: &str, default: f32, min: f32| {
+        let v = config::get_double(key, -1.0) as f32;
+        if v.is_finite() && v >= min { v } else { default }
+    };
+    (
+        [read(KEY_X, WINDOW_POS_AT_1080P[0], 0.0), read(KEY_Y, WINDOW_POS_AT_1080P[1], 0.0)],
+        [read(KEY_W, WINDOW_SIZE_AT_1080P[0], 120.0), read(KEY_H, WINDOW_SIZE_AT_1080P[1], 80.0)],
+    )
+}
+
+fn save_layout(pos: [f32; 2], size: [f32; 2]) {
+    let Some(path) = INI_PATH.get() else {
+        return;
+    };
+    let fmt = |v: f32| format!("{:.0}", v.max(0.0));
+    let ok = config::set_values(
+        path,
+        &[(KEY_X, fmt(pos[0])), (KEY_Y, fmt(pos[1])), (KEY_W, fmt(size[0])), (KEY_H, fmt(size[1]))],
+    );
+    if !ok {
+        logger::error("Menu: couldn't save the menu position to the ini.");
+    }
+}
+
 #[derive(Default)]
 struct MenuRenderLoop {
     /// Unscaled ImGui style, to re-derive from on every scale change
     /// (`scale_all_sizes` compounds if applied to an already-scaled style).
     base_style: Option<imgui::Style>,
-    /// Scale currently applied (0 = none yet).
+    /// Scale currently applied (0 = none yet): resolution x `MenuScale`.
     scale: f32,
+    /// Resolution-only part of it, for the menu's position.
+    pos_scale: f32,
+    /// `MenuScale` from the ini, read once at startup.
+    menu_scale: f32,
     /// Set when the scale changes, so the next frame re-applies the window's
     /// size/position once (the player can still move/resize it after).
     relayout: bool,
     /// Left/right mouse button state last fed to ImGui (see [feed_mouse]).
     buttons_down: [bool; 2],
+    /// Menu position/size (1080p units) as last seen / saved - saved to the
+    /// ini when it changed and the player let go of the mouse.
+    layout_seen: Option<([f32; 2], [f32; 2])>,
+    layout_saved: Option<([f32; 2], [f32; 2])>,
 }
 
 #[link(name = "kernel32")]
@@ -238,7 +307,7 @@ impl ImguiRenderLoop for MenuRenderLoop {
 
         let main = FontSource::TtfData {
             data: EMBEDDED_FONT,
-            size_pixels: FONT_RASTER_SIZE,
+            size_pixels: font_raster_size(),
             config: Some(FontConfig {
                 glyph_ranges: FontGlyphRanges::from_slice(&GLYPH_RANGES),
                 ..FontConfig::default()
@@ -252,7 +321,7 @@ impl ImguiRenderLoop for MenuRenderLoop {
                     main,
                     FontSource::TtfData {
                         data: bytes,
-                        size_pixels: FONT_RASTER_SIZE,
+                        size_pixels: font_raster_size(),
                         config: Some(FontConfig {
                             glyph_ranges: FontGlyphRanges::chinese_simplified_common(),
                             ..FontConfig::default()
@@ -265,6 +334,10 @@ impl ImguiRenderLoop for MenuRenderLoop {
                 ctx.fonts().add_font(&[main]);
                 logger::log("Menu: embedded Noto Sans (no system CJK font found).");
             }
+        }
+        self.menu_scale = menu_scale();
+        if self.menu_scale != 1.0 {
+            logger::log(&format!("Menu: MenuScale {:.2}.", self.menu_scale));
         }
         apply_theme(ctx.style_mut());
         self.base_style = Some(*ctx.style());
@@ -285,7 +358,10 @@ impl ImguiRenderLoop for MenuRenderLoop {
         }
 
         // Follow the game window's resolution (and changes to it).
-        let scale = scale_for(ctx.io().display_size);
+        // Resolution scale x the player's own MenuScale.
+        self.pos_scale = scale_for(ctx.io().display_size);
+        let menu_scale = if self.menu_scale > 0.0 { self.menu_scale } else { 1.0 };
+        let scale = self.pos_scale * menu_scale;
         if (scale - self.scale).abs() > 0.01 {
             if let Some(base) = self.base_style {
                 let mut style = base;
@@ -298,7 +374,7 @@ impl ImguiRenderLoop for MenuRenderLoop {
                 style.mouse_cursor_scale = base.mouse_cursor_scale * scale;
                 *ctx.style_mut() = style;
             }
-            ctx.io_mut().font_global_scale = FONT_AT_1080P * scale / FONT_RASTER_SIZE;
+            ctx.io_mut().font_global_scale = FONT_AT_1080P * scale / font_raster_size();
             if self.scale != 0.0 {
                 logger::log(&format!("Menu: UI scale {:.2} -> {scale:.2}.", self.scale));
             }
@@ -312,15 +388,64 @@ impl ImguiRenderLoop for MenuRenderLoop {
             return;
         }
 
+        // Size follows the full scale (bigger text needs a bigger window);
+        // position only the resolution, so changing MenuScale doesn't move
+        // the menu away from where the player put it.
         let scale = if self.scale > 0.0 { self.scale } else { 1.0 };
+        let pos_scale = if self.pos_scale > 0.0 { self.pos_scale } else { 1.0 };
         let cond = if std::mem::take(&mut self.relayout) { Condition::Always } else { Condition::FirstUseEver };
+        let (pos, size) = saved_layout();
         let mut keep_open = true;
+        let mut reset_layout = false;
+        let mut layout = None;
         ui.window("##souls_teleport")
             .title_bar(false)
-            .size(WINDOW_SIZE_AT_1080P.map(|v| v * scale), cond)
-            .position(WINDOW_POS_AT_1080P.map(|v| v * scale), cond)
+            .size(size.map(|v| v * scale), cond)
+            .position(pos.map(|v| v * pos_scale), cond)
             .collapsible(false)
-            .build(|| draw_contents(ui, &mut keep_open));
+            .build(|| {
+                layout = Some((ui.window_pos().map(|v| v / pos_scale), ui.window_size().map(|v| v / scale)));
+                draw_contents(ui, &mut keep_open, &mut reset_layout);
+            });
+
+        if reset_layout {
+            // Back to the default layout: -1 in the ini, and re-apply it on
+            // the next frame (Condition::Always). The saved/seen baseline is
+            // dropped so that default layout isn't then saved back as numbers.
+            if let Some(path) = INI_PATH.get() {
+                let reset = |k| (k, "-1".to_string());
+                config::set_values(path, &[reset(KEY_X), reset(KEY_Y), reset(KEY_W), reset(KEY_H)]);
+            }
+            self.relayout = true;
+            self.layout_saved = None;
+            self.layout_seen = None;
+            layout = None;
+        }
+
+        // Remember where the player dragged/resized the menu - saved once
+        // they let go of the mouse (not every frame of a drag).
+        if let Some(now) = layout {
+            if self.layout_saved.is_none() {
+                self.layout_saved = Some(now);
+            }
+            self.layout_seen = Some(now);
+        }
+        let mouse_held = self.buttons_down[0];
+        if !mouse_held {
+            if let Some(seen) = self.layout_seen {
+                let changed = self.layout_saved.is_none_or(|(p, s)| {
+                    (p[0] - seen.0[0]).abs() >= 1.0
+                        || (p[1] - seen.0[1]).abs() >= 1.0
+                        || (s[0] - seen.1[0]).abs() >= 1.0
+                        || (s[1] - seen.1[1]).abs() >= 1.0
+                });
+                if changed {
+                    save_layout(seen.0, seen.1);
+                    self.layout_saved = Some(seen);
+                }
+            }
+        }
+
         if !keep_open {
             MENU_OPEN.store(false, Ordering::Relaxed);
         }
@@ -342,7 +467,9 @@ impl ImguiRenderLoop for MenuRenderLoop {
     }
 
     fn message_filter(&self, _io: &Io) -> MessageFilter {
-        // While open, keyboard/mouse go to the menu only, not the game.
+        // While open, keyboard/mouse window messages go to the menu only. The
+        // game itself reads input through DirectInput, not these messages
+        // (see `input_block` for what actually stops the camera).
         if MENU_OPEN.load(Ordering::Relaxed) { MessageFilter::InputAll } else { MessageFilter::empty() }
     }
 }
@@ -437,13 +564,24 @@ fn centered_text(ui: &Ui, color: [f32; 4], text: &str) {
     ui.text_colored(color, text);
 }
 
-fn draw_contents(ui: &Ui, keep_open: &mut bool) {
+fn draw_contents(ui: &Ui, keep_open: &mut bool, reset_layout: &mut bool) {
     let (in_session, partners, status, busy) =
         with_shared(|s| (s.in_session, s.partners.clone(), s.current_status(), s.busy));
 
-    // Header: mod name centered, a close button at the right edge.
+    // Header: small "reset layout" button on the left, mod name centered,
+    // close button on the right.
     let pad = ui.clone_style().frame_padding;
     let header_y = ui.cursor_pos()[1];
+    let header_x = ui.cursor_pos()[0];
+    ui.set_cursor_pos([header_x, header_y - pad[1] * 0.5]);
+    if ui.small_button("Reset") {
+        *reset_layout = true;
+    }
+    if ui.is_item_hovered() {
+        ui.tooltip_text("Reset the menu's position and size");
+    }
+    ui.same_line();
+    ui.set_cursor_pos([header_x, header_y]);
     centered_text(ui, GOLD, "Souls Teleport");
     let close_w = ui.calc_text_size("X")[0] + pad[0] * 2.0;
     ui.same_line_with_pos(ui.window_content_region_max()[0] - close_w);
