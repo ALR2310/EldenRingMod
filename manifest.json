@@ -192,5 +192,18 @@
         "commit": "9d45929ab587123cfca1ea91a00b8746c3f8733e"
       }
     ]
+  },
+  {
+    "id": "11119",
+    "internalId": "18610093304687",
+    "name": "Souls Teleport",
+    "crate": "soulsteleport",
+    "modFileId": "18610093344994",
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": "b6b204772b3835e5637b87da8fc8ff1533eda527"
+      }
+    ]
   }
 ]
