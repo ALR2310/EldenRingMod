@@ -1,12 +1,20 @@
 # SoulsTeleport
 
-Addon **không chính thức** cho SoulsChat (mod chat của 2Pz cho Seamless
-Co-op): mục tiêu là thêm lệnh `/teleport <player>` dịch chuyển (qua màn hình
-loading) tới đúng vị trí của người chơi khác. Tên hiển thị dự kiến trên
-Nexus: "Souls Teleport" (chưa đăng).
+Mod độc lập cho **Seamless Co-op**: bấm `MenuKey` (Tab) mở menu ImGui liệt
+kê mọi người trong phiên kèm vai trò, bấm 1 người để dịch chuyển (qua màn
+hình loading) tới đúng chỗ họ đứng, dù ở xa tới đâu. Vị trí được hỏi trực
+tiếp người đó qua Steam P2P (`WHERE` → `HERE`), nên người được tới cũng phải
+cài mod. Tên hiển thị trên Nexus: "Souls Teleport" (chưa đăng).
 
-Cấu hình (`SoulsTeleport.ini`) chỉ còn 2 key (từ 2026-09-25):
-- `MenuKey` (mặc định `0x09` = Tab): mở/đóng menu chọn đồng đội để dịch chuyển.
+Ban đầu (2026-09-24) định làm addon cho SoulsChat (lệnh `/teleport`) - đã bỏ
+hướng đó ngày 2026-09-25, xem các mục bên dưới.
+
+Cấu hình (`SoulsTeleport.ini`):
+- `MenuKey` (mặc định `0x09` = Tab): mở/đóng menu chọn người để dịch chuyển.
+- `[Menu]` `MenuScale` (mặc định `1.0`): phóng to/thu nhỏ cả menu, nhân thêm
+  trên phần co giãn tự động theo độ phân giải.
+- `[Menu]` `MenuX`/`MenuY`/`MenuWidth`/`MenuHeight`: vị trí + kích thước menu,
+  mod tự ghi khi người chơi kéo/đổi cỡ menu (-1 = mặc định).
 - `LogFile`: ghi `SoulsTeleport.log` cạnh DLL.
 
 (Các phím thử nghiệm `SaveKey`/`WarpKey`/`ListPlayersKey`/`WarpToPartnerKey`
@@ -622,3 +630,87 @@ chuẩn bị phát hành:
   `crates/<crate>/assets/` - để `NotoSans-OFL.txt` luôn đi kèm font nhúng như
   OFL yêu cầu. Các mod khác không có thư mục `assets/` nên zip không đổi (đã
   thử với AutoRegen).
+
+## Lưu vị trí + kích thước menu vào ini (2026-09-25)
+
+Yêu cầu người dùng: menu kéo/đổi cỡ ở đâu thì lần chơi sau vẫn ở đó.
+- `common::config::set_values(ini_path, &[(key, value)])` - **hàm mới trong
+  `common`** (trước đó cả workspace không có hàm nào ghi giá trị vào ini,
+  `migrate` chỉ ghi lại cả file từ template). Sửa đúng dòng `key=value` tại
+  chỗ, giữ nguyên comment/section/các dòng khác, key chưa có thì nối cuối
+  file; cập nhật luôn map cấu hình trong bộ nhớ. Có unit test.
+- 4 key mới trong mục `[Menu]`: `MenuX`, `MenuY`, `MenuWidth`, `MenuHeight`,
+  mặc định `-1` (= bố cục mặc định). Lưu theo **đơn vị 1080p** (chia cho UI
+  scale) nên đổi độ phân giải menu vẫn nằm đúng tỷ lệ chỗ cũ, không văng ra
+  ngoài màn hình.
+- `ui.rs`: mỗi frame đọc vị trí/kích thước thật của cửa sổ ImGui; khi khác
+  bản đã lưu ≥ 1 đơn vị **và** người chơi đã nhả chuột trái thì ghi ini 1 lần
+  (không ghi mỗi frame trong lúc kéo). Mở menu lần đầu không ghi gì - ini giữ
+  `-1` tới khi người chơi thật sự di chuyển menu.
+- Ini cũ của người dùng tự được `migrate` thêm mục `[Menu]` lần chạy đầu.
+
+Về các câu hỏi trước khi phát hành (người dùng trả lời): đã chạy chung với
+QuestPath ổn; đã thử cả 3 chế độ màn hình ổn; danh sách dài hơn menu thì
+ImGui tự có thanh cuộn (con lăn chuột); việc hiện mọi người kể cả kẻ xâm nhập
+(kèm vai trò) là đúng ý. Chưa có điều kiện thử phiên từ 3 người trở lên.
+
+Chưa chạy thử phần lưu vị trí.
+
+## Nút "Reset" bố cục menu (2026-09-25)
+
+Nút nhỏ **Reset** ở góc trái đầu menu (tooltip "Reset the menu's position
+and size"): ghi `-1` cho cả 4 key `[Menu]` qua `config::set_values`, và đặt
+lại vị trí/kích thước mặc định ngay frame sau (`relayout` →
+`Condition::Always`). Mốc so sánh đã lưu/đã thấy được xoá, để bố cục mặc định
+vừa áp không bị ghi ngược lại vào ini thành số - ini giữ `-1`. Tiêu đề
+"Souls Teleport" vẫn căn giữa, nút `X` vẫn ở góc phải.
+
+Chưa chạy thử.
+
+## Key `MenuScale` (2026-09-25)
+
+`[Menu] MenuScale` (mặc định `1.0`, kẹp 0.5-3.0): hệ số người chơi tự chọn,
+**nhân thêm** trên scale tự động theo độ phân giải. Đọc 1 lần lúc khởi động
+(không có `ReloadKey` - đổi xong phải khởi động lại game, ini có ghi chú).
+- Chữ, style (padding, bo góc, cỡ con trỏ...) và **kích thước** menu theo
+  scale tổng = độ phân giải × `MenuScale`. **Vị trí** menu chỉ theo độ phân
+  giải - tách riêng `pos_scale` - để đổi `MenuScale` không làm menu trôi khỏi
+  chỗ người chơi đã đặt. `MenuWidth`/`MenuHeight` lưu theo scale tổng, nên
+  cùng 1 giá trị lưu vẫn vừa khít chữ ở `MenuScale` mới.
+- Font raster `40 × MenuScale` (kẹp 40-64 px) để chữ không bị mờ khi phóng
+  to; không cho lên cao hơn vì atlas còn chứa cả chữ CJK.
+- Chốt chặn: nếu `before_render` chạy trước `initialize` (lúc `menu_scale`
+  còn 0) thì coi như 1.0.
+
+Chưa chạy thử.
+
+## Review trước phát hành: chống giả gói tin + dọn dẹp (2026-09-25)
+
+Review toàn bộ crate trước khi đăng. Sửa:
+- **Chống giả `HERE`/`WHERE`.** Trước đó người gửi chỉ lấy từ SteamID ghi
+  trong nội dung gói, và request id là 1, 2, 3... → 1 người trong phiên dùng
+  bản mod bị sửa có thể gửi `HERE` giả đúng lúc mình đang chờ và ép warp tới
+  block/tọa độ rác (crash, rơi khỏi map, kẹt). Giờ:
+  - `steam.rs` đọc thêm `m_identityPeer` của `SteamNetworkingMessage_t`
+    (offset 16, sau `m_pData`/`m_cbSize`/`m_conn` - layout không đổi từ khi
+    struct ra đời) = người gửi do **Steam** xác thực; `net.rs` bỏ mọi gói có
+    SteamID trong nội dung khác người gửi thật (`sender_matches`).
+  - Request id ngẫu nhiên (`RandomState` + thời gian, khác 0).
+  - `HERE` có block `-1`, tọa độ NaN/vô cực hoặc > 100 000 bị bỏ
+    (`spot_is_sane`); vẫn chờ tiếp, hết giờ thì báo như thường.
+- **Giữ tối đa 1 `WHERE` hoãn lại cho mỗi người hỏi** (cái mới thay cái cũ) -
+  trước đó ai gửi dồn dập lúc mình đang loading thì vào lại game sẽ trả hàng
+  loạt `HERE` một lúc.
+- Comment lỗi thời: đầu `net.rs` ("kẻ xâm nhập không được trả lời"),
+  `warp.rs` ("turned out hostile"), `message_filter` trong `ui.rs`.
+- Đoạn mở đầu README viết lại cho đúng mod độc lập.
+- `DESCRIPTION.bbcode`: thêm mục Notes - chỉ bàn phím + chuột (chưa tay cầm),
+  và khuyên đặt `cooppassword` riêng vì ai trong phiên cài mod cũng hỏi được
+  vị trí của mình.
+- 3 unit test mới trong `net.rs` (khớp người gửi, lọc vị trí rác, request id
+  ngẫu nhiên khác 0).
+
+Giới hạn đã biết, để sau 1.0.0: chưa chặn teleport khi người kia đang cưỡi
+Torrent trên không / trong trận boss / đang chết; cấu trúc đọc qua
+fromsoftware-rs (danh sách phiên, vị trí, `protocol_state`) phụ thuộc bố cục
+bộ nhớ từng bản game; chưa test phiên từ 3 người.

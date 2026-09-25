@@ -130,6 +130,50 @@ fn migrate(ini_path: &str, default_ini: &str) -> usize {
     missing_count
 }
 
+/// Writes `values` (key, value) back into `ini_path` and the shared config
+/// map - for a mod that saves state the player changed in-game (e.g. a
+/// menu's position). Each key's existing `key=value` line is rewritten in
+/// place, so comments, sections and every other line are kept as-is; a key
+/// with no line yet is appended at the end of the file. Returns `false` (map
+/// still updated) if the file couldn't be read or written.
+///
+/// Added 2026-09-25 for SoulsTeleport (nothing in this workspace wrote ini
+/// values before - `migrate` only rewrites the whole file from the template).
+pub fn set_values(ini_path: &str, values: &[(&str, String)]) -> bool {
+    {
+        let mut map = VALUES.write().unwrap();
+        for (key, value) in values {
+            map.insert((*key).to_string(), value.clone());
+        }
+    }
+    let Ok(content) = fs::read_to_string(ini_path) else {
+        return false;
+    };
+    let newline = if content.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut pending: Vec<&(&str, String)> = values.iter().collect();
+    let mut lines: Vec<String> = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        let key = trimmed
+            .find('=')
+            .filter(|_| !trimmed.starts_with(';') && !trimmed.starts_with('#') && !trimmed.starts_with('['))
+            .map(|eq| trimmed[..eq].trim());
+        if let Some(pos) = key.and_then(|k| pending.iter().position(|(pk, _)| *pk == k)) {
+            let (k, v) = pending.remove(pos);
+            let indent = &line[..line.len() - trimmed.len()];
+            lines.push(format!("{indent}{k}={v}"));
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    for (k, v) in pending {
+        lines.push(format!("{k}={v}"));
+    }
+    let mut out = lines.join(newline);
+    out.push_str(newline);
+    fs::write(ini_path, out).is_ok()
+}
+
 pub fn get_string(key: &str, default: &str) -> String {
     VALUES
         .read()
@@ -212,6 +256,15 @@ Fp=0
         fn drop(&mut self) {
             let _ = fs::remove_file(&self.0);
         }
+    }
+
+    #[test]
+    fn set_values_rewrites_in_place_and_appends_missing() {
+        let ini = TempIni::new("set_values", "[General]\n; comment\nReloadKey=F5\n\n[Section]\nHp=0\n");
+        assert!(set_values(ini.path(), &[("Hp", "12".into()), ("New", "x".into())]));
+        let text = ini.read();
+        assert_eq!(text, "[General]\n; comment\nReloadKey=F5\n\n[Section]\nHp=12\nNew=x\n");
+        assert_eq!(get_string("Hp", ""), "12");
     }
 
     #[test]

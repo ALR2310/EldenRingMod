@@ -166,8 +166,8 @@ fn request_partner_position(net: &mut Net, steam_id: u64) {
         ui::set_status("Not in a co-op session.");
         return;
     };
-    // Re-checked here, not just when the list was drawn: the partner may have
-    // left, or turned out hostile, since.
+    // Re-checked here, not just when the list was drawn: they may have left
+    // the session since.
     let Some(target) = members.iter().find(|m| m.steam_id == steam_id && m.is_teleport_target()) else {
         ui::set_status("That player is no longer available.");
         return;
