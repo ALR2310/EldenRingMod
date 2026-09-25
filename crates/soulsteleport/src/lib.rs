@@ -1,7 +1,10 @@
 #![allow(non_snake_case)] // crate name is "SoulsTeleport" to control the output DLL's filename
 
+mod input_block;
+mod net;
+mod party;
 mod steam;
-mod sync;
+mod ui;
 mod warp;
 
 use common::{config, dll_dir, logger};
@@ -37,10 +40,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        // `common::reload` owns `General.ReloadKey` watching for the whole
-        // DLL (see its module doc comment for why only one caller may poll
-        // that key).
-        std::thread::spawn(move || common::reload::run(ini_path));
+        ui::install();
 
         warp::run();
     });
