@@ -40,6 +40,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // reloaded" banner - `rune::run` just re-reads its keys every tick.
         std::thread::spawn(move || common::reload::run(ini_path));
 
+        common::diag::log_environment_when_game_ready();
         rune::run();
     });
 

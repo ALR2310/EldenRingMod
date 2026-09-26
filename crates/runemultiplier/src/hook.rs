@@ -304,6 +304,8 @@ pub fn run(ini_path: String) {
     let debug_log = config::get_bool("LogFile", false);
     if !install(debug_log) {
         logger::error("RuneMultiplier disabled for this session (hook install failed).");
+        // Right away, not after CSTaskImp - this path never gets there.
+        common::diag::log_environment();
         return;
     }
 
@@ -311,6 +313,7 @@ pub fn run(ini_path: String) {
     logger::log(&format!("Hook active. Press {hotkey_name} in-game to reload RuneMultiplier.ini."));
 
     let cs_task = wait_for_cs_task();
+    common::diag::log_environment();
 
     let _handle = run_recurring_safe(
         cs_task,

@@ -49,6 +49,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // below only polls `common::reload::RELOAD_GENERATION`.
         std::thread::spawn(move || common::reload::run(ini_path));
 
+        common::diag::log_environment_when_game_ready();
         run();
     });
 

@@ -57,6 +57,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         // The features' own `task::wait_for_cs_task()` calls now return the
         // cached instance immediately.
         common::task::wait_for_cs_task();
+        common::diag::log_environment();
 
         // `reload` owns General.ReloadKey watching for the whole DLL (see its
         // module doc comment for why only one module may call
