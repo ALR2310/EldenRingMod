@@ -58,9 +58,10 @@ fn open(path: &str) -> Option<File> {
     OpenOptions::new().create(true).append(true).open(path).ok()
 }
 
-/// Writes one line as `[timestamp] [LEVEL] message`. `level` is padded to a
-/// fixed 5 characters so every line's message column starts at the same
-/// offset, which is what makes a log skimmable at a glance (2026-08-28).
+/// Writes one line as `[timestamp] [LEVEL] message`. `level` is written as-is
+/// (2026-09-26) - it used to be padded to 5 characters (`[INFO ]`) to line up
+/// the message column, but the trailing space inside the brackets read as a
+/// typo to users.
 fn write_line(level: &str, message: &str) {
     // Read before taking the log lock - never hold both at once.
     if !config::get_bool("LogFile", false) {
@@ -75,7 +76,7 @@ fn write_line(level: &str, message: &str) {
     }
     if let Some(file) = guard.file.as_mut() {
         let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-        let _ = writeln!(file, "[{now}] [{level:<5}] {message}");
+        let _ = writeln!(file, "[{now}] [{level}] {message}");
     }
 }
 

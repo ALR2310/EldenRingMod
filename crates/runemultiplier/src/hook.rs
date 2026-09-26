@@ -165,14 +165,14 @@ fn hex_dump(bytes: &[u8]) -> String {
 /// untouched in that case.
 fn install(debug_log: bool) -> bool {
     let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) else {
-        logger::log("ERROR: anchor pattern not found (used to locate AddSoul_Call). Game may have been updated - re-check ANCHOR_PATTERN.");
+        logger::error("Anchor pattern not found (used to locate AddSoul_Call). Game may have been updated - re-check ANCHOR_PATTERN.");
         return false;
     };
     logger::log(&format!("Anchor found at {anchor:p} (known-good offset is +0x630CB3)."));
 
     let call_site = unsafe { anchor.add(ADDSOUL_CALL_SITE_OFFSET) };
     let Some(addsoul_entry) = resolve_call_target(call_site) else {
-        logger::log("ERROR: couldn't resolve AddSoul_Call from the anchor - byte layout differs from expected.");
+        logger::error("Couldn't resolve AddSoul_Call from the anchor - byte layout differs from expected.");
         return false;
     };
     logger::log(&format!("AddSoul_Call resolved at {addsoul_entry:p}."));
@@ -195,7 +195,7 @@ fn install(debug_log: bool) -> bool {
         VirtualAlloc(std::ptr::null_mut(), stub_body.len(), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     };
     if stub.is_null() {
-        logger::log("ERROR: VirtualAlloc failed for the stub.");
+        logger::error("VirtualAlloc failed for the stub.");
         return false;
     }
     unsafe { std::ptr::copy_nonoverlapping(stub_body.as_ptr(), stub as *mut u8, stub_body.len()) };
@@ -212,7 +212,7 @@ fn install(debug_log: bool) -> bool {
     let mut old_protect: u32 = 0;
     let ok = unsafe { VirtualProtect(addsoul_entry as *mut c_void, ADDSOUL_PREFIX_LEN, PAGE_EXECUTE_READWRITE, &mut old_protect) };
     if ok == 0 {
-        logger::log("ERROR: VirtualProtect failed, RuneMultiplier disabled.");
+        logger::error("VirtualProtect failed, RuneMultiplier disabled.");
         return false;
     }
     unsafe {
@@ -303,7 +303,7 @@ pub fn run(ini_path: String) {
 
     let debug_log = config::get_bool("LogFile", false);
     if !install(debug_log) {
-        logger::log("RuneMultiplier disabled for this session (hook install failed).");
+        logger::error("RuneMultiplier disabled for this session (hook install failed).");
         return;
     }
 

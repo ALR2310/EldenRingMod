@@ -142,7 +142,7 @@ fn reload_weight_value() {
         if addr != 0 {
             let patched = unsafe { codepatch::overwrite_bytes(addr as *mut u8, &mode_instruction(new_mode)) };
             if !patched {
-                logger::log("ERROR: failed to re-patch stub for new Mode - keeping the previous Mode's behavior.");
+                logger::warn("Failed to re-patch stub for new Mode - keeping the previous Mode's behavior.");
                 WEIGHT_MODE.store(old_mode, Ordering::Relaxed);
             }
         }
@@ -176,7 +176,7 @@ fn build_stub(mode: i32, weight_value_addr: u64) -> Vec<u8> {
 
 fn install() -> bool {
     let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) else {
-        logger::log("ERROR: weight-summing-loop anchor pattern not found. Game may have been updated - re-check ANCHOR_PATTERN.");
+        logger::error("Weight-summing-loop anchor pattern not found. Game may have been updated - re-check ANCHOR_PATTERN.");
         return false;
     };
     let target = unsafe { anchor.add(ANCHOR_TO_TARGET) };
@@ -188,7 +188,7 @@ fn install() -> bool {
     let stub_body = build_stub(WEIGHT_MODE.load(Ordering::Relaxed), value_addr);
 
     let Some(stub) = codepatch::install_jmp_hook(target, TARGET_INSTRUCTION_LEN, &stub_body) else {
-        logger::log("ERROR: failed to install hook (couldn't allocate stub or patch target).");
+        logger::error("Failed to install hook (couldn't allocate stub or patch target).");
         return false;
     };
     STUB_MODE_INSTR_ADDR.store(unsafe { stub.add(STUB_MODE_INSTR_OFFSET) } as u64, Ordering::Relaxed);
@@ -210,7 +210,7 @@ pub fn run(ini_path: String) {
     init_weight_value();
 
     if !install() {
-        logger::log("WeightMultiplier disabled for this session (hook install failed).");
+        logger::error("WeightMultiplier disabled for this session (hook install failed).");
         return;
     }
 

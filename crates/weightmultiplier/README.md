@@ -251,3 +251,30 @@ focus lại chỉ ghi nhận trạng thái (không bắn phím đã bấm ở ap
 khi alt-tab về). Vẫn bắt được cú bấm ngắn hơn chu kỳ poll 100ms nhờ bit thấp.
 Hệ quả với người dùng: bấm `ReloadKey` khi đang ở ngoài game sẽ không còn
 reload nữa - đúng với ý định ban đầu.
+
+
+## Dòng lỗi bị gắn nhãn `[INFO ] ERROR: ...` - chuyển sang `logger::error`/`warn` (2026-09-26)
+
+Phát hiện qua 1 báo lỗi trên Nexus (anchor pattern không tìm thấy): log in ra
+`[INFO ] ERROR: weight-summing-loop anchor pattern not found...` - nhãn cấp
+độ nói INFO nhưng nội dung lại là ERROR. Nguyên nhân: `hook.rs` viết từ trước
+khi `common::logger` có `warn`/`error`/`debug`, nên vẫn gọi
+`logger::log("ERROR: ...")`. Đã đổi:
+
+- anchor không tìm thấy, cài hook thất bại, dòng "disabled for this session"
+  → `logger::error` (bỏ chữ "ERROR:" trong message, cột level đã nói rồi).
+- re-patch stub khi đổi `Mode` lúc reload thất bại → `logger::warn`, vì mod
+  vẫn chạy tiếp với `Mode` cũ (không mất tính năng).
+
+Không đổi hành vi, chỉ đổi cấp độ log. Bản thân lỗi anchor của người báo
+chưa rõ nguyên nhân (nghi có DLL giảm trọng lượng khác đã hook đè lên
+`inc ebx`, hoặc khác phiên bản game) - đang chờ họ trả lời.
+
+
+## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
+
+`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
+mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
+thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
+bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
+`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.

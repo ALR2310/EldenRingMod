@@ -1386,3 +1386,12 @@ Sửa trong `shared/src/lib.rs`: đổi sang `GetModuleFileNameW` +
 32768) khi bị cắt, nên đường dẫn dài cũng không bị cắt nữa.
 `config`/`logger` đã dùng `std::fs` (Unicode sẵn) nên không cần đổi. Fix
 áp dụng cho mọi mod dùng `common::dll_dir`.
+
+
+## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
+
+`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
+mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
+thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
+bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
+`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
