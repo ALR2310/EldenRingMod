@@ -731,3 +731,12 @@ file Main `SoulsTeleport` 1.0.0 (id `18610093344994`, nhóm file `8024916`),
 primary download, `update_mod_version`; changelog "Initial release.". Gói
 build từ commit `b6b2047`. `manifest.json` đã có entry, `CLAUDE.md` + memory
 có mod ID - bản sau deploy bằng skill `deploy-nexus-mod` như các mod khác.
+
+
+## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
+
+`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
+mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
+thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
+bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
+`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.

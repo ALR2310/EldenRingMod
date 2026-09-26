@@ -277,3 +277,22 @@ thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNa
 `from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
 `dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
 `crates/autoregen/README.md`.
+
+
+## Dòng lỗi bị gắn nhãn `[INFO ] ERROR: ...` - chuyển sang `logger::error` (2026-09-26)
+
+Cùng lỗi phát hiện ở WeightMultiplier: `hook.rs` vẫn gọi
+`logger::log("ERROR: ...")` (viết trước khi `common::logger` có các cấp độ),
+nên log in ra `[INFO ] ERROR: ...`. Các dòng anchor không tìm thấy, không
+resolve được `AddSoul_Call`, `VirtualAlloc`/`VirtualProtect` thất bại và
+"disabled for this session" giờ dùng `logger::error` (bỏ chữ "ERROR:" trong
+message). Không đổi hành vi.
+
+
+## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
+
+`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
+mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
+thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
+bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
+`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
