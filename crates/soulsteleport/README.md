@@ -762,3 +762,43 @@ tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
 in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
 loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
 dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).
+
+
+## Chặn teleport giữa người chơi thù địch (invader) (2026-09-26)
+
+Góp ý trên Nexus (Kolagon): "make sure this doesn't work for invaders,
+otherwise Reds are gonna tele to hosts". Đúng: từ mục "Hiện mọi người trong
+phiên + vai trò" (2026-09-25) mọi vai trò đều teleport được, nên 1 invader
+cùng phiên Seamless Co-op có thể dịch chuyển thẳng tới host - phá PvP. Mục
+này thay thế ghi chú "kẻ xâm nhập cài mod này cũng hỏi được vị trí của mình"
+ở mục đó.
+
+Quy tắc mới: 1 cặp chỉ teleport được khi **cả 2 bên đều không thù địch**.
+Thù địch (`party::is_hostile_type`) = `Duelist` (Invader), `BloodyFinger`/
+`FesteringBloodyFinger`/`BloodyFingerNpc`, `Recusant`/`RecusantNpc`. Hunter
+(`BluePhantom`) đến để giúp host nên vẫn được phép. Chặn ở cả 2 chiều:
+
+- **Bên hỏi:** `party::own_is_hostile()` (đọc `WorldChrMan.main_player`
+  `chr_type`) - đang là invader thì menu chỉ hiện "Teleport is disabled while
+  invading." (`ui::Shared::hostile`) và `request_partner_position` từ chối.
+  Người thù địch khác không có trong danh sách (`Member::is_teleport_target`
+  giờ loại `Member::is_hostile()`).
+- **Bên trả lời (quan trọng hơn):** `Net::answer_where` bỏ qua `WHERE` nếu
+  người hỏi thù địch hoặc chính mình đang thù địch - nên host vẫn được bảo
+  vệ kể cả khi invader dùng 1 bản mod đã bị sửa. `flush_deferred` kiểm tra
+  lại, vì người hỏi có thể đổi vai trò trong lúc chờ.
+
+Vai trò chưa từng thấy (`Unknown`) vẫn coi là không thù địch, như trước.
+Không thêm key ini để bật lại (theo yêu cầu người dùng).
+
+Log thêm (chỉ khi đổi): `Own role: <ChrType>.` cho chính mình và
+`Role of '<tên>': <ChrType>.` cho từng người trong phiên - để biết Seamless
+Co-op thật sự gán vai trò gì.
+
+Test trong game (Seamless Co-op): xâm nhập thế giới người khác → log
+`Own role: Duelist.`, menu hiện "Teleport is disabled while invading."; về
+lại → `Own role: Local.`. Máy invader cũng thấy chính mình là `Duelist` qua
+`player_chr_set` (`Role of 'AnLe': Duelist.`) - cùng đường mà máy host dùng
+để nhận ra invader. Chiều host (bị xâm nhập) không test riêng, người dùng
+cho là đủ. `Unknown` trong menu = người đó chưa vào tới thế giới (chưa có
+`PlayerIns`), không phải lỗi.
