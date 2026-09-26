@@ -802,3 +802,16 @@ lại → `Own role: Local.`. Máy invader cũng thấy chính mình là `Duelis
 để nhận ra invader. Chiều host (bị xâm nhập) không test riêng, người dùng
 cho là đủ. `Unknown` trong menu = người đó chưa vào tới thế giới (chưa có
 `PlayerIns`), không phải lỗi.
+
+
+## 1.1.0 đã publish lên Nexus (mod 11119) (2026-09-26)
+
+Gồm chặn teleport giữa người chơi thù địch (mục trên) và phần log mới
+(phiên bản game + danh sách DLL qua `common::diag`, nhãn `[INFO]`). Build từ
+commit `df0c644`. Changelog trên Nexus: "Invaders can no longer teleport, and
+no one can teleport to them." / "Improved logging."
+
+Lúc deploy phát hiện `modFileId` trong `manifest.json` thật ra là id của
+**version** 1.0.0 (`18610093344994`), không phải id mod file -
+`GET /v3/mod-files/18610093344994/versions` trả 404. Id mod file đúng là
+`8024916` (lấy từ `GET /v3/mods/<internalId>/files`), đã sửa trong manifest.
