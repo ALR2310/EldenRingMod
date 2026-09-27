@@ -7,20 +7,27 @@
 //! partner stays in it, only their position goes stale). The two are joined
 //! through `PlayerIns.session_manager_player_entry.steam_id`.
 //!
-//! Every other session member is listed and can be teleported to, whatever
-//! their role - invaders included (user's call, 2026-09-25; the first draft
-//! filtered out hostile `chr_type`s). The role is shown next to each name.
+//! Every other session member is listed with their role, except hostile
+//! ones (invaders, Bloody Fingers, Recusants - [is_hostile_type]): a pair
+//! can only teleport to each other when neither side is hostile, so a red
+//! can't warp straight to the host they're invading (2026-09-26, after a
+//! Nexus comment; 2026-09-25 had briefly allowed every role). Hunters
+//! (`BluePhantom`) are allies of the host and stay allowed.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use eldenring::cs::{CSSessionManager, ChrType, WorldChrMan};
+use common::logger;
 use fromsoftware_shared::FromStatic;
 
 /// Last `chr_type` seen for each SteamID, so a member whose `PlayerIns` is
 /// gone for a while (loading screen, far away - co-op test 4, 2026-09-24)
 /// still shows their role instead of "Unknown".
 static KNOWN_ROLES: Mutex<Option<HashMap<u64, ChrType>>> = Mutex::new(None);
+
+/// Our own last `chr_type`, only to log it when it changes.
+static OWN_ROLE: Mutex<Option<ChrType>> = Mutex::new(None);
 
 pub struct Member {
     pub steam_id: u64,
@@ -34,10 +41,49 @@ pub struct Member {
     pub is_host: bool,
 }
 
+/// Roles that are there to fight the host, not help them.
+fn is_hostile_type(chr_type: ChrType) -> bool {
+    matches!(
+        chr_type,
+        ChrType::Duelist
+            | ChrType::BloodyFinger
+            | ChrType::FesteringBloodyFinger
+            | ChrType::BloodyFingerNpc
+            | ChrType::Recusant
+            | ChrType::RecusantNpc
+    )
+}
+
+/// Whether our own character is currently hostile (e.g. we're the invader) -
+/// then we may neither teleport nor answer anyone's `WHERE`.
+pub fn own_is_hostile() -> bool {
+    let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else {
+        return false;
+    };
+    let Some(chr_type) = world_chr_man.main_player.as_ref().map(|p| p.chr_ins.chr_type) else {
+        return false;
+    };
+    // Logged on change: which role Seamless Co-op actually gives us while
+    // invading is what decides whether this block works at all.
+    let mut last = OWN_ROLE.lock().unwrap();
+    if *last != Some(chr_type) {
+        logger::log(&format!("Own role: {chr_type:?}."));
+        *last = Some(chr_type);
+    }
+    is_hostile_type(chr_type)
+}
+
 impl Member {
-    /// Anyone but ourselves can be teleported to / gets an answer.
+    /// A member whose last known role is hostile. Unknown role (never seen
+    /// in the world yet) counts as not hostile, same as before.
+    pub fn is_hostile(&self) -> bool {
+        self.chr_type.is_some_and(is_hostile_type)
+    }
+
+    /// Anyone but ourselves who isn't hostile can be teleported to / gets an
+    /// answer. Our own side is checked separately via [own_is_hostile].
     pub fn is_teleport_target(&self) -> bool {
-        !self.is_local
+        !self.is_local && !self.is_hostile()
     }
 
     /// Short role label for the menu.
@@ -98,10 +144,13 @@ pub fn members() -> Vec<Member> {
         for player in world_chr_man.player_chr_set.characters() {
             let steam_id = player.session_manager_player_entry.steam_id;
             if let Some(member) = members.iter_mut().find(|m| m.steam_id == steam_id) {
-                member.character_name =
-                    Some(character_name(&unsafe { player.player_game_data.as_ref() }.character_name));
-                member.chr_type = Some(player.chr_ins.chr_type);
-                known.insert(steam_id, player.chr_ins.chr_type);
+                let name = character_name(&unsafe { player.player_game_data.as_ref() }.character_name);
+                let chr_type = player.chr_ins.chr_type;
+                if known.insert(steam_id, chr_type) != Some(chr_type) {
+                    logger::log(&format!("Role of '{name}': {chr_type:?}."));
+                }
+                member.character_name = Some(name);
+                member.chr_type = Some(chr_type);
             }
         }
     }

@@ -32,6 +32,8 @@ pub struct PartnerRow {
 #[derive(Default)]
 pub struct Shared {
     pub in_session: bool,
+    /// Our own character is hostile (invading) - teleport is disabled.
+    pub hostile: bool,
     pub partners: Vec<PartnerRow>,
     /// Last outcome/progress line ("Locating X...", "X did not respond").
     /// Private: set through [set_status] / [Shared::set_status] so
@@ -565,8 +567,8 @@ fn centered_text(ui: &Ui, color: [f32; 4], text: &str) {
 }
 
 fn draw_contents(ui: &Ui, keep_open: &mut bool, reset_layout: &mut bool) {
-    let (in_session, partners, status, busy) =
-        with_shared(|s| (s.in_session, s.partners.clone(), s.current_status(), s.busy));
+    let (in_session, hostile, partners, status, busy) =
+        with_shared(|s| (s.in_session, s.hostile, s.partners.clone(), s.current_status(), s.busy));
 
     // Header: small "reset layout" button on the left, mod name centered,
     // close button on the right.
@@ -594,6 +596,8 @@ fn draw_contents(ui: &Ui, keep_open: &mut bool, reset_layout: &mut bool) {
 
     if !in_session {
         centered_text(ui, TEXT_MUTED, "Not in a co-op session.");
+    } else if hostile {
+        centered_text(ui, TEXT_MUTED, "Teleport is disabled while invading.");
     } else if partners.is_empty() {
         centered_text(ui, TEXT_MUTED, "No other player in this session.");
     } else {

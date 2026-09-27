@@ -856,7 +856,8 @@ bản chất mô hình trọng số tương đối, không phải bug).
 - **Có hot-reload** (khác `risearcher` không hề hỗ trợ, vì `regulation.bin`
   của nó chỉ áp 1 lần) - do người dùng muốn tinh chỉnh nhanh khi test. Để
   tránh compounding (nhân 2 lần liên tiếp thành x4 thay vì giữ x2), lưu lại
-  **snapshot giá trị gốc** (`static Mutex<HashMap<u32, [u16; 8]>>`, chụp 1
+  **snapshot giá trị gốc** (`static Mutex<HashMap<u32, [u16; 8]>>` - từ
+  2026-09-27 là `Mutex<Option<Vec<[u16; 8]>>>` theo index dòng, xem mục cùng ngày; chụp 1
   lần duy nhất trước khi sửa gì cả) - mỗi lần bấm `ReloadKey`, luôn tính lại
   từ snapshot gốc × hệ số hiện tại, không tính chồng lên giá trị đang sống.
 - Không tự đọc lại `SomeTweaks.ini` khi bấm phím (dựa vào `regen.rs` đã lo
@@ -2393,3 +2394,45 @@ mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột n�
 thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
 bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
 `shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
+
+
+## Log in phiên bản game + danh sách DLL đã nạp (2026-09-26)
+
+Để log gửi kèm báo lỗi tự trả lời được "khác phiên bản game?" và "có mod nào
+khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1 dòng
+`Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
+không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
+MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
+tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay sau lần `common::task::wait_for_cs_task()` chung trước khi bật các tính năng.
+Không đổi hành vi.
+
+Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
+Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
+game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
+cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
+dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
+(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
+tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
+in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
+loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
+dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).
+
+
+## `rows_mut()` panic với regulation của Convergence - duyệt theo index qua `common::params` (2026-09-27)
+
+Phát hiện qua DropMultiplier (bản tách của module này, báo lỗi trên Nexus):
+`drop_rate::apply` dùng `repo.rows_mut::<ItemLotParam_enemy>()` để snapshot,
+và với regulation.bin của Convergence thì hàm này panic ngay trong
+fromsoftware-rs (`param_repository.rs:357`, `unwrap()` trên `None`), làm chết
+thread nên drop rate không bao giờ được áp. Nguyên nhân (đã xác nhận in-game,
+chi tiết ở mục cùng ngày trong `crates/dropmultiplier/README.md`): header file
+ghi 4631 dòng nhưng lookup table game dựng chỉ có 4630 phần tử, fromsoftware-rs
+đọc lố 1 phần tử rác.
+
+Đã sửa giống hệt DropMultiplier: duyệt qua `common::params::for_each_row_mut`
+(theo index, không dùng lookup table), kiểm tra slot bằng
+`common::params::check` trước khi ghi, snapshot đổi từ `HashMap<u32, Points>`
+(theo ID) sang `Vec<Points>` (theo index), mutex tự phục hồi khi bị poisoned.
+Log dòng `DropRate: SoloParamRepository ready, snapshotting ...` giờ kèm tên
+resource/struct và số dòng (header + runtime). Module này chưa được test lại
+in-game riêng; code giống hệt bản DropMultiplier đã test.

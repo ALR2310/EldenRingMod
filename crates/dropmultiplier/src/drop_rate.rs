@@ -68,7 +68,6 @@
 //! is shared by many features; this crate's whole log file already is this
 //! one feature.
 
-use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -83,14 +82,15 @@ use common::logger;
 type Points = [u16; 8];
 type ItemIds = [i32; 8];
 
-// The game's own original `lot_item_base_point0N` values, keyed by row ID -
+// The game's own original `lot_item_base_point0N` values, keyed by row index
+// (see [`common::params`] for why not by row ID via `rows_mut()`) -
 // captured once (lazily, on the first call to `apply`) before any edit, so
 // every later `ReloadKey` press rescales from the true baseline instead of
 // compounding on top of an already-scaled value. Guarded by a `Mutex`
 // because the initial capture runs on this module's own worker thread while
 // later reloads run on whichever thread the game's `FrameBegin` task group
 // executes the recurring closure on.
-static ORIGINAL_BASE_POINTS: Mutex<Option<HashMap<u32, Points>>> = Mutex::new(None);
+static ORIGINAL_BASE_POINTS: Mutex<Option<Vec<Points>>> = Mutex::new(None);
 
 fn get_base_points(row: &ITEMLOT_PARAM_ST) -> Points {
     [
@@ -200,33 +200,44 @@ fn scale_row(original: &Points, item_ids: &ItemIds, mode: &Mode) -> Points {
 
 /// Applies `mode` to every `ItemLotParam_enemy` row, from a cached snapshot
 /// of the game's own original weights (captured on the first call, before
-/// any mutation). Returns how many rows were touched, for logging.
-fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> usize {
-    let mut snapshot_guard = ORIGINAL_BASE_POINTS.lock().unwrap();
-    let is_first_call = snapshot_guard.is_none();
-    if is_first_call {
-        logger::log("SoloParamRepository ready, snapshotting ItemLotParam_enemy...");
-    }
-    let snapshot = snapshot_guard.get_or_insert_with(|| {
-        repo.rows_mut::<ItemLotParam_enemy>()
-            .map(|(id, row)| (id, get_base_points(row)))
-            .collect()
-    });
-    if is_first_call {
-        logger::log(&format!("snapshotted {} row(s), applying...", snapshot.len()));
+/// any mutation). Returns how many rows were touched, for logging, or `None`
+/// if the param slot doesn't hold what we expect (nothing written then).
+///
+/// Walks rows through [`common::params::for_each_row_mut`], not
+/// `repo.rows_mut()`: the latter panicked inside fromsoftware-rs on
+/// Convergence's regulation.bin (2026-09-27).
+fn apply(repo: &mut SoloParamRepository, mode: &Mode) -> Option<usize> {
+    if let Err(reason) = common::params::check::<ItemLotParam_enemy>(repo) {
+        logger::error(&format!("{reason} - drop rates left unchanged."));
+        return None;
     }
 
+    // Recover from poisoning instead of `unwrap()`: a panic while holding
+    // this lock must not turn every later reload into a second panic.
+    let mut snapshot_guard = ORIGINAL_BASE_POINTS.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if snapshot_guard.is_none() {
+        logger::log(&format!(
+            "SoloParamRepository ready, snapshotting {}...",
+            common::params::describe::<ItemLotParam_enemy>(repo)
+        ));
+        let mut points = Vec::new();
+        common::params::for_each_row_mut::<ItemLotParam_enemy>(repo, |_, row| points.push(get_base_points(row)));
+        logger::log(&format!("snapshotted {} row(s), applying...", points.len()));
+        *snapshot_guard = Some(points);
+    }
+    let snapshot = snapshot_guard.as_ref()?;
+
     let mut changed = 0;
-    for (id, row) in repo.rows_mut::<ItemLotParam_enemy>() {
-        let Some(original) = snapshot.get(&id) else {
-            continue; // shouldn't happen - every row was snapshotted above
+    common::params::for_each_row_mut::<ItemLotParam_enemy>(repo, |index, row| {
+        let Some(original) = snapshot.get(index) else {
+            return; // shouldn't happen - every row was snapshotted above
         };
         let item_ids = get_item_ids(row);
         let scaled = scale_row(original, &item_ids, mode);
         set_base_points(row, scaled);
         changed += 1;
-    }
-    changed
+    });
+    Some(changed)
 }
 
 fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
@@ -251,8 +262,9 @@ pub fn run() {
     let repo = common::player::wait_for_solo_param_repository();
     logger::log("SoloParamRepository instance acquired.");
     let mode = build_mode();
-    let changed = apply(repo, &mode);
-    log_mode(&mode, changed, "");
+    if let Some(changed) = apply(repo, &mode) {
+        log_mode(&mode, changed, "");
+    }
 
     let cs_task = common::task::wait_for_cs_task();
     common::task::run_recurring_safe(
@@ -281,8 +293,9 @@ pub fn run() {
                 return;
             };
             let mode = build_mode();
-            let changed = apply(repo, &mode);
-            log_mode(&mode, changed, " (hotkey pressed)");
+            if let Some(changed) = apply(repo, &mode) {
+                log_mode(&mode, changed, " (hotkey pressed)");
+            }
         },
     );
 

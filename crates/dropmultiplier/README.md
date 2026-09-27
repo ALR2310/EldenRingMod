@@ -113,3 +113,75 @@ mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột n�
 thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
 bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
 `shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
+
+
+## Log in phiên bản game + danh sách DLL đã nạp (2026-09-26)
+
+Để log gửi kèm báo lỗi tự trả lời được "khác phiên bản game?" và "có mod nào
+khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1 dòng
+`Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
+không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
+MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
+tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
+Không đổi hành vi.
+
+Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
+Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
+game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
+cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
+dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
+(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
+tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
+in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
+loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
+dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).
+
+
+## Sửa panic với regulation của Convergence: bỏ `rows_mut()`, duyệt theo index (2026-09-27)
+
+Báo lỗi trên Nexus (bản 1.0.1, game 1.17 + Convergence 3.0.2.0 + Seamless
+Co-op; người báo nói vanilla cũng lỗi nhưng mình không tái tạo được): mod
+không có tác dụng, log dừng ngay sau `snapshotting ItemLotParam_enemy...`
+bằng panic `param_repository.rs:357:22: called Option::unwrap() on a None
+value`. Bấm ReloadKey vẫn hiện banner (banner đến từ `common::reload`, task
+riêng), nhưng thread của mod đã chết trước khi kịp đăng ký task reload riêng
+và mutex snapshot bị poisoned, nên drop rate không bao giờ đổi.
+
+Tái tạo: vanilla 1.17 chạy bình thường (5135 dòng); bản 1.16.2 có Convergence
+panic y hệt. Dòng 357 nằm trong `ParamFile::rows_mut()` của fromsoftware-rs:
+`get_row_by_index_mut(lookup.index).unwrap()`. Hàm đó duyệt lookup table
+(cặp `(param_id, index)` sắp theo ID) mà game gắn sau mỗi param file, nhưng
+định cỡ bảng theo `row_count` trong header file (`u16`).
+
+Đã thử/bỏ: ban đầu nghi tràn `u16` (Convergence có hơn 65535 dòng), bỏ vì
+log chẩn đoán cho thấy header 4631 dòng nhưng số dòng runtime (`u32` trong
+metadata 0x10 byte trước file, thứ game thật sự dùng để dựng lookup table) là
+**4630**. Tức là game dựng bảng thiếu 1 phần tử so với header (nhiều khả năng
+file của Convergence có 1 ID dòng bị trùng), fromsoftware-rs đọc lố 1 phần tử
+ra vùng nhớ rác, ra index vượt `row_count` rồi panic. Cũng đã loại khả năng
+khác bố cục param giữa 1.16.2 và 1.17 (slot 20 đúng là `ItemLotParam_enemy` /
+`ITEMLOT_PARAM_ST`).
+
+Sửa:
+- Module mới `common::params` (`shared/src/params.rs`):
+  `for_each_row_mut::<P>()` duyệt theo index qua row descriptor của chính
+  file (`get_row_by_index_mut` tới khi trả `None`), không đụng lookup table;
+  `check::<P>()` xác minh slot thật sự chứa đúng param trước khi ghi
+  (fromsoftware-rs chỉ kiểm tra bằng `debug_assert!`, bản release không có);
+  `describe::<P>()` in tên resource/struct, paramdef version, số dòng header
+  và runtime cho log báo lỗi.
+- `drop_rate.rs`: snapshot đổi từ `HashMap<u32, Points>` (theo ID) sang
+  `Vec<Points>` (theo index, ổn định trong 1 phiên); mutex dùng
+  `unwrap_or_else(into_inner)` để không panic dây chuyền; `apply` trả
+  `Option<usize>`, `None` (kèm log `[ERROR]`) nếu `check` không qua.
+
+Đã test in-game trên 1.16.2 + Convergence: snapshot + áp 4631 dòng, hotkey
+reload chạy bình thường. Dòng log mới:
+`snapshotting ItemLotParam_enemy (slot 20): resource 'ItemLotParam_enemy', struct 'ITEMLOT_PARAM_ST' v4, 4631 row(s) (runtime: 4630)...`
+
+Các chỗ khác trong workspace còn dùng `rows()`/`rows_mut()` (risearcher
+`EquipParamWeapon`, sometweaks `ShopLineupParam`/`EquipParamGem`/...,
+infiniteailment `SpEffectParam`) chưa đổi: chỉ panic nếu đúng param đó bị
+lệch header/runtime trong regulation đang dùng; người báo lỗi xác nhận
+Infinite Ailments chạy tốt trên Convergence. `sometweaks::drop_rate` (code
+gốc của mod này) đã sửa cùng lúc.

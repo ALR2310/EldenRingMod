@@ -278,3 +278,41 @@ mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột n�
 thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
 bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
 `shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
+
+
+## Log in phiên bản game + danh sách DLL đã nạp, nhận ra mod khác hook đè (2026-09-26)
+
+Tiếp nối báo lỗi "anchor pattern not found" ở mục trên: log cũ không đủ để
+biết người dùng khác phiên bản game hay đang cài thêm 1 mod trọng lượng khác.
+Làm theo kiểu header của MapForGoblins:
+
+- Module mới `common::diag` (`shared/src/diag.rs`): `log_environment()` in
+  1 dòng `Game: eldenring.exe v<file version> base=0x.. size=0x.. ts=0x..` (`ts` =
+  `TimeDateStamp` trong PE header, phân biệt đúng từng build kể cả khi
+  version không đổi), rồi danh sách mọi DLL không nằm trong thư mục Windows (trừ chính exe, đã có ở dòng `Game:`)
+  (tên, version, base, size). Kèm `loaded_modules()`/`module_containing(addr)`.
+  `dll_dir` trong `shared/src/lib.rs` tách phần đọc đường dẫn ra
+  `module_path()` để `diag` dùng chung.
+- `hook::run` gọi `diag::log_environment()` **sau** `LoadDelay`, ngay trước
+  khi quét anchor - gọi từ `DllMain` thì các mod nạp sau chưa có trong danh
+  sách.
+- Khi không thấy `ANCHOR_PATTERN`, quét thêm `FOREIGN_PATCH_PATTERN`
+  (`E9 ?? ?? ?? ?? 7C ?? 4C 8D 5C 24 ??`) - tức `inc ebx; cmp ebx,5` (đúng
+  5 byte) đã bị thay bằng `jmp rel32`, đúng chỗ mà các DLL kiểu "NoWeight"
+  hook vào. Nếu khớp thì log thêm 1 dòng ERROR nói rõ đã bị mod khác hook,
+  kèm tên DLL chứa đích của `jmp` (hoặc "unknown" nếu `jmp` nhảy vào 1 stub
+  cấp phát ngoài mọi module).
+
+Chưa test được trong game (cần 1 mod weight khác để dựng lại tình huống);
+`common::diag` có unit test liệt kê module của chính process test.
+
+Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
+Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
+game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
+cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
+dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
+(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
+tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
+in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
+loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
+dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).

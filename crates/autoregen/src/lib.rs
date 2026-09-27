@@ -33,6 +33,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
+        common::diag::log_environment_when_game_ready();
         regen::run(ini_path);
     });
 

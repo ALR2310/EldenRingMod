@@ -266,6 +266,13 @@ impl Net {
             logger::log(&format!("Ignored WHERE from {from}: not in this session."));
             return;
         };
+        if asker.is_hostile() || party::own_is_hostile() {
+            logger::log(&format!(
+                "Ignored WHERE from '{}': teleporting is disabled between hostile players.",
+                asker.display_name()
+            ));
+            return;
+        }
         let Some(own) = party::own_steam_id(members) else {
             return;
         };
@@ -300,6 +307,15 @@ impl Net {
         if !self.settled() {
             return;
         }
+        // Re-checked: a deferred asker (or we) may have turned hostile since.
+        let own_hostile = party::own_is_hostile();
+        self.deferred.retain(|d| {
+            let allowed = !own_hostile && members.iter().any(|m| m.steam_id == d.asker && !m.is_hostile());
+            if !allowed {
+                logger::log(&format!("Dropped deferred WHERE from '{}': hostile.", d.asker_name));
+            }
+            allowed
+        });
         let mut still_waiting = Vec::new();
         for d in std::mem::take(&mut self.deferred) {
             match own_here(own, d.request_id) {

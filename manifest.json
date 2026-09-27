@@ -164,7 +164,7 @@
     "internalId": "18610093304643",
     "name": "DropMultiplier",
     "crate": "dropmultiplier",
-    "modFileId": "18610093344772",
+    "modFileId": "8003106",
     "deploys": [
       {
         "version": "1.0.0",
@@ -173,6 +173,10 @@
       {
         "version": "1.0.1",
         "commit": "1bef966b8f3be4dacb600b810573edfb4373686c"
+      },
+      {
+        "version": "1.0.2",
+        "commit": "91bd5404438f7a9a08086a51aa471980373a45ca"
       }
     ]
   },
@@ -198,11 +202,15 @@
     "internalId": "18610093304687",
     "name": "Souls Teleport",
     "crate": "soulsteleport",
-    "modFileId": "18610093344994",
+    "modFileId": "8024916",
     "deploys": [
       {
         "version": "1.0.0",
         "commit": "b6b204772b3835e5637b87da8fc8ff1533eda527"
+      },
+      {
+        "version": "1.1.0",
+        "commit": "df0c644e2d18bbb4591928b4a72e479237386756"
       }
     ]
   }

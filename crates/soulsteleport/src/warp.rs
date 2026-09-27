@@ -166,6 +166,10 @@ fn request_partner_position(net: &mut Net, steam_id: u64) {
         ui::set_status("Not in a co-op session.");
         return;
     };
+    if party::own_is_hostile() {
+        ui::set_status("Teleport is disabled while invading.");
+        return;
+    }
     // Re-checked here, not just when the list was drawn: they may have left
     // the session since.
     let Some(target) = members.iter().find(|m| m.steam_id == steam_id && m.is_teleport_target()) else {
@@ -183,6 +187,7 @@ fn request_partner_position(net: &mut Net, steam_id: u64) {
 fn refresh_menu_snapshot() {
     let members = party::members();
     let in_session = party::own_steam_id(&members).is_some();
+    let hostile = party::own_is_hostile();
     let partners = members
         .iter()
         .filter(|m| m.is_teleport_target())
@@ -195,6 +200,7 @@ fn refresh_menu_snapshot() {
         .collect();
     ui::with_shared(|s| {
         s.in_session = in_session;
+        s.hostile = hostile;
         s.partners = partners;
     });
 }
