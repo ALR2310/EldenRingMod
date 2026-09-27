@@ -438,3 +438,25 @@ mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột n�
 thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
 bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
 `shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
+
+
+## Log in phiên bản game + danh sách DLL đã nạp (2026-09-26)
+
+Để log gửi kèm báo lỗi tự trả lời được "khác phiên bản game?" và "có mod nào
+khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1 dòng
+`Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
+không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
+MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
+tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
+Không đổi hành vi.
+
+Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
+Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
+game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
+cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
+dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
+(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
+tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
+in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
+loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
+dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).

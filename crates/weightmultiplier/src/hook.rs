@@ -41,6 +41,7 @@ use std::time::Duration;
 
 use common::codepatch;
 use common::config;
+use common::diag;
 use common::input::{is_key_pressed, parse_virtual_key};
 use common::logger;
 use common::memscan;
@@ -174,9 +175,33 @@ fn build_stub(mode: i32, weight_value_addr: u64) -> Vec<u8> {
     body
 }
 
+// Same anchor, but with `inc ebx; cmp ebx,5` (exactly 5 bytes) replaced by
+// a `jmp rel32` - the shape another weight mod (e.g. a "NoWeight" DLL, which
+// hooks `inc ebx` - see the comment above ANCHOR_PATTERN) leaves behind.
+const FOREIGN_PATCH_PATTERN: &str = "E9 ?? ?? ?? ?? 7C ?? 4C 8D 5C 24 ??";
+
+/// Called only when ANCHOR_PATTERN isn't found: tells "another mod already
+/// patched this spot" apart from "the game code changed", and names the
+/// other mod's DLL when the jmp lands inside one (it often lands in a stub
+/// allocated outside any module instead - then only the address is known).
+fn report_foreign_patch() {
+    let Some(site) = memscan::find_pattern_in_module(FOREIGN_PATCH_PATTERN) else {
+        return;
+    };
+    let rel = unsafe { (site.add(1) as *const i32).read_unaligned() };
+    let dest = (site as usize + 5).wrapping_add_signed(rel as isize);
+    let owner = diag::module_containing(dest)
+        .map(|m| m.name)
+        .unwrap_or_else(|| "unknown (stub outside any module)".to_string());
+    logger::error(&format!(
+        "The weight-summing loop at {site:p} is already hooked by another mod (jmp to 0x{dest:X}, owner: {owner}).          Disable the other weight/equip-load mod - the two can't run together."
+    ));
+}
+
 fn install() -> bool {
     let Some(anchor) = memscan::find_pattern_in_module(ANCHOR_PATTERN) else {
         logger::error("Weight-summing-loop anchor pattern not found. Game may have been updated - re-check ANCHOR_PATTERN.");
+        report_foreign_patch();
         return false;
     };
     let target = unsafe { anchor.add(ANCHOR_TO_TARGET) };
@@ -206,6 +231,9 @@ fn install() -> bool {
 pub fn run(ini_path: String) {
     let load_delay_ms = config::get_int("LoadDelay", 5000).max(0) as u64;
     std::thread::sleep(Duration::from_millis(load_delay_ms));
+
+    // After LoadDelay, so the other mods' DLLs are loaded by now too.
+    diag::log_environment();
 
     init_weight_value();
 
