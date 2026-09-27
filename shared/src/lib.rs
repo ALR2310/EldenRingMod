@@ -36,6 +36,10 @@
 //! - `announce`: shows text in the game's own top-of-screen system
 //!   announcement banner (e.g. "config reloaded"), for in-game confirmation
 //!   without needing to check a log file.
+//! - `params`: iterates `SoloParamRepository` rows by index instead of
+//!   fromsoftware-rs's `rows()`/`rows_mut()`, which panic on some modded
+//!   regulation.bin files (Convergence), and checks a param's slot really
+//!   holds that param before writing to it.
 
 pub mod alloc_hook;
 pub mod announce;
@@ -45,6 +49,7 @@ pub mod diag;
 pub mod input;
 pub mod logger;
 pub mod memscan;
+pub mod params;
 pub mod player;
 pub mod reload;
 pub mod task;
