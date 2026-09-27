@@ -164,7 +164,7 @@
     "internalId": "18610093304643",
     "name": "DropMultiplier",
     "crate": "dropmultiplier",
-    "modFileId": "18610093344772",
+    "modFileId": "8003106",
     "deploys": [
       {
         "version": "1.0.0",
@@ -173,6 +173,10 @@
       {
         "version": "1.0.1",
         "commit": "1bef966b8f3be4dacb600b810573edfb4373686c"
+      },
+      {
+        "version": "1.0.2",
+        "commit": "91bd5404438f7a9a08086a51aa471980373a45ca"
       }
     ]
   },
