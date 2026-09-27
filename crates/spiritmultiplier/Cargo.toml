@@ -1,0 +1,14 @@
+[package]
+name = "spiritmultiplier"
+version = "0.2.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "SpiritMultiplier"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { path = "../../shared" }
+eldenring.workspace = true
+fromsoftware-shared.workspace = true
