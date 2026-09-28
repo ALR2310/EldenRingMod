@@ -1,7 +1,7 @@
 //! Adjusts enemy item-drop weights in `ItemLotParam_enemy`, two mutually
 //! exclusive ways picked by `Mode` (never both at once):
 //! - `Mode=0`: `Multiplier` scales every real item's own weight by a factor.
-//! - `Mode=1`: `ChancePercent` forces every row's combined "any real item"
+//! - `Mode=1`: `Percentage` forces every row's combined "any real item"
 //!   chance to exactly this %, preserving each item's relative share against
 //!   its row-mates.
 //!
@@ -36,9 +36,9 @@
 //! numerator and denominator scale together. Only slots holding a real item
 //! (`lot_item_id0N != 0`) are scaled; a "nothing" slot's weight is left
 //! untouched (`Multiplier`) or used as the fixed pivot to solve for the new
-//! item weight (`ChancePercent`).
+//! item weight (`Percentage`).
 //!
-//! `ChancePercent`'s algebra, per row: with `itemSum` = the row's own total
+//! `Percentage`'s algebra, per row: with `itemSum` = the row's own total
 //! real-item weight and `otherSum` = its "nothing" slot's weight
 //! (unchanged), solving `target = itemSum_new / (itemSum_new + otherSum)`
 //! for `itemSum_new` gives `itemSum_new = target * otherSum / (1 - target)`;
@@ -105,7 +105,7 @@ fn get_base_points(row: &ITEMLOT_PARAM_ST) -> Points {
     ]
 }
 
-fn get_item_ids(row: &ITEMLOT_PARAM_ST) -> ItemIds {
+pub(crate) fn get_item_ids(row: &ITEMLOT_PARAM_ST) -> ItemIds {
     [
         row.lot_item_id01(),
         row.lot_item_id02(),
@@ -141,14 +141,14 @@ enum Mode {
     /// (`Multiplier`).
     Multiplier(f64),
     /// `Mode=1`: force every row's combined "any real item" chance to
-    /// exactly this percent (`ChancePercent`, `0.0..=100.0`), preserving
+    /// exactly this percent (`Percentage`, `0.0..=100.0`), preserving
     /// each item's share relative to its row-mates.
     FixedPercent(f64),
 }
 
 fn build_mode() -> Mode {
     match config::get_int("Mode", 0) {
-        1 => Mode::FixedPercent(config::get_double("ChancePercent", 50.0).max(0.0)),
+        1 => Mode::FixedPercent(config::get_double("Percentage", 50.0).max(0.0)),
         _ => Mode::Multiplier(config::get_double("Multiplier", 2.0).max(0.0)),
     }
 }
@@ -246,7 +246,7 @@ fn log_mode(mode: &Mode, changed: usize, suffix: &str) {
             logger::log(&format!("Multiplier={factor:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."))
         }
         Mode::FixedPercent(percent) => logger::log(&format!(
-            "ChancePercent={percent:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."
+            "Percentage={percent:.3} applied to {changed} ItemLotParam_enemy row(s){suffix}."
         )),
     }
 }
@@ -265,6 +265,7 @@ pub fn run() {
     if let Some(changed) = apply(repo, &mode) {
         log_mode(&mode, changed, "");
     }
+    crate::materials::apply(repo, "");
 
     let cs_task = common::task::wait_for_cs_task();
     common::task::run_recurring_safe(
@@ -296,6 +297,7 @@ pub fn run() {
             if let Some(changed) = apply(repo, &mode) {
                 log_mode(&mode, changed, " (hotkey pressed)");
             }
+            crate::materials::apply(repo, " (hotkey pressed)");
         },
     );
 

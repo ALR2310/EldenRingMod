@@ -17,7 +17,7 @@ Khác biệt so với bản gốc trong `sometweaks`:
 
 - **Bỏ tiền tố `DropRate.`** trong ini: `DropRate.Enabled`/`Mode`/
   `Multiplier`/`ChancePercent` → `Enabled`/`Mode`/`Multiplier`/
-  `ChancePercent` - không cần tiền tố vì cả file ini của mod này chỉ nói về
+  `ChancePercent` (từ 2026-09-28 là `Percentage`, trong `[Drop]`) - không cần tiền tố vì cả file ini của mod này chỉ nói về
   đúng 1 tính năng (khớp quy ước `weightmultiplier`/`runemultiplier`: mod
   đơn tính năng không cần namespace key).
 - **Dùng chung [`shared`](../../shared) (`common`)** thay vì tự có bản
@@ -185,3 +185,71 @@ infiniteailment `SpEffectParam`) chưa đổi: chỉ panic nếu đúng param đ
 lệch header/runtime trong regulation đang dùng; người báo lỗi xác nhận
 Infinite Ailments chạy tốt trên Convergence. `sometweaks::drop_rate` (code
 gốc của mod này) đã sửa cùng lúc.
+
+
+## Tính năng mới `[Materials]`: nhân số lượng nguyên liệu; `[Settings]` → `[Drop]`, `ChancePercent` → `Percentage` (2026-09-28)
+
+Đề xuất từ người báo lỗi Convergence trên Nexus (sau khi 1.0.2 sửa xong): cho
+multiplier ảnh hưởng cả nguyên liệu craft / đồ hái ngoài thế giới mở. Tìm
+trên Nexus không thấy mod DLL nào làm việc này - các mod tương tự
+(#2238 "Reasonable Material Drop rate and Amount Increase", #537 "Better
+Gathering and Hunting") đều thay nguyên `regulation.bin`, sửa tay từng món,
+xung đột với overhaul, không có DLC.
+
+**Thiết kế ini** (chốt cùng người dùng sau vài vòng):
+```ini
+[Materials]
+Crafting=1   ; nguyên liệu craft farm được
+Upgrade=1    ; nguyên liệu nâng cấp farm được
+Unique=1     ; mọi nguyên liệu chỉ nhặt được 1 lần
+```
+Đã thử/bỏ: chia 2 key theo nguồn `Farmable`/`Unique` (không tách craft và
+nâng cấp) và 1 key duy nhất cho mọi nguyên liệu. Chọn 3 key vì tách được
+nhóm ảnh hưởng cân bằng nhiều nhất (Scadutree Fragment, Sacred Tear,
+Smithing Stone trên xác - đều nằm ở `Unique`) khỏi nhóm farm vô hại.
+Cân nhắc tên `Repeatable`/`OneTime` rồi bỏ: `Multiplier` trong tên key dễ
+nhầm với tỉ lệ rơi, "Unique" dùng được vì section `[Materials]` đã giới
+hạn ngữ cảnh (không bị hiểu là vũ khí độc nhất).
+
+**Phân loại mỗi ô** (`src/materials.rs`), dựa trên export vanilla 1.17
+(`.docs/ItemLotParam_map.csv`, `.docs/EquipParamGoods.csv`):
+- ô không phải Goods (`lotItemCategory0N != 1`), hoặc Goods có
+  `EquipParamGoods.goodsType` khác 2 (nguyên liệu craft, 106 món) / 14
+  (nâng cấp: Smithing/Somber Stone, Glovewort, Golden Seed, Sacred Tear,
+  Scadutree Fragment, Revered Spirit Ash) → không đụng. Nhờ vậy vũ khí, key
+  item, đồ tiêu hao (Flask, Kukri, Golden Rune - đều `goodsType 0`) và các
+  dòng lạ như `ItemLotParam_map` ID `2` (quay ngẫu nhiên bình Crimson Tears,
+  không cờ, 60% trắng tay) bị loại. Bài học: "không có cờ" không đồng nghĩa
+  với "điểm hái" - phải lọc theo `goodsType` trước;
+- có cờ nhặt (`getItemFlagId` của dòng hoặc `getItemFlagId0N` của ô khác 0)
+  → `Unique`;
+- còn lại → `Crafting`/`Upgrade` theo `goodsType`.
+
+Điểm hái là các dòng `ItemLotParam_map` không cờ ID `9965xx`–`9993xx` (base
+game) và `463xxxx` (DLC), vd. `997200` Rowa Fruit ra 1/2/3/5. Smithing Stone
+farm được đến từ quái hồi sinh (`ItemLotParam_enemy`: thợ mỏ, golem, lính),
+không có "mạch quặng" hồi lại. Mô phỏng trên CSV vanilla: 1602 ô crafting,
+1046 upgrade, 1659 unique.
+
+Nhân `lotItemNum0N` (`u8`): làm tròn, tối thiểu 1, tối đa 255; ô số lượng 0
+giữ nguyên. Snapshot số lượng gốc + nhóm của từng ô 1 lần (cùng pattern
+baseline với `drop_rate`), mỗi lần áp/reload tính lại từ snapshot. Chạy sau
+`drop_rate::apply` cả lúc khởi động lẫn khi bấm ReloadKey; 2 tính năng ghi
+2 cột khác nhau (`lotItemBasePoint` vs `lotItemNum`) nên độc lập.
+
+`goodsType` đọc từ `EquipParamGoods` lúc chạy (không hardcode ID) để overhaul
+như Convergence tự phân loại đúng đồ của nó. Tra theo ID mà không đi qua
+`repo.get()` (binary search trên chính lookup table gây panic ở mục trước):
+thêm `common::params::row_ids::<P>()` đọc ID thẳng từ row descriptor, tự đối
+chiếu data offset với `get_row_by_index` - lệch là trả `None` (log lỗi, bỏ
+qua tính năng) chứ không ra ID sai.
+
+**Đổi tên ini** (người dùng tự sửa template): `[Settings]` → `[Drop]`,
+`ChancePercent` → `Percentage`. `common::config` bỏ qua section nên chỉ đổi
+tên key là có ảnh hưởng: trước đây migrate sẽ đẩy `ChancePercent` cũ vào
+`[Legacy]` và đặt lại `Percentage` về mặc định, làm mất giá trị người dùng
+đã chỉnh. Thêm `common::config::load_or_create_default_with_renames` (kèm
+unit test): key cũ có mà key mới chưa có → chuyển giá trị sang key mới, bỏ
+key cũ. `lib.rs` truyền `("ChancePercent", "Percentage")`.
+
+Test in-game do người dùng xác nhận ổn (2026-09-28).
