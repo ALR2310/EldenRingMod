@@ -1,23 +1,15 @@
-A DLL mod that gets you back on your feet much faster after dying: your death counts the moment the death animation starts, and the long pause on the "YOU DIED" screen is skipped. Toggle it on and off in-game with a hotkey.
+A DLL mod that lets you respawn about 8-10 seconds faster after dying - less waiting, and you're straight back into the fight.
 
-[size=4][b]Why this mod?[/b][/size]
-[i]Have you ever died to the same boss for the tenth time in a row, and then had to sit through your character slowly crumbling to the ground, followed by "YOU DIED" hanging on screen for what feels like forever - before you can even start the run back?
+[size=4][b]Introduction[/b][/size]
+A DLL mod that gets your character back on their feet faster after dying, by cutting the wait on the death animation and on the "YOU DIED" screen. The idea comes from two mods, [url=https://www.nexusmods.com/eldenring/mods/3367]Faster Death Animation[/url] by [url=https://www.nexusmods.com/profile/0R4X]0R4X[/url] and [url=https://www.nexusmods.com/eldenring/mods/501]Faster Respawn[/url] by [url=https://www.nexusmods.com/profile/ImAxel0]ImAxel0[/url]. Being a single DLL, it's easy to install and works in overhaul modpacks such as [url=https://www.nexusmods.com/eldenring/mods/3419]The Convergence[/url].
 
-Yeah, me too. I've probably spent more time staring at that screen than at some of the bosses.
-
-So I made this mod. The death animation still plays, but the game stops making you wait for it, and "YOU DIED" fades out right away. A normal death now gets you back to the grace in about 4 seconds instead of 12-14. More tries, less waiting.[/i]
-
-[size=4][b]Features[/b][/size]
+[size=4][b]How it works[/b][/size]
 [list]
-[*]Your death counts as soon as the death animation starts - the animation itself still plays.[/*]
-[*]Skips the pause on the "YOU DIED" screen before it fades out.[/*]
-[*]Respawn in about 4 seconds instead of 12-14 after a normal death.[/*]
-[*]Doesn't replace any game files, so it works alongside animation mods and overhauls.[/*]
-[*]Hotkey to toggle the mod on/off in-game, to compare with vanilla.[/*]
-[*]Hotkey to reload the ini without restarting the game.[/*]
+[*]Sets [b]soloPlayDeath_ToFadeOutTime[/b] in [b]MenuCommonParam[/b] to 0, so "YOU DIED" fades out right away.[/*]
+[*]Triggers the death animation's "Kill Character" event at its start instead of its end.[/*]
 [/list]
 
-[b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
+[size=4][b][color=#E74C3C]Disclaimer: Only use in offline mode with EAC disabled![/color][/b][/size]
 
 [size=4][b]Installation[/b][/size]
 
@@ -29,7 +21,7 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
 [*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
 [code]external_dlls = [
-    "natives\FasterRevival.dll",
+    "natives\\FasterRevival.dll",
 ][/code]
 [/*]
 [*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
@@ -44,15 +36,15 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 
 [size=4][b]Credits[/b][/size]
 [list]
-[*]Inspired by [url=https://www.nexusmods.com/eldenring/mods/3367]Faster Death Animation[/url] by 0-F and [url=https://www.nexusmods.com/eldenring/mods/501]Faster Respawn[/url] by ImAxel0 ([url=https://github.com/ImAxel0/EldenRing-FasterRespawn-Mod]MIT[/url]) - same results, done at runtime instead of by editing game files or patching code.[/*]
-[*]Game structures via [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url].[/*]
+[*]Based on [url=https://www.nexusmods.com/eldenring/mods/3367]Faster Death Animation[/url] by [url=https://www.nexusmods.com/profile/0R4X]0R4X[/url].[/*]
+[*]Inspired by [url=https://www.nexusmods.com/eldenring/mods/501]Faster Respawn[/url] by [url=https://www.nexusmods.com/profile/ImAxel0]ImAxel0[/url].[/*]
+[*]Game structures from [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url].[/*]
 [/list]
 
 [size=4][b]Changelogs[/b][/size]
 [spoiler=Changelogs][b]1.0.0[/b]
 [list]
-[*]Death counts as soon as the death animation starts.[/*]
-[*]Skipped the pause on the "YOU DIED" screen.[/*]
+[*]Initial release.[/*]
 [/list]
 [/spoiler]
 [size=4][b]Support[/b][/size]

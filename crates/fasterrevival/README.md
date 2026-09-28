@@ -7,7 +7,8 @@ màn hình "YOU DIED" và hồi sinh, **không sửa file animation** (`.anibnd`
 
 ## Tạo crate (2026-09-28)
 
-Ý tưởng lấy từ mod **FasterDeathAnimation** của 0-F
+Ý tưởng lấy từ mod **FasterDeathAnimation** của 0-F (tên GitHub; trên Nexus là
+[0R4X](https://www.nexusmods.com/profile/0R4X))
 ([Nexus 3367](https://www.nexusmods.com/eldenring/mods/3367),
 [GitHub](https://github.com/0-F/FasterDeathAnimation), repo không có
 LICENSE - chỉ tham khảo ý tưởng, không copy code). Mod gốc là 1 tool
@@ -233,3 +234,20 @@ rơi vực, Stake of Marika). Tổng kết hồi sinh sau chết thường: vani
 - Thêm `DESCRIPTION.bbcode` cho Nexus (chưa có trang mod, nên changelog bắt
   đầu từ 1.0.0 - không có changelog thật nào để đối chiếu qua API). Credit
   0-F (FasterDeathAnimation) và ImAxel0 (FasterRespawn, MIT).
+
+## Bỏ `ReloadKey`, `FastDeath`, `ToggleKey` - mod luôn bật (2026-09-28)
+
+Theo ý người dùng: mod cài vào là chạy, không có gì để chỉnh, nên 3 key đó
+thừa (`FastDeath`/`ToggleKey` chỉ phục vụ việc so sánh bật/tắt lúc test,
+đã xong). Gỡ luôn phần code tương ứng:
+
+- `death.rs`: bỏ `fast_death_enabled` (override F6 + reset theo
+  `RELOAD_GENERATION`), dòng log `Died (FastDeath ON/OFF)` thành `Died:`.
+- `fade.rs`: không còn trạng thái OFF nên không cần snapshot giá trị gốc
+  để khôi phục - chỉ ghi `soloPlayDeath_ToFadeOutTime = 0` đúng 1 lần (log
+  kèm giá trị cũ).
+- `lib.rs`: không chạy `common::reload::run` nữa.
+
+Ini chỉ còn `[Debug] DeathProbe` và `[Logging] LogFile`. Ini cũ của người
+dùng còn các key đã bỏ thì vô hại (không ai đọc). Description Nexus bỏ 2
+dòng tính năng hotkey.
