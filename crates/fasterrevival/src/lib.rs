@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "FasterRevival" to control the output DLL's filename
 
 mod death;
+mod fade;
 
 use common::{config, dll_dir, logger};
 

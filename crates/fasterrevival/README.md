@@ -175,3 +175,61 @@ Còn chưa test: khi đang cưỡi Torrent.
 Không dời action 20 "Send Ghost Info" nữa (bỏ khỏi danh sách việc cần
 làm): chơi có mod DLL thì phải tắt EAC, không vào được online chính thức,
 nên không có bloodstain/ghost nào để gửi cho người khác.
+
+## Bỏ khoảng dừng ở màn "YOU DIED" (2026-09-28)
+
+Nguồn: **FasterRespawn** của ImAxel0 ([Nexus 501](https://www.nexusmods.com/eldenring/mods/501),
+[GitHub](https://github.com/ImAxel0/EldenRing-FasterRespawn-Mod), MIT). DLL
+C++ 15 dòng: AOB `74 ?? F3 0F 10 19`, đổi `74 06` (`jz`) → `EB 06` (`jmp`)
+- decompile bản DLL và source công khai khớp hoàn toàn. Tác giả không ghi
+cú nhảy đó điều khiển gì; tra trong IDA (2.7.1.0, mẫu duy nhất ở
+`0x1405A7F23`; 2.6.2.0 ở `0x1405A70D3`):
+
+- Nằm trong `sub_1405A7E00`, 1 bước của `CSDeathRestartEvent::Start`
+  (`sub_14059F670`, có chuỗi tên hàm đó). Bước này hẹn giờ callback
+  `sub_1405A7FA0` qua `sub_1405942D0(a2, 4006, cb, delay, 0, 4, 1)`.
+- `delay` (xmm3) = `*sub_140D2FE90()` - con trỏ tới param slot 143
+  (`MenuCommonParam`), row ID 0, trường đầu tiên =
+  **`soloPlayDeath_ToFadeOutTime`** (tên paramdef/Smithbox, hiển thị
+  "[YOU DIED] Fade Out Duration", vanilla 3.8; accessor fromsoftware-rs
+  `solo_play_death_to_fade_out_time`). Patch ép luôn nhánh `xorps xmm3, xmm3`
+  → delay = 0.
+- Bước kế (stage 5, trong `sub_1405A7FA0`) còn 1 delay khác đọc từ
+  `GameSystemCommonParam[0]+0x37C` - FasterRespawn không đụng, chưa xác
+  định là trường nào.
+
+Vì delay chính là 1 giá trị param nên không cần patch code: `src/fade.rs`
+ghi thẳng `MenuCommonParam[0].soloPlayDeath_ToFadeOutTime` = 0 khi
+`FastDeath` bật, trả về giá trị gốc (snapshot trước lần ghi đầu, tránh cộng
+dồn) khi tắt - theo đúng công tắc/F6 của `death.rs`, không thêm key ini
+riêng (theo ý người dùng). Chỉ ghi khi trạng thái đổi, và chỉ khi
+`main_player` đã có (gate `SoloParamRepository`). Không đụng
+`partyGhostDeath_ToFadeOutTime` (co-op, vanilla 3.3), giống bản gốc. **Chưa test trong
+game.**
+
+## Hồi sinh chậm ~8-20s ở 1 số lần: không phải lỗi (2026-09-28)
+
+Sau khi thêm phần bỏ khoảng dừng "YOU DIED", các lần chết thường hồi sinh
+~4.4-4.7s (trước đó ~8.4s - khớp với 3.8s vanilla của
+`soloPlayDeath_ToFadeOutTime`), nhưng 1 số lần 7.8s / 14s / 20s. Đo từ log:
+animation đứng yên (fade) ở ~1.7s và khoảng load (không có frame) ~2.3-2.5s
+là **như nhau** ở mọi lần; phần chênh là thời gian game vẫn chạy frame sau
+fade. Đã thử giả thuyết stage 5 của `CSDeathRestartEvent` (chỉ chờ khi
+`is_death_penalty_skip`, delay từ `GameSystemCommonParam[0]+0x37C`) bằng
+log tạm: `penalty_skip=false`, `+0x37C = 0` → sai. Nguyên nhân thật (người
+dùng tự nhận ra): chết gần **Stake of Marika** → game hiện menu chọn hồi
+sinh ở Stake hay ở grace cuối, thời gian đứng ở menu được tính vào. Đã gỡ
+đoạn log tạm đó.
+
+## Chuẩn bị phát hành 1.0.0 (2026-09-28)
+
+Người dùng test ổn toàn bộ (chết thường, chết giữa đòn tấn công, đòn tóm,
+rơi vực, Stake of Marika). Tổng kết hồi sinh sau chết thường: vanilla
+12.2-14.4s → ~4.2-4.7s khi bật.
+
+- `Debug.DeathProbe` mặc định đổi sang `false` (log mỗi 100ms trong lúc
+  chết quá dày cho người dùng thường; vẫn bật được để chẩn đoán). Các dòng
+  `Died` / `Killed early` / `Death registered` / `Respawned` vẫn luôn log.
+- Thêm `DESCRIPTION.bbcode` cho Nexus (chưa có trang mod, nên changelog bắt
+  đầu từ 1.0.0 - không có changelog thật nào để đối chiếu qua API). Credit
+  0-F (FasterDeathAnimation) và ImAxel0 (FasterRespawn, MIT).
