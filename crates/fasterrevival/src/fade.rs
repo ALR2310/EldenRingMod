@@ -1,8 +1,7 @@
 //! Skips the pause after "YOU DIED" appears: sets
 //! `MenuCommonParam[0].soloPlayDeath_ToFadeOutTime` (paramdef/Smithbox name,
 //! "[YOU DIED] Fade Out Duration"; fromsoftware-rs accessor
-//! `solo_play_death_to_fade_out_time`, vanilla 3.8) to 0 while `FastDeath`
-//! is on, back to its original value while off.
+//! `solo_play_death_to_fade_out_time`, vanilla 3.8) to 0, once.
 //!
 //! Same effect as ImAxel0's FasterRespawn (MIT,
 //! https://github.com/ImAxel0/EldenRing-FasterRespawn-Mod), which patches
@@ -13,9 +12,6 @@
 //! row ID 0, first field) - or is `0.0`. Writing the param instead needs no
 //! code patch. `partyGhostDeath_ToFadeOutTime` (co-op, vanilla 3.3) is left alone, like
 //! the original.
-//!
-//! The vanilla value is snapshotted before the first write so toggling off
-//! (or a `ReloadKey` press) restores it instead of compounding.
 
 use eldenring::cs::{MenuCommonParam, SoloParamRepository};
 use fromsoftware_shared::FromStatic;
@@ -24,33 +20,28 @@ use common::logger;
 
 #[derive(Default)]
 pub struct FadeState {
-    // `None` until the param was first read successfully.
-    baseline: Option<f32>,
-    applied: Option<bool>,
-    failed: bool,
+    done: bool,
 }
 
-/// Brings the param in line with `enabled`. Must only be called while the
-/// main player exists - `SoloParamRepository` reads before that can panic
-/// (see `common::player`).
-pub fn apply(state: &mut FadeState, enabled: bool) {
-    if state.failed || state.applied == Some(enabled) {
+/// Writes the param once. Must only be called while the main player
+/// exists - `SoloParamRepository` reads before that can panic (see
+/// `common::player`).
+pub fn apply(state: &mut FadeState) {
+    if state.done {
         return;
     }
     let Ok(repo) = (unsafe { SoloParamRepository::instance_mut() }) else { return };
+    // Whatever happens below, don't retry every frame.
+    state.done = true;
     if let Err(reason) = common::params::check::<MenuCommonParam>(repo) {
         logger::error(&format!("YOU DIED fade: {reason} - disabled."));
-        state.failed = true;
         return;
     }
     let Some(row) = repo.get_row_by_index_mut::<MenuCommonParam>(0) else {
         logger::error("YOU DIED fade: MenuCommonParam has no row - disabled.");
-        state.failed = true;
         return;
     };
-    let baseline = *state.baseline.get_or_insert_with(|| row.solo_play_death_to_fade_out_time());
-    let value = if enabled { 0.0 } else { baseline };
-    row.set_solo_play_death_to_fade_out_time(value);
-    state.applied = Some(enabled);
-    logger::log(&format!("YOU DIED fade delay: {value}s (vanilla {baseline}s)."));
+    let vanilla = row.solo_play_death_to_fade_out_time();
+    row.set_solo_play_death_to_fade_out_time(0.0);
+    logger::log(&format!("YOU DIED fade delay: 0s (was {vanilla}s)."));
 }

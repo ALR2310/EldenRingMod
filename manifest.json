@@ -213,5 +213,12 @@
         "commit": "df0c644e2d18bbb4591928b4a72e479237386756"
       }
     ]
+  },
+  {
+    "id": "11160",
+    "internalId": "18610093304728",
+    "name": "Faster Revival",
+    "crate": "fasterrevival",
+    "deploys": []
   }
 ]

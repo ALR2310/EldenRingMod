@@ -36,11 +36,6 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             ));
         }
 
-        // `common::reload` owns `General.ReloadKey` watching for the whole
-        // DLL (see its module doc comment for why only one caller may poll
-        // that key) - `death::run` below just re-reads its keys every frame.
-        std::thread::spawn(move || common::reload::run(ini_path));
-
         common::diag::log_environment_when_game_ready();
         death::run();
     });

@@ -1,7 +1,7 @@
 //! Player death handling: makes the game "kill" the main player (the step
 //! that leads to the "YOU DIED" screen and respawn) as soon as the death
 //! animation starts, instead of near its end. The pause after "YOU DIED"
-//! itself is cut by [crate::fade], on the same switch.
+//! itself is cut by [crate::fade]. Always on - no ini switch.
 //!
 //! ## How vanilla does it (IDA, exe 2.7.1.0, 2026-09-28)
 //!
@@ -34,18 +34,15 @@
 //! is playing ([has_kill_event]).
 //!
 //! Every death logs how long it took from HP 0 until the game registered
-//! it and until respawn, and `Death.ToggleKey` flips `FastDeath` in-game,
-//! so both modes can be timed back to back. `Debug.DeathProbe` adds the
-//! animation trace (anim ID, play time, length) in between.
+//! it and until respawn. `Debug.DeathProbe` adds the animation trace (anim
+//! ID, play time, length) in between.
 
-use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use eldenring::cs::{CSTaskGroupIndex, ChrIns, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
-use common::input::{is_key_pressed, parse_virtual_key};
-use common::{announce, config, logger, memscan};
+use common::{config, logger, memscan};
 
 use crate::fade::{self, FadeState};
 
@@ -83,8 +80,6 @@ fn has_kill_event(anim_id: i32) -> bool {
 // Log at most this often while dead - every frame would bury the log.
 const PROBE_INTERVAL_MS: u128 = 100;
 
-const VK_F6: i32 = 0x75;
-
 #[derive(Default)]
 struct DeathState {
     // `Some` from the first frame HP is seen at 0 until respawn.
@@ -94,10 +89,6 @@ struct DeathState {
     last_log: Option<Instant>,
     last_anim_id: i32,
     last_killed: bool,
-    // `ToggleKey` override of the ini's `FastDeath`, dropped again on the
-    // next `ReloadKey` press so the ini stays the source of truth.
-    toggled: Option<bool>,
-    toggle_generation: u64,
     fade: FadeState,
 }
 
@@ -123,25 +114,7 @@ pub fn run() {
     );
 }
 
-fn fast_death_enabled(state: &mut DeathState) -> bool {
-    let generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
-    if generation != state.toggle_generation {
-        state.toggle_generation = generation;
-        state.toggled = None;
-    }
-    let enabled = state.toggled.unwrap_or_else(|| config::get_bool("FastDeath", true));
-    if is_key_pressed(parse_virtual_key(&config::get_string("ToggleKey", "F6"), VK_F6)) {
-        state.toggled = Some(!enabled);
-        let text = if enabled { "FasterRevival: OFF" } else { "FasterRevival: ON" };
-        logger::log(text);
-        announce::show_announcement(text);
-        return !enabled;
-    }
-    enabled
-}
-
 fn tick(state: &mut DeathState, kill_chr: Option<KillChrFn>) {
-    let enabled = fast_death_enabled(state);
     let probe = config::get_bool("DeathProbe", false);
 
     let Ok(world_chr_man) = (unsafe { WorldChrMan::instance() }) else { return };
@@ -149,9 +122,7 @@ fn tick(state: &mut DeathState, kill_chr: Option<KillChrFn>) {
     let chr_ins = &main_player.chr_ins;
     let hp = chr_ins.modules.data.hp;
 
-    // The "YOU DIED" pause follows the same ON/OFF switch, so F6 still
-    // compares the whole thing against vanilla.
-    fade::apply(&mut state.fade, enabled);
+    fade::apply(&mut state.fade);
 
     if hp > 0 {
         if let Some(since) = state.since.take() {
@@ -175,8 +146,7 @@ fn tick(state: &mut DeathState, kill_chr: Option<KillChrFn>) {
             state.last_log = None;
             state.last_anim_id = -1;
             logger::log(&format!(
-                "Died (FastDeath {}): anim={} death_flag={} killed={}.",
-                if enabled { "ON" } else { "OFF" },
+                "Died: anim={} death_flag={} killed={}.",
                 cur.anim_id,
                 chr_ins.chr_flags1c5.death_flag(),
                 killed,
@@ -186,7 +156,7 @@ fn tick(state: &mut DeathState, kill_chr: Option<KillChrFn>) {
     };
     let elapsed = now.duration_since(since).as_millis();
 
-    if enabled && !killed && !state.kill_sent {
+    if !killed && !state.kill_sent {
         if let Some(kill_chr) = kill_chr {
             if has_kill_event(cur.anim_id) {
                 state.kill_sent = true;
