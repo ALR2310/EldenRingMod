@@ -219,6 +219,11 @@
     "internalId": "18610093304728",
     "name": "Faster Revival",
     "crate": "fasterrevival",
-    "deploys": []
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": "e4349a683148c1128b0590bc61152ed326ceb944"
+      }
+    ]
   }
 ]
