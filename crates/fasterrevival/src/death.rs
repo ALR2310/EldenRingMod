@@ -1,6 +1,7 @@
 //! Player death handling: makes the game "kill" the main player (the step
 //! that leads to the "YOU DIED" screen and respawn) as soon as the death
-//! animation starts, instead of near its end.
+//! animation starts, instead of near its end. The pause after "YOU DIED"
+//! itself is cut by [crate::fade], on the same switch.
 //!
 //! ## How vanilla does it (IDA, exe 2.7.1.0, 2026-09-28)
 //!
@@ -45,6 +46,8 @@ use fromsoftware_shared::FromStatic;
 
 use common::input::{is_key_pressed, parse_virtual_key};
 use common::{announce, config, logger, memscan};
+
+use crate::fade::{self, FadeState};
 
 // `sub_1403EDA70` (2.7.1.0) / `sub_1403ED840` (2.6.2.0), unique in both.
 // `sub_1403EDB60` (action 47 "Kill Character (No Item Drop)") shares the
@@ -95,6 +98,7 @@ struct DeathState {
     // next `ReloadKey` press so the ini stays the source of truth.
     toggled: Option<bool>,
     toggle_generation: u64,
+    fade: FadeState,
 }
 
 pub fn run() {
@@ -144,6 +148,10 @@ fn tick(state: &mut DeathState, kill_chr: Option<KillChrFn>) {
     let Some(main_player) = world_chr_man.main_player.as_ref() else { return };
     let chr_ins = &main_player.chr_ins;
     let hp = chr_ins.modules.data.hp;
+
+    // The "YOU DIED" pause follows the same ON/OFF switch, so F6 still
+    // compares the whole thing against vanilla.
+    fade::apply(&mut state.fade, enabled);
 
     if hp > 0 {
         if let Some(since) = state.since.take() {

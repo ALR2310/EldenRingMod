@@ -1,0 +1,61 @@
+A DLL mod that gets you back on your feet much faster after dying: your death counts the moment the death animation starts, and the long pause on the "YOU DIED" screen is skipped. Toggle it on and off in-game with a hotkey.
+
+[size=4][b]Why this mod?[/b][/size]
+[i]Have you ever died to the same boss for the tenth time in a row, and then had to sit through your character slowly crumbling to the ground, followed by "YOU DIED" hanging on screen for what feels like forever - before you can even start the run back?
+
+Yeah, me too. I've probably spent more time staring at that screen than at some of the bosses.
+
+So I made this mod. The death animation still plays, but the game stops making you wait for it, and "YOU DIED" fades out right away. A normal death now gets you back to the grace in about 4 seconds instead of 12-14. More tries, less waiting.[/i]
+
+[size=4][b]Features[/b][/size]
+[list]
+[*]Your death counts as soon as the death animation starts - the animation itself still plays.[/*]
+[*]Skips the pause on the "YOU DIED" screen before it fades out.[/*]
+[*]Respawn in about 4 seconds instead of 12-14 after a normal death.[/*]
+[*]Doesn't replace any game files, so it works alongside animation mods and overhauls.[/*]
+[*]Hotkey to toggle the mod on/off in-game, to compare with vanilla.[/*]
+[*]Hotkey to reload the ini without restarting the game.[/*]
+[/list]
+
+[b][color=#E74C3C]Only use in offline mode with EAC disabled![/color][/b]
+
+[size=4][b]Installation[/b][/size]
+
+Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url], [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url], [url=https://github.com/garyttierney/me3/releases]Mod Engine 3[/url].
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\FasterRevival.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]FasterRevival.dll[/b] and [b]FasterRevival.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+[size=4][b]Credits[/b][/size]
+[list]
+[*]Inspired by [url=https://www.nexusmods.com/eldenring/mods/3367]Faster Death Animation[/url] by 0-F and [url=https://www.nexusmods.com/eldenring/mods/501]Faster Respawn[/url] by ImAxel0 ([url=https://github.com/ImAxel0/EldenRing-FasterRespawn-Mod]MIT[/url]) - same results, done at runtime instead of by editing game files or patching code.[/*]
+[*]Game structures via [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url].[/*]
+[/list]
+
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]1.0.0[/b]
+[list]
+[*]Death counts as soon as the death animation starts.[/*]
+[*]Skipped the pause on the "YOU DIED" screen.[/*]
+[/list]
+[/spoiler]
+[size=4][b]Support[/b][/size]
+Enjoying the mod? You can buy me a coffee on Ko-fi - it really helps. Thank you!
+
+[url=https://ko-fi.com/L7S227ME2P][img]https://storage.ko-fi.com/cdn/kofi1.png?v=6[/img][/url]
