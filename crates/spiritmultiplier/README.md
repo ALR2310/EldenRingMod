@@ -564,3 +564,171 @@ hành; người dùng tạm dừng hướng này, làm lại sau khi đăng 1.0.
   Gameplay), file `SpiritMultiplier` 1.0.0 (mod file đầu tiên, tạo bằng
   `POST /mod-files` vì trang mới chưa có update group nào), build từ commit
   `f3454eb`. Trang mod lúc upload còn ở trạng thái chưa công khai.
+
+## Tra cứu: "Multi Spirit" (nhiều Ash cùng lúc) trong Solid Uncapper 2.3.3 (2026-09-29)
+
+Người dùng muốn tìm hiểu tính năng "gọi nhiều Ash khác nhau cùng lúc" của
+`.docs/Solid Uncapper.dll` (MojoW, C++/MSVC, 2.3.3). Phân tích bằng IDA
+(db tạm trong scratchpad cho DLL; `dumps/ida/2.7.1.0` cho game) - không đổi
+code.
+
+Game gốc (2.7.1.0, offset theo `SummonBuddyManager` của fromsoftware-rs):
+
+- `GetBuddyState(mgr, goodsId)` = `sub_1404B72F0`: 2 = đang có spirit và
+  `goodsId` trùng Ash đang ra (`+0xE4`) hoặc `goodsId = -1`; 1 = đã sang
+  khu bia đá khác; -1 = không có gì.
+- `DoSummon(mgr, speffect)` = `sub_1404B85B0`: gọi `GetBuddyState(mgr, -1)`
+  → hễ có spirit là bật `disappear_requested` (`+0x28`) và thoát - luật "1
+  nhóm spirit". Không thì spawn, `+0x20 = speffect` (request).
+- `SummonBuddyManager::Update(dt)` = `sub_1404B86D0`: có request (`+0x20 >=
+  0`) thì tìm nhóm của người chơi trong `groups` (`+0x70`), nếu nhóm có
+  spirit gọi **`sub_1404BB9A0(mgr, playerId)` thu hồi cả nhóm cũ**, rồi
+  (`+0x88 <= 0`) `sub_1404BBDD0` spawn nhóm mới, `+0x24 = +0x20`, `+0x20 =
+  -1`.
+
+Solid Uncapper - lõi "Multi Spirit" là 2 patch:
+
+1. AOB `e8 ? ? ? ? 83 f8 01 76 1b 83 f8 02 75 04 c6 43 28 01`
+   (`0x1404B85C9`, trong `DoSummon`): sau `GetBuddyState`, nếu state = 2 và
+   speffect mới (`edi`) khác `[rbx+0x20]` thì `xor eax,eax` → đi tiếp luồng
+   triệu hồi thay vì cho về; cùng Ash thì giữ vanilla (cho về).
+2. AOB `8b 10 49 8b cf e8 ? ? ? ? 41 83 bf 88 00 00 00 00` (`0x1404B89AB`,
+   trong `Update`): thay `call sub_1404BB9A0` bằng stub bỏ qua lệnh thu hồi
+   (trừ khi tắt tính năng hoặc `[+0x88] > 0`) → nhóm cũ ở lại.
+
+Phụ trợ: hook 3 chỗ UI gọi `GetBuddyState` (`0x1407C3930`, `0x140847830`,
+`0x140847B20` - làm xám Ash / hộp thoại "gửi spirit về?"), send-back chỉ
+Ash được bấm (`sub_1404B8160`), theo dõi từng Ash, dọn clone chết, Clone
+Same Spirit (mỗi bản sao tốn FP/HP).
+
+**Xung đột với mod này:** hook "buddy slot-reserve" của Solid Uncapper
+(AOB `4c 8b f1 45 33 ff 0f b6 c2 83 c0 02`, `0x1404933A9`) nằm trong đúng
+`sub_140493380` mà `band.rs` thay vòng tìm slot (Max Spirits Out của họ =
+cấp phát lại mảng ChrSet lúc chạy). Không dùng chung 2 mod khi Solid
+Uncapper bật Max Spirits Out / Multi Spirit.
+
+Hướng làm (để sau 1.0.0, người dùng chưa quyết): bản tối giản = 2 patch
+lõi + sửa `GetBuddyState` phía UI, rồi test.
+
+## MultiSpirit: gọi nhiều Ash khác nhau cùng lúc - bản tối giản (2026-09-29)
+
+Làm trong git worktree riêng (`../EldenRingMod-multispirit`, nhánh
+`feat/multi-spirit` tách từ `main`) vì tree chính đang có việc dở của
+SpeedMultiplier. Dựa trên mục tra cứu Solid Uncapper ở trên, viết lại (không
+copy code) 2 patch lõi trong `src/multi_spirit.rs` (ini `MultiSpirit`,
+mặc định `true`, hot reload qua 1 byte `ENABLED` mà stub đọc):
+
+1. `DoSummon` - AOB `E8 ?? ?? ?? ?? 83 F8 01 76 1B 83 F8 02 75 04 C6 43 28
+   01` (`0x1404B85C9`, duy nhất), hook 14 byte tại +5 (`cmp eax,1` ...
+   `mov byte [rbx+28h],1`): nếu state = 2, tính năng bật, và SpEffect yêu
+   cầu (`edi`) khác cả `[rbx+0x24]` (active) lẫn `[rbx+0x20]` (pending) →
+   `eax = 0` (đi luồng triệu hồi, `0x1404B85EE`, kiểm tra byte `85 FF`
+   trước khi patch); ngược lại chạy lại nguyên 14 byte gốc. So với
+   `[+0x24]` thay vì chỉ `[+0x20]` như Solid Uncapper: sau khi spawn,
+   `Update` đặt `+0x20 = -1`, chỉ so `+0x20` thì dùng lại cùng Ash cũng sẽ
+   bị coi là "Ash khác".
+2. `Update` - AOB `8B 10 49 8B CF E8 ?? ?? ?? ?? 41 83 BF 88 00 00 00 00`
+   (`0x1404B89AB`, duy nhất), thay `call sub_1404BB9A0` (thu hồi cả nhóm
+   cũ) bằng stub: bật → bỏ qua, tắt → `call [rip]` như cũ.
+
+Cả 2 stub đã disassemble lại bằng capstone (test `dump_stubs`).
+
+**Test lần 1 (người dùng):** gọi sói xong, các Ash khác **bị làm xám**, không
+dùng được - đúng dự đoán, phần UI chưa sửa. Tra thêm: `sub_1407C3930` là
+prompt dùng item (`GetBuddyState(-1)` = 2 → hộp thoại `20000600` "gửi
+spirit về?"); `sub_140847830`/`sub_140847B20` chỉ xét Ash loại 7/8 với
+`GetBuddyState(goodsId)` - trả 2 chỉ cho đúng Ash đang ra, rồi gọi
+`sub_140689F60` (tính chi phí FP `goods+0x80`) - tức chúng hiển thị chi phí,
+không phải chỗ làm xám. Field `EquipParamGoods.useLimitSummonBuddy`
+(`+0x79`, "バディアイテムか") chỉ đánh dấu Ash; không tìm được hàm nào
+vừa đọc `+0x79` vừa gọi thẳng API summon (có lớp trung gian) - dừng dò
+tĩnh, làm theo Solid Uncapper rồi test.
+
+**Patch 3** (sau test 1): thay `call GetBuddyState` ở 3 chỗ UI (AOB của
+Solid Uncapper, đều duy nhất: `0x1407C3C9E`, `0x140847A1B`, `0x140847CDF`)
+bằng stub gọi hàm thật rồi `eax = 0` nếu bật và kết quả >= 1. `DoSummon`/
+`Update` vẫn thấy kết quả thật → dùng lại cùng Ash vẫn cho về (patch 1),
+nhưng không còn hộp thoại xác nhận. Chưa làm: cho về từng Ash.
+
+**Test lần 2:** log xác nhận cả 5 patch đã cài, nhưng Ash khác **vẫn xám**
+- chỗ làm xám không nằm ở 3 chỗ UI trên. Dò tiếp các hàm ngoài manager có
+lấy `SummonBuddyManager`: `sub_14068EE60` = **`CanUseItem`** (goods id +
+nhiều điều kiện → bool). Với Ash (loại 7/8) nó tính
+`usable = GetBuddyState(mgr, goodsId) != -1` (`0x140690383`). Theo
+`GetBuddyState`: gần bia đá không có spirit → 0; ra ngoài khu bia đá → -1
+(xám - luật vanilla); có spirit, Ash khác, cùng khu → **-1 (xám - lỗi gặp
+phải)**; cùng Ash đang ra → 2.
+
+**Patch 4** (AOB `48 8B C8 41 8B D5 E8 ?? ?? ?? ?? 83 F8 FF 41 0F 95 C5`,
+`0x14069037D`, duy nhất): stub gọi `GetBuddyState` thật; nếu bật và kết quả
+-1 thì hỏi lại với goodsId -1, nếu ra 2 (có spirit, cùng khu) → trả 0, còn
+lại giữ -1 (ngoài khu bia đá vẫn xám như vanilla). Stub cấp 0x30 byte stack
+(0x20 shadow cho callee + chỗ lưu rcx, bội 16 giữ alignment), disassemble
+lại bằng capstone.
+
+**Test lần 3-4:** Ash thứ 2 hết xám và gọi được; 2 nhóm cùng tồn tại (slot
+#20 + #21) rồi cả 2 biến mất ~10 s sau (`buddyDisappearDelaySec`). Lần 3
+có lẫn `Solid_Uncapper.dll` trong thư mục mod; lần 4 người dùng xác nhận
+không bật nó và đứng đúng khu vực bia đá (tôi đã kết luận sai là "đứng ngoài
+khu vực" - đính chính). Probe tạm hook đầu `DisappearAll` (`sub_1404B8160`,
+ghi `[rsp]`): mọi lần gọi từ `eldenring.exe+0x4B95B4` = nhánh "rời khu bia
+đá" của `sub_1404B92B0` (`+0x20 < 0 && !+0xB7 && !+0xB5`, offset xác
+nhận bằng `offset_of!`: `+0xB5 is_within_activation_range`, `+0xB7
+is_within_warn_range`); không gọi khi chỉ có nhóm 1, gọi 60 lần/giây ngay
+sau lần gọi thứ 2. `sub_1404BD870` tính 2 cờ đó theo vùng BuddyStoneParam
+của bia đá **đang hoạt động `+0x3C`**; `DoSummon` thành công ghi `+0x3C =
++0x38` (`0x1404B862A`); `DisappearAll` cũng đặt `+0x3C = 0`.
+
+**Patch 5** (giả thuyết: `+0x38` đã về 0 ở lần gọi thứ 2): thay `mov
+eax,[rbx+38h]; mov rsi,[rsp+38h]` (anchor DoSummon + 0x61, kiểm tra 8 byte)
+bằng stub: nếu `+0x38 == 0` và bật → lấy `+0x3C` cũ. SlotProbe giờ log
+`stones: current=+0x38 active=+0x3C in_activation_range in_warn_range` khi
+đổi, để xác nhận. **Test lần 5: đúng** - log `stones` cho thấy `current`
+về 0 sau lần gọi đầu còn `active` được giữ; 4 Ash khác nhau cùng ra (slot
+#20-#24), không nhóm nào tự biến mất.
+
+## MultiSpirit: cho về từng Ash, bỏ probe DisappearAll (2026-09-29)
+
+Test 5 lộ ra: bấm lại 1 Ash đã gọi thì **cả 3 nhóm** đều bị cho về, vì
+vanilla chỉ có `DisappearAll`. Thêm nữa, patch 1 nhận diện "cùng Ash" bằng
+cách so `edi` với `+0x24`/`+0x20` - chỉ biết Ash gọi **sau cùng**, bấm lại
+Ash gọi trước đó sẽ bị coi là Ash khác và gọi thêm 1 nhóm nữa.
+
+Solid Uncapper 2.3.3 (`sub_18005DA50`) làm thế này: duyệt cây `groups`
+(+0x78), đánh dấu tạm `disappear_requested` (+49 của entry) cho mọi entry
+**không** thuộc Ash đích, gọi `DisappearAll` gốc (nó bỏ qua entry đã đánh
+dấu), rồi gỡ dấu. Họ nhận diện Ash qua bảng ChrIns→Ash tự lưu.
+
+Cách làm ở đây (logic viết bằng Rust, 2 stub nhỏ gọi vào):
+
+- **Patch 1 đổi:** khi state = 2 và bật, stub gọi `decide_dismiss(mgr,
+  speffect)`: lấy danh sách BuddyParam id của SpEffect đó trong
+  `trigger_speffect_to_buddy_map` (chain đã nới của `chain.rs` chỉ lặp lại
+  id gốc nên vẫn đúng), xem trong `groups` còn entry nào sống
+  (`!disappear_requested`, `!is_remote`) có `buddy_param_id` thuộc danh
+  sách không. Có → nhớ `DISMISS_TARGET = speffect`, giữ state 2 (vanilla
+  đặt `+0x28`); không → state 0, gọi thêm. Không cần bảng ChrIns riêng như
+  Solid Uncapper vì `SummonBuddyGroup` đã có `buddy_param_id`.
+- **Patch 6 (thay probe):** detour đầu `DisappearAll` (17 byte prologue,
+  stub `push rcx; sub rsp,20h; call hook; ...; ret` nếu hook xử lý, không
+  thì chạy prologue gốc - đoạn đó + jmp về cũng là "hàm gốc" để hook gọi).
+  Hook chỉ lọc khi bật, `+0x28` đang set (đúng lời gọi phục vụ yêu cầu cho
+  về ở `sub_1404B92B0`) và có `DISMISS_TARGET`; mọi lý do khác (rời khu,
+  chết, SpEffect 202...) giữ vanilla = cho về hết. Lọc: đánh dấu tạm mọi
+  entry sống của Ash khác, gọi hàm gốc, gỡ dấu; nếu còn nhóm khác thì
+  khôi phục `+0x3C` mà hàm gốc vừa xoá (tránh lặp lại lỗi "rời khu" của
+  patch 5). Nếu Ash đích đã hết spirit sống thì không gọi hàm gốc (không
+  để các Ash khác bị cho về theo).
+- Bỏ probe `DisappearAll` (log 60 dòng/giây khi không có spirit). Thay bằng
+  1 dòng log mỗi lần cho về 1 Ash: `sent back Ash (SpEffect N): X
+  spirit(s), Y other(s) kept`.
+
+Thứ tự `sub_1404B92B0` trong cùng 1 frame: SpEffect 202 → `+0x28` → rời
+khu → ... Nếu 202 trùng frame với lần bấm, lần gọi 202 bị lọc (chỉ cho về
+Ash đích, `DISMISS_TARGET` bị tiêu), lần gọi `+0x28` ngay sau không còn
+target → cho về hết, đúng ý 202.
+
+Stub disassemble lại bằng capstone (test `dump_stubs`). **Test lần 6: đúng**
+- 4 Ash (SpEffect 213000/229000/236000/241000) cùng ra, bấm lại từng cái
+chỉ cho về đúng Ash đó (log `1 spirit(s), 3 → 2 → 1 → 0 other(s) kept`),
+bấm lại Ash gọi trước đó cũng được, các nhóm còn lại không tự biến mất.

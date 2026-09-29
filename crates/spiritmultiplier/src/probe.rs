@@ -46,6 +46,7 @@ pub fn run() {
     let mut elapsed_ms: f64 = 0.0;
     let mut logged_static_info = false;
     let mut last_layout: Option<Vec<SlotInfo>> = None;
+    let mut last_stones: Option<(u32, u32, bool, bool)> = None;
 
     let _handle = common::task::run_recurring_safe(
         cs_task,
@@ -97,6 +98,22 @@ pub fn run() {
                     let npc_param_id = unsafe { chr_ins.as_ref() }.npc_param_id;
                     layout.push((i, npc_param_id, format!("{:?}", entry.chr_load_status)));
                 }
+            }
+
+            // Buddy stone ids + range flags (MultiSpirit investigation,
+            // 2026-09-29): logged, and a change in them also logs a line.
+            let stones = (
+                manager.buddy_stone_entity_id,
+                manager.active_summmon_buddy_stone_entity_id,
+                manager.is_within_activation_range,
+                manager.is_within_warn_range,
+            );
+            if last_stones != Some(stones) {
+                logger::log(&format!(
+                    "stones: current={} active={} in_activation_range={} in_warn_range={}",
+                    stones.0, stones.1, stones.2, stones.3
+                ));
+                last_stones = Some(stones);
             }
 
             if last_layout.as_ref() != Some(&layout) {
