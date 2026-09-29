@@ -24,7 +24,7 @@
 use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common::{config, logger};
 
@@ -62,6 +62,10 @@ unsafe extern "system" {
     fn GetWindowThreadProcessId(hwnd: Hwnd, pid: *mut u32) -> u32;
     fn IsWindow(hwnd: Hwnd) -> i32;
     fn IsWindowVisible(hwnd: Hwnd) -> i32;
+    fn IsIconic(hwnd: Hwnd) -> i32;
+    fn GetClientRect(hwnd: Hwnd, rect: *mut Rect) -> i32;
+    fn GetWindowRect(hwnd: Hwnd, rect: *mut Rect) -> i32;
+    fn SetThreadDpiAwarenessContext(context: isize) -> isize;
     fn GetClassNameW(hwnd: Hwnd, buf: *mut u16, len: i32) -> i32;
     fn GetWindowLongPtrW(hwnd: Hwnd, index: i32) -> isize;
     fn SetWindowLongPtrW(hwnd: Hwnd, index: i32, value: isize) -> isize;
@@ -90,9 +94,12 @@ const SWP_NOZORDER: u32 = 0x0004;
 const SWP_NOACTIVATE: u32 = 0x0010;
 const SWP_FRAMECHANGED: u32 = 0x0020;
 
+const DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: isize = -4;
+
 const WM_SETCURSOR: u32 = 0x0020;
 const WM_GETMINMAXINFO: u32 = 0x0024;
 const WM_SIZING: u32 = 0x0214;
+const WM_ENTERSIZEMOVE: u32 = 0x0231;
 
 // Hit-test codes of the resize border, HTLEFT..=HTBOTTOMRIGHT.
 const HT_SIZE_FIRST: u32 = 10;
@@ -111,21 +118,38 @@ static ORIG_WNDPROC: AtomicIsize = AtomicIsize::new(0);
 /// Whether the resize border is currently on because we added it - the
 /// subclassed messages only do anything while it is.
 static FRAME_ADDED: AtomicBool = AtomicBool::new(false);
+/// Set once the player starts dragging the border - from then on the
+/// startup `Width`/`Height` is never re-applied over their size.
+static USER_RESIZED: AtomicBool = AtomicBool::new(false);
+
+/// How long after hooking the startup size keeps being re-applied: the game
+/// may still set its own resolution on the window right after creating it.
+const START_SIZE_WINDOW: Duration = Duration::from_secs(20);
 
 /// Hooks the game window once it exists, then keeps its resize border in
 /// sync with the ini for the rest of the process's life. Never returns.
 pub fn run() {
+    // Physical pixels for this thread's own calls (`Width`/`Height`,
+    // `GetClientRect`/`SetWindowPos`), whatever DPI mode the game runs in -
+    // a DPI-unaware caller gets scaled coordinates (a 480x300 request came out
+    // 720x450 at 150% in the first outside test).
+    unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
     let mut hooked: Hwnd = null_mut();
+    let mut hooked_at = Instant::now();
     loop {
         if hooked.is_null() || unsafe { IsWindow(hooked) } == 0 {
             hooked = null_mut();
             if let Some(hwnd) = find_game_window() {
                 hook(hwnd);
                 hooked = hwnd;
+                hooked_at = Instant::now();
             }
         }
         if !hooked.is_null() {
             sync_frame(hooked);
+            if hooked_at.elapsed() < START_SIZE_WINDOW && !USER_RESIZED.load(Ordering::SeqCst) {
+                apply_start_size(hooked);
+            }
         }
         std::thread::sleep(Duration::from_secs(1));
     }
@@ -165,7 +189,7 @@ fn hook(hwnd: Hwnd) {
     }
     ORIG_WNDPROC.store(prev, Ordering::SeqCst);
     FRAME_ADDED.store(false, Ordering::SeqCst);
-    logger::log("Game window found and hooked.");
+    logger::log(&format!("Game window found and hooked (DPI {}).", unsafe { GetDpiForWindow(hwnd) }));
 }
 
 /// Adds or removes `WS_THICKFRAME` to match `Resizable`, windowed mode only
@@ -223,6 +247,57 @@ fn frame_size(hwnd: Hwnd) -> (i32, i32) {
     (rect.right - rect.left, rect.bottom - rect.top)
 }
 
+/// Client size from `Width`/`Height`; `None` if both are empty. With only
+/// one set, the other follows `AspectWidth`:`AspectHeight` (or keeps the
+/// current size if the aspect lock is off).
+fn start_client_size(current: (i32, i32)) -> Option<(i32, i32)> {
+    let w = config::get_int("Width", 0);
+    let h = config::get_int("Height", 0);
+    let aspect_w = config::get_int("AspectWidth", 16) as i64;
+    let aspect_h = config::get_int("AspectHeight", 9) as i64;
+    let aspect = aspect_w > 0 && aspect_h > 0;
+    let size = match (w > 0, h > 0) {
+        (false, false) => return None,
+        (true, true) => (w, h),
+        (true, false) if aspect => (w, ((w as i64 * aspect_h + aspect_w / 2) / aspect_w) as i32),
+        (false, true) if aspect => (((h as i64 * aspect_w + aspect_h / 2) / aspect_h) as i32, h),
+        (true, false) => (w, current.1),
+        (false, true) => (current.0, h),
+    };
+    let (min_w, min_h) = min_client();
+    Some((size.0.max(min_w), size.1.max(min_h)))
+}
+
+/// Resizes the window so its client area is the ini's startup size, keeping
+/// its position. No-op when already that size, minimized, or not windowed.
+fn apply_start_size(hwnd: Hwnd) {
+    let style = unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } as u32;
+    if style & WS_CAPTION != WS_CAPTION || unsafe { IsIconic(hwnd) } != 0 {
+        return;
+    }
+    let mut client = Rect::default();
+    let mut window = Rect::default();
+    unsafe {
+        GetClientRect(hwnd, &mut client);
+        GetWindowRect(hwnd, &mut window);
+    }
+    let current = (client.right - client.left, client.bottom - client.top);
+    let Some((w, h)) = start_client_size(current) else {
+        return;
+    };
+    if current == (w, h) {
+        return;
+    }
+    // Frame measured from the live rects (same DPI context as the resize
+    // call below) rather than `frame_size`, which uses the window's DPI.
+    let frame_w = (window.right - window.left) - current.0;
+    let frame_h = (window.bottom - window.top) - current.1;
+    unsafe {
+        SetWindowPos(hwnd, null_mut(), 0, 0, w + frame_w, h + frame_h, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+    logger::log(&format!("Window set to {w}x{h} (was {}x{}).", current.0, current.1));
+}
+
 fn min_client() -> (i32, i32) {
     (config::get_int("MinWidth", 160).max(1), config::get_int("MinHeight", 90).max(1))
 }
@@ -277,6 +352,7 @@ unsafe extern "system" fn wnd_proc(hwnd: Hwnd, msg: u32, wparam: usize, lparam: 
     let orig = ORIG_WNDPROC.load(Ordering::SeqCst);
     if FRAME_ADDED.load(Ordering::SeqCst) {
         match msg {
+            WM_ENTERSIZEMOVE => USER_RESIZED.store(true, Ordering::SeqCst),
             WM_SETCURSOR => {
                 let hit = (lparam & 0xFFFF) as u32;
                 if (HT_SIZE_FIRST..=HT_SIZE_LAST).contains(&hit) {
