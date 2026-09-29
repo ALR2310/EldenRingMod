@@ -4,6 +4,7 @@ mod activate_limit;
 mod band;
 mod chain;
 mod enemy_probe;
+mod ghost_color;
 mod probe;
 
 use common::{config, dll_dir, logger};
@@ -52,6 +53,9 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(probe::run);
         std::thread::spawn(enemy_probe::run);
         std::thread::spawn(activate_limit::run);
+        std::thread::spawn(ghost_color::run);
+
+        common::diag::log_environment_when_game_ready();
         chain::run();
     });
 
