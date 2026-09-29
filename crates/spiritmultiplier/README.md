@@ -560,4 +560,7 @@ hành; người dùng tạm dừng hướng này, làm lại sau khi đăng 1.0.
   `GhostColor=false`, `Regen=0.75`, `LogFile=true`; các key debug
   (`SlotProbe`, `EnemyProbe`, `ActiveCharacterLimit`) giữ, mặc định tắt.
 - Tính năng dịch chuyển spirit để sau 1.0.0 (xem mục trước).
-- Chưa có mod ID trên Nexus - người dùng tạo trang mod rồi mới deploy.
+- Đã deploy lên Nexus: **mod 11168** (Spirit Multiplier, category
+  Gameplay), file `SpiritMultiplier` 1.0.0 (mod file đầu tiên, tạo bằng
+  `POST /mod-files` vì trang mới chưa có update group nào), build từ commit
+  `f3454eb`. Trang mod lúc upload còn ở trạng thái chưa công khai.
