@@ -1,0 +1,86 @@
+<<TEMPLATE NOTE: fill every <...> placeholder. Blocks between <<OPTIONAL ...>> and <<END OPTIONAL>> are optional: keep the ones this mod needs, delete the rest, and always delete the <<...>> marker lines (and this note) before publishing.>>
+
+This is a DLL mod that allows you to <what the mod lets the player do>, so you <the benefit for the player>.
+
+<Second paragraph: the main ways it can be configured, in plain words - no ini key names.>
+
+<<OPTIONAL: Why this mod? - short first-person story (italic, 3 short paragraphs, no technical details). Delete this block if not needed.>>
+[size=4][b]Why this mod?[/b][/size]
+[i]<The problem that made you create this mod.>
+
+<How it felt / the moment you decided to fix it.>
+
+<How this mod solves it, in plain words.>[/i]
+<<END OPTIONAL>>
+
+<<OPTIONAL: Features - only when the mod has at least 2 features; with just 1, the intro already covers it. Delete this block if not needed.>>
+[size=4][b]Features[/b][/size]
+[list]
+[*]<Feature 1>[/*]
+[*]<Feature 2>[/*]
+[*]Hotkey to reload the ini without restarting the game.[/*]
+[/list]
+<<END OPTIONAL>>
+
+<<OPTIONAL: Requirements - other mods or conditions this mod needs. Delete this block if not needed.>>
+[size=4][b]Requirements[/b][/size]
+[list]
+[*][url=<link to the required mod>]<Required mod name>[/url].[/*]
+[*]<Other requirement, e.g. every player must have this mod installed too.>[/*]
+[/list]
+<<END OPTIONAL>>
+
+[size=4][b][color=#E74C3C]Disclaimer: Only use in offline mode with EAC disabled![/color][/b][/size]
+
+<<OPTIONAL: Usage - step-by-step for mods the player interacts with (menu, hotkey...). Delete this block if not needed.>>
+[size=4][b]Usage[/b][/size]
+[list=1]
+[*]<Step 1>[/*]
+[*]Press [b]<Key>[/b] to <action> (change it with [b]<IniKey>[/b] in [b]<ModName>.ini[/b]).[/*]
+[*]<Step 3>[/*]
+[/list]
+[img]<screenshot URL uploaded to the Nexus mod page>[/img]
+<<END OPTIONAL>>
+
+[size=4][b]Installation[/b][/size]
+
+Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url], [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url], [url=https://github.com/garyttierney/me3/releases]Mod Engine 3[/url].
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\<ModName>.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]<ModName>.dll[/b] and [b]<ModName>.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+<<OPTIONAL: Credits - mods this is based on / inspired by, libraries, fonts. Delete this block if not needed.>>
+[size=4][b]Credits[/b][/size]
+[list]
+[*]Based on [url=<mod link>]<Mod name>[/url] by [url=<author profile link>]<Author>[/url].[/*]
+[*]Inspired by [url=<mod link>]<Mod name>[/url] by [url=<author profile link>]<Author>[/url].[/*]
+[*]Game structures from [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url].[/*]
+[/list]
+<<END OPTIONAL>>
+
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]1.0.0[/b]
+[list]
+[*]Initial release.[/*]
+[/list]
+[/spoiler]
+[size=4][b]Support[/b][/size]
+Enjoying the mod? You can buy me a coffee on Ko-fi - it really helps. Thank you!
+
+[url=https://ko-fi.com/L7S227ME2P][img]https://storage.ko-fi.com/cdn/kofi1.png?v=6[/img][/url]

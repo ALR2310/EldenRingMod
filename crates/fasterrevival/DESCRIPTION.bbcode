@@ -1,0 +1,53 @@
+A DLL mod that lets you respawn about 8-10 seconds faster after dying - less waiting, and you're straight back into the fight.
+
+[size=4][b]Introduction[/b][/size]
+A DLL mod that gets your character back on their feet faster after dying, by cutting the wait on the death animation and on the "YOU DIED" screen. The idea comes from two mods, [url=https://www.nexusmods.com/eldenring/mods/3367]Faster Death Animation[/url] by [url=https://www.nexusmods.com/profile/0R4X]0R4X[/url] and [url=https://www.nexusmods.com/eldenring/mods/501]Faster Respawn[/url] by [url=https://www.nexusmods.com/profile/ImAxel0]ImAxel0[/url]. Being a single DLL, it's easy to install and works in overhaul modpacks such as [url=https://www.nexusmods.com/eldenring/mods/3419]The Convergence[/url].
+
+[size=4][b]How it works[/b][/size]
+[list]
+[*]Sets [b]soloPlayDeath_ToFadeOutTime[/b] in [b]MenuCommonParam[/b] to 0, so "YOU DIED" fades out right away.[/*]
+[*]Triggers the death animation's "Kill Character" event at its start instead of its end.[/*]
+[/list]
+
+[size=4][b][color=#E74C3C]Disclaimer: Only use in offline mode with EAC disabled![/color][/b][/size]
+
+[size=4][b]Installation[/b][/size]
+
+Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url], [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url], [url=https://github.com/garyttierney/me3/releases]Mod Engine 3[/url].
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\FasterRevival.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]FasterRevival.dll[/b] and [b]FasterRevival.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+[size=4][b]Credits[/b][/size]
+[list]
+[*]Based on [url=https://www.nexusmods.com/eldenring/mods/3367]Faster Death Animation[/url] by [url=https://www.nexusmods.com/profile/0R4X]0R4X[/url].[/*]
+[*]Inspired by [url=https://www.nexusmods.com/eldenring/mods/501]Faster Respawn[/url] by [url=https://www.nexusmods.com/profile/ImAxel0]ImAxel0[/url].[/*]
+[*]Game structures from [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url].[/*]
+[/list]
+
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]1.0.0[/b]
+[list]
+[*]Initial release.[/*]
+[/list]
+[/spoiler]
+[size=4][b]Support[/b][/size]
+Enjoying the mod? You can buy me a coffee on Ko-fi - it really helps. Thank you!
+
+[url=https://ko-fi.com/L7S227ME2P][img]https://storage.ko-fi.com/cdn/kofi1.png?v=6[/img][/url]

@@ -43,6 +43,7 @@ Mod ID theo từng mod trong workspace này (game domain luôn là `eldenring`):
 - `risearcher` → 5807
 - `sometweaks` → **chưa có, chưa đăng lên Nexus**
 - `soulsteleport` → 11119 (Souls Teleport)
+- `fasterrevival` → 11160 (Faster Revival)
 
 Key API cá nhân của người dùng lưu ở `.secrets/nexus_api_key.txt` (đã
 gitignore, không commit). Nếu API trả về thiếu 1 vài version cũ so với thực

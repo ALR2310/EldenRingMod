@@ -97,3 +97,46 @@ pub fn for_each_row_mut<P: SoloParam>(
     }
     index
 }
+
+/// Param ID of every row of `P`, in the same file order / index as
+/// [for_each_row_mut] - so a caller can build its own ID -> row map without
+/// going through fromsoftware-rs's `get()` (a binary search over the same
+/// lookup table `rows_mut()` trips on, see the module doc).
+///
+/// Reads the row descriptors right after the file header directly, since
+/// fromsoftware-rs keeps `row_data_offset` private. Layout (mirrors its
+/// `RowDescriptor<T>`): `id: u32` then `data_offset: T`, `name_offset: T`,
+/// with `T = u64` (24-byte descriptor) when bit 2 of `format_2d` (header
+/// byte 0x2D) is set, else `T = u32` (12 bytes); descriptors start after
+/// the header plus 0x10 extra bytes for the extended header. Every
+/// descriptor's data offset is cross-checked against the row
+/// `get_row_by_index` itself returns - on any mismatch (layout assumption
+/// wrong on some future version) this returns `None` rather than wrong IDs.
+pub fn row_ids<P: SoloParam>(repo: &SoloParamRepository) -> Option<Vec<u32>> {
+    let res_cap = repo.solo_param_holders.get(P::INDEX as usize)?.get_res_cap(0)?;
+    let file: &eldenring::fd4::ParamFile = &res_cap.param_res_cap.data;
+    let base = file as *const _ as *const u8;
+    let format_2d = unsafe { base.add(0x2D).read() };
+    let is_64_bit = format_2d & 0x04 != 0;
+    let extended_header = is_64_bit || (format_2d & 0x01 != 0 && format_2d & 0x02 != 0);
+    let start = size_of::<eldenring::fd4::ParamFile>() + if extended_header { 0x10 } else { 0 };
+    let (stride, data_field) = if is_64_bit { (24, 8) } else { (12, 4) };
+
+    let mut ids = Vec::with_capacity(file.row_count());
+    for index in 0..file.row_count() {
+        let row = repo.get_row_by_index::<P>(index)? as *const _ as *const u8;
+        unsafe {
+            let descriptor = base.add(start + index * stride);
+            let data_offset = if is_64_bit {
+                (descriptor.add(data_field) as *const u64).read_unaligned() as usize
+            } else {
+                (descriptor.add(data_field) as *const u32).read_unaligned() as usize
+            };
+            if base.add(data_offset) != row {
+                return None;
+            }
+            ids.push((descriptor as *const u32).read_unaligned());
+        }
+    }
+    Some(ids)
+}
