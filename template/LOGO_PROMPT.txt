@@ -1,0 +1,56 @@
+Create a logo/icon for a PC game mod called "<Mod Name>" for Elden Ring.
+The mod <one-line description of what it does>.
+
+ATTACHED IMAGES:
+<List every attached image and what to take from it. Delete this section
+if no image is attached. Examples:>
+- Image 1: <e.g. an in-game screenshot of a stone portal gate> - take
+  <the gate>.
+- Image 2: <e.g. a screenshot of a Tarnished> - take <the hooded figure>.
+
+HOW TO USE THE IMAGES:
+Cut each listed element out of its image as faithfully as possible - same
+shape, details, wear, dark aged colors and in-game lighting. Do not
+redesign, repaint, clean up, sharpen, brighten, saturate or add glow to
+them. They should look cut straight out of the screenshots, not redrawn.
+Remove everything else from the images (scenery, sky, floor, other
+characters, HUD, compass, text).
+<If more than 1 image:> Combine the cut-out elements into one scene:
+<how they fit together, e.g. the figure stands in front of the gate,
+facing the vortex>. Only adjust scale and lighting as much as needed for
+them to sit naturally together.
+
+STYLE (only for anything not taken from an image):
+Match Elden Ring's own in-game look: dark, matte, weathered and aged,
+muted desaturated colors, soft directional light, and a restrained
+magical glow only where it helps explain what the mod does.
+
+MAIN SUBJECT:
+<What the final subject is, e.g. "the gate from Image 1" or "the figure
+from Image 2 in front of the gate from Image 1". If no image is attached,
+describe the object, symbol, character silhouette or effect, its
+materials and its <color> glowing accents.>
+One clear subject with a strong, readable silhouette.
+
+SERIES EMBLEM (required, behind the subject):
+A large, thin, glowing golden Elden Ring-style emblem: a circle of fine
+interlocking golden arcs, a vertical line of light through the center,
+and a short horizontal line near the top. It sits behind the subject,
+partly overlapped by it, visible but dimmer than the subject so the
+subject stays the focus.
+
+FORMAT:
+- Square 1024x1024, subject centered and filling about 75% of the canvas.
+- Must stay recognizable when shrunk to a 128px thumbnail.
+- Transparent background with real PNG alpha - no black, gray, white or
+  checkerboard. Clean edges, no leftover background from the images.
+- No text, letters, numbers, watermark or UI.
+
+Generate ONE single image now (not a grid, not multiple panels), using
+composition 1 below. I will ask for the others separately, one per
+message, keeping the same subject and emblem:
+1. Full - the whole subject.
+2. Medium - cropped closer, the least important part cut off by the
+   canvas edge, so the key part reads larger.
+3. Close-up - only the most recognizable part filling most of the canvas,
+   for small thumbnails.

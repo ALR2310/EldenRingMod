@@ -1,0 +1,73 @@
+Create a thumbnail image for the Nexus Mods page of a PC game mod called
+"<Mod Name>" for Elden Ring. The mod <one-line description of what it does>.
+This is a full scene (not an icon), shown as the mod's cover image in
+Nexus Mods listings.
+
+ATTACHED IMAGES:
+<List every attached image and what to take from it. Delete this section
+if no image is attached. Examples:>
+- Image 1: <e.g. an in-game screenshot of a stone portal gate> - take
+  <the gate, and its surroundings as the background>.
+- Image 2: <e.g. a screenshot of a Tarnished> - take <the hooded figure>.
+
+HOW TO USE THE IMAGES:
+Keep every element taken from the images as faithful as possible - same
+shape, details, wear, dark aged colors and in-game lighting. Do not
+redesign, repaint, clean up, sharpen, brighten, saturate or add glow to
+them. They should look like they come straight from the game, not redrawn.
+Remove anything that isn't part of the scene: HUD, compass, health bars,
+menus, text, watermarks.
+<If more than 1 image:> Combine the elements into one scene: <how they fit
+together, e.g. the figure stands in front of the gate, facing the vortex>.
+Only adjust scale and lighting as much as needed for them to sit
+naturally together.
+
+SCENE:
+<What the viewer should see, e.g. "the gate from Image 1 in its original
+ruined courtyard" or, with no image, a description of the subject and
+setting.> The scene should show at a glance what the mod does:
+<the one moment that sells the mod, e.g. a player stepping through the
+portal to reach a friend>.
+Background: <keep the background from Image 1 / a fitting Elden Ring
+location, e.g. ruined stone courtyard, misty Limgrave field>, darker and
+slightly blurred so the subject stands out.
+
+STYLE (only for anything not taken from an image):
+Match Elden Ring's own in-game look: dark, matte, weathered and aged,
+muted desaturated colors, soft directional light, atmospheric haze, and a
+restrained magical glow only where it helps explain what the mod does.
+It should look like a real in-game screenshot or official key art, not
+generic fantasy art. Keep it restrained:
+- matte, dry surfaces - not wet, not glossy, no strong reflections
+- natural softness - no over-sharpened edges or extra micro-detail
+- magic effects as dim and muted as in the source images, not neon
+- only a few light particles, no sparkles, no lens flares, no bloom
+
+SERIES EMBLEM (required, very subtle):
+A large, thin, faint golden Elden Ring-style emblem behind the subject: a
+circle of fine interlocking golden arcs, a vertical line of light through
+the center, and a short horizontal line near the top. Barely glowing,
+like a faint trace of light in the air - dimmer than any magic effect in
+the scene, never covering the subject.
+
+<SCALE: if the scene combines several elements, give their relative size
+with concrete anchors, e.g. "the gate's crest is level with the top of
+his helmet" - not just "not too big".>
+
+FORMAT:
+- Landscape 16:9 (e.g. 1536x864 or 1920x1080), all important content
+  inside the central area.
+- Must stay readable as a small listing tile: one clear subject, strong
+  contrast between subject and background.
+- No text, letters, numbers, watermark or UI.
+- <Optional: leave the <left/right> third of the image darker and emptier
+  so the mod name can be added on top later.>
+
+Generate ONE single image now (not a grid, not multiple panels), using
+composition 1 below. I will ask for the others separately, one per
+message, keeping the same subject and emblem:
+1. Centered - subject in the middle, emblem centered behind it.
+2. Side - subject on one side, the other side calmer and darker (room for
+   a title).
+3. Close - camera closer, the most recognizable part filling the frame,
+   background mostly in shadow.
