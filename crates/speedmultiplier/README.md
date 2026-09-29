@@ -292,3 +292,12 @@ Người dùng chốt mặc định: `PlayerMovement=1.2`, `PlayerAttack=1.2`,
 "mọi key mặc định 1" là trước thay đổi này. Intro của `DESCRIPTION.bbcode`
 đổi theo câu của người dùng. Features giờ liệt kê đúng 6 mục kèm % mặc
 định, bỏ các bullet về key tổng, SotE và hotkey reload.
+
+## Deploy 1.0.0 lên Nexus (2026-09-29)
+
+Đã deploy: **mod 11173** (Speed Multiplier, category Gameplay, internal id
+`18610093304741`). File `SpeedMultiplier` 1.0.0 (mod file `8049852`) là
+file đầu tiên của trang, nên được tạo bằng `POST /mod-files` (trang mới
+chưa có update group nào, giống lần đầu của spiritmultiplier). Build từ
+commit `e51b1a0`. Changelog Nexus: `1.0.0: Initial release.` Đã ghi vào
+`manifest.json`.
