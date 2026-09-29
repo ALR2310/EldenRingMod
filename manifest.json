@@ -177,6 +177,10 @@
       {
         "version": "1.0.2",
         "commit": "91bd5404438f7a9a08086a51aa471980373a45ca"
+      },
+      {
+        "version": "1.1.0",
+        "commit": "1ccf899efde0742c36d5b6e463132e144d111586"
       }
     ]
   },
@@ -211,6 +215,18 @@
       {
         "version": "1.1.0",
         "commit": "df0c644e2d18bbb4591928b4a72e479237386756"
+      }
+    ]
+  },
+  {
+    "id": "11160",
+    "internalId": "18610093304728",
+    "name": "Faster Revival",
+    "crate": "fasterrevival",
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": "e4349a683148c1128b0590bc61152ed326ceb944"
       }
     ]
   }

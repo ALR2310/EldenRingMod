@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "DropMultiplier" to control the output DLL's filename
 
 mod drop_rate;
+mod materials;
 
 use common::{config, dll_dir, logger};
 
@@ -24,7 +25,10 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
     std::thread::spawn(move || {
         let dir = dll_dir(hmodule);
         let ini_path = format!("{dir}\\DropMultiplier.ini");
-        let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
+        // `ChancePercent` was renamed to `Percentage` (2026-09-28, along
+        // with `[Settings]` -> `[Drop]`) - carry an existing user's value over.
+        let migrated =
+            config::load_or_create_default_with_renames(&ini_path, DEFAULT_INI, &[("ChancePercent", "Percentage")]);
 
         // [Logging] LogFile gates the log file entirely - see common::logger.
         logger::init(&dir, "DropMultiplier.log");

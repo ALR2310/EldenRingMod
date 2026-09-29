@@ -50,8 +50,22 @@ pub fn load(ini_path: &str) {
 /// Returns how many new keys were merged in, so the caller can log it once
 /// its logger is up.
 pub fn load_or_create_default(ini_path: &str, default_ini: &str) -> usize {
+    load_or_create_default_with_renames(ini_path, default_ini, &[])
+}
+
+/// Same as [load_or_create_default], but also carries a renamed key's value
+/// over: for each `(old, new)` in `renames`, a user file that still has `old`
+/// but not `new` gets `new=<their old value>` instead of the template's
+/// default, and `old` is dropped rather than moved to `[Legacy]`. Without
+/// this, renaming a key in a new version silently resets every existing
+/// user's customized value to the default.
+pub fn load_or_create_default_with_renames(
+    ini_path: &str,
+    default_ini: &str,
+    renames: &[(&str, &str)],
+) -> usize {
     let migrated = if fs::exists(ini_path).unwrap_or(false) {
-        migrate(ini_path, default_ini)
+        migrate_with_renames(ini_path, default_ini, renames)
     } else {
         let _ = fs::write(ini_path, default_ini);
         0
@@ -70,11 +84,28 @@ pub fn load_or_create_default(ini_path: &str, default_ini: &str) -> usize {
 /// removed in a newer version) aren't silently discarded: they're moved to a
 /// trailing `[Legacy]` block instead, so nothing the user configured
 /// disappears without a trace.
+#[cfg(test)]
 fn migrate(ini_path: &str, default_ini: &str) -> usize {
+    migrate_with_renames(ini_path, default_ini, &[])
+}
+
+/// [migrate] plus `renames` - see [load_or_create_default_with_renames].
+/// A renamed key isn't counted in the returned "new keys" total, since the
+/// user already had it under its old name.
+fn migrate_with_renames(ini_path: &str, default_ini: &str, renames: &[(&str, &str)]) -> usize {
     let Ok(existing_content) = fs::read_to_string(ini_path) else {
         return 0;
     };
-    let existing_values = parse(&existing_content);
+    let mut existing_values = parse(&existing_content);
+    let mut renamed = false;
+    for (old_key, new_key) in renames {
+        if !existing_values.contains_key(*new_key) {
+            if let Some(value) = existing_values.remove(*old_key) {
+                existing_values.insert(new_key.to_string(), value);
+                renamed = true;
+            }
+        }
+    }
     let template_values = parse(default_ini);
 
     let missing_count = template_values
@@ -85,7 +116,7 @@ fn migrate(ini_path: &str, default_ini: &str) -> usize {
         .iter()
         .filter(|(k, _)| !template_values.contains_key(*k))
         .collect();
-    if missing_count == 0 && legacy.is_empty() {
+    if missing_count == 0 && legacy.is_empty() && !renamed {
         return 0; // already has every key the current template defines, nothing stale either
     }
 
@@ -347,6 +378,20 @@ Fp=0
             merged.get("SomeRemovedFeature.Flag").map(String::as_str),
             Some("true")
         );
+    }
+
+    #[test]
+    fn migrate_carries_renamed_key_value_over() {
+        let old_file = TEST_TEMPLATE.replace("Hp=0", "OldHp=25");
+        let ini = TempIni::new("rename", &old_file);
+
+        let migrated = migrate_with_renames(ini.path(), TEST_TEMPLATE, &[("OldHp", "Hp")]);
+
+        assert_eq!(migrated, 0); // renamed, not new
+        let content = ini.read();
+        assert!(!content.contains("OldHp"));
+        let merged = parse(&content);
+        assert_eq!(merged.get("Hp").map(String::as_str), Some("25"));
     }
 
     #[test]
