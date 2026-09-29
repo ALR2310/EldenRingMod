@@ -1,0 +1,58 @@
+A DLL mod that lets you summon more spirits from every Spirit Ash, giving you a whole army to conquer the Lands Between - increase them by a multiplier or set a fixed number, all in the config file.
+
+[size=4][b]Features[/b][/size]
+[list]
+[*]Summon more spirits per Ash: a multiplier (default x2) or a fixed number.[/*]
+[*]Works with every Spirit Ash, including ones added by other mods.[/*]
+[*]Spirits slowly regenerate health, 0.75% of their max HP per second by default.[/*]
+[*]Removes the ghost color from spirits so they look like normal characters.[/*]
+[*]Works in Seamless Co-op: each player gets their own spirits, as long as everyone has the mod installed.[/*]
+[*]Hotkey to reload the ini without restarting the game.[/*]
+[/list]
+
+[size=4][b]Notes[/b][/size]
+[list]
+[*]Summon up to 60 spirits at once within the safe limit - or push it further, like 1000, if your PC can handle it :)[/*]
+[/list]
+
+[size=4][b][color=#E74C3C]Disclaimer: Only use in offline mode with EAC disabled![/color][/b][/size]
+
+[size=4][b]Installation[/b][/size]
+
+Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url], [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url], [url=https://github.com/garyttierney/me3/releases]Mod Engine 3[/url].
+
+[b]Option 1 - [url=https://github.com/soulsmods/ModEngine2/releases]Mod Engine 2[/url] (recommended)[/b]
+[list=1]
+[*]Download Mod Engine 2 from the link above and extract it into your game folder (the same folder as [i]eldenring.exe[/i]).[/*]
+[*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
+[*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
+[code]external_dlls = [
+    "natives\\SpiritMultiplier.dll",
+][/code]
+[/*]
+[*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
+[/list]
+
+[b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
+[list=1]
+[*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
+[*]Download this mod and drag [b]SpiritMultiplier.dll[/b] and [b]SpiritMultiplier.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Launch the game - the mod will be loaded automatically.[/*]
+[/list]
+
+[size=4][b]Credits[/b][/size]
+[list]
+[*]Inspired by [url=https://www.nexusmods.com/eldenring/mods/7948]10x Spirit Summons[/url].[/*]
+[*]Game structures from [url=https://github.com/vswarte/fromsoftware-rs]fromsoftware-rs[/url].[/*]
+[/list]
+
+[size=4][b]Changelogs[/b][/size]
+[spoiler=Changelogs][b]1.0.0[/b]
+[list]
+[*]Initial release.[/*]
+[/list]
+[/spoiler]
+[size=4][b]Support[/b][/size]
+Enjoying the mod? You can buy me a coffee on Ko-fi - it really helps. Thank you!
+
+[url=https://ko-fi.com/alr2310][img]https://storage.ko-fi.com/cdn/kofi1.png?v=6[/img][/url]
