@@ -229,5 +229,18 @@
         "commit": "e4349a683148c1128b0590bc61152ed326ceb944"
       }
     ]
+  },
+  {
+    "id": "11168",
+    "internalId": "18610093304736",
+    "name": "Spirit Multiplier",
+    "crate": "spiritmultiplier",
+    "modFileId": "8047548",
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": "f3454ebfaf55c67403d14d99aab5cba9e7d76e46"
+      }
+    ]
   }
 ]
