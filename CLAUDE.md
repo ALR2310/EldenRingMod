@@ -53,6 +53,19 @@ tế trên trang web (đã xảy ra 1 lần, 2026-09-03) - đó là do giới h�
 API, không phải version đó không tồn tại - hỏi lại người dùng xác nhận
 qua trang web thật trước khi tự xoá bất kỳ mục changelog cũ nào.
 
+## Bump `version` trong `Cargo.toml` cùng lúc với changelog mới
+
+Khi thêm 1 mục version mới vào `[Changelog]` của
+`crates/<mod>/DESCRIPTION.bbcode`, **luôn đổi luôn `version` trong
+`crates/<mod>/Cargo.toml` thành đúng số version đó** (vd. changelog
+`1.1.0` → `version = "1.1.0"`), rồi build lại để `Cargo.lock` cập nhật
+theo. Version crate phải luôn khớp với version mới nhất trên Nexus.
+
+Không cần hỏi lại người dùng - coi đây là 1 phần của việc viết changelog.
+Người dùng yêu cầu (2026-09-29, SpiritMultiplier 1.1.0) vì trước đó version
+crate không được bump (vd. `autoregen` vẫn `2.0.0` trong khi Nexus đã lên
+2.6.x).
+
 ## Kiểm tra `shared/` (`common`) trước khi viết helper mới
 
 Trước khi viết 1 hàm/struct/module mới (helper gate "đã vào game", chờ
