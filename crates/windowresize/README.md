@@ -17,6 +17,7 @@ cửa sổ Elden Ring ở chế độ Windowed, nhỏ hơn mức 800x450 nhỏ n
 | Key | Mặc định | Ý nghĩa |
 |---|---|---|
 | `Resizable` | `true` | Bật/tắt viền kéo resize (chỉ ở chế độ Windowed) |
+| `Width` / `Height` | trống | Kích thước vùng hình đặt khi game khởi động; trống cả 2 = giữ kích thước của game, điền 1 = cái còn lại theo tỉ lệ |
 | `AspectWidth` / `AspectHeight` | `16` / `9` | Khoá tỉ lệ vùng hình khi kéo; `0` ở 1 trong 2 = kéo tự do |
 | `MinWidth` / `MinHeight` | `160` / `90` | Kích thước vùng hình nhỏ nhất (pixel thật) |
 | `LogFile` | `true` | Ghi log |
@@ -95,3 +96,25 @@ và giờ mod không còn dùng gì của game lúc chạy - chỉ Win32 (`froms
 vẫn được compile qua `common` nhưng LTO bỏ hết phần không gọi tới).
 `window::run` tự poll tìm cửa sổ mỗi 1s nên không cần chờ game khởi động xong.
 Ini cũ còn `ReloadKey` sẽ được `config::migrate` tự chuyển vào `[Legacy]`.
+## Kích thước khởi động `Width`/`Height` (2026-09-29)
+
+Thêm 2 key `Width`/`Height` (kích thước **client area**, pixel thật): khi
+tìm thấy cửa sổ game, mod `SetWindowPos` về kích thước này (giữ vị trí).
+Để trống cả 2 → không đụng, giữ kích thước theo setting của game. Điền 1
+key → key còn lại tính theo `AspectWidth:AspectHeight` (nếu tắt tỉ lệ thì
+giữ kích thước hiện tại cho trục đó). Vẫn bị kẹp bởi `MinWidth/MinHeight`.
+
+Áp lại mỗi 1s trong **20s đầu** sau khi hook (`START_SIZE_WINDOW`), vì từ
+khi bỏ `diag` mod hook cửa sổ ngay lúc mới tạo, trước khi game kịp tự
+đặt độ phân giải trong setting lên nó - áp 1 lần có thể bị game ghi đè
+ngay sau. Ngừng áp ngay khi người chơi bắt đầu kéo viền
+(`WM_ENTERSIZEMOVE` → `USER_RESIZED`), để không giành lại kích thước họ
+vừa chọn. Ban đầu là 10s; tăng lên 20s cùng ngày theo yêu cầu sau khi test.
+
+DPI: thread của mod gọi `SetThreadDpiAwarenessContext(PER_MONITOR_AWARE_V2)`
+nên `Width`/`Height` luôn là pixel thật, không bị Windows nhân theo scale
+như lần test ngoài bằng PowerShell (480x300 → 720x450 ở 150%). Game vốn đã
+DPI-aware (`GetDpiForWindow` = 144 ở 150%, bản unaware luôn trả 96), đây chỉ
+là phòng hờ. Khung cửa sổ khi đặt kích thước khởi động đo từ rect thật
+(`GetWindowRect - GetClientRect`) cho cùng hệ toạ độ với `SetWindowPos`.
+Log lúc hook in DPI của cửa sổ để kiểm tra.
