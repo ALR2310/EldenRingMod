@@ -5,6 +5,7 @@ mod band;
 mod chain;
 mod enemy_probe;
 mod ghost_color;
+mod multi_spirit;
 mod probe;
 mod regen;
 
@@ -56,6 +57,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(activate_limit::run);
         std::thread::spawn(ghost_color::run);
         std::thread::spawn(regen::run);
+        std::thread::spawn(multi_spirit::run);
 
         common::diag::log_environment_when_game_ready();
         chain::run();
