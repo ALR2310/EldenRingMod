@@ -63,6 +63,17 @@
 //!    so only the pressed Ash's spirits leave - Solid Uncapper's approach.
 //!    The active stone `+0x3C` is restored afterwards while others remain.
 //!
+//! 7. FP/HP cost: every extra Ash summoned while spirits were out was
+//!    free. `sub_1403C0930` builds an item's use cost; for Ashes (goods
+//!    type 7/8) it asks `GetBuddyState(mgr, -1)` and zeroes the FP cost
+//!    (`+0xB8`) and the HP cost (`+0xB4`) on state 2 - in vanilla, using an
+//!    Ash with a spirit out can only mean "send it back". Both calls
+//!    ([COST_CALL_SITES]) get a stub that asks [cost_state] instead: state
+//!    2 (free) only if the pressed Ash itself still has live spirits,
+//!    else 0 (normal cost). The goods row is the function's `[rbp-0x38]`;
+//!    for an Ash `refCategory` is 2 (SpEffect) and `refId_default` (+0)
+//!    is the trigger SpEffect `trigger_speffect_to_buddy_map` is keyed on.
+//!
 //! All stubs read one byte ([ENABLED]) that the tick below keeps in sync
 //! with the ini, so F5 switches the behavior live without re-patching.
 
@@ -111,6 +122,14 @@ const DOSUMMON_STONE_BYTES: [u8; 8] = [0x8B, 0x43, 0x38, 0x48, 0x8B, 0x74, 0x24,
 const CANUSE_AOB: &str = "48 8B C8 41 8B D5 E8 ?? ?? ?? ?? 83 F8 FF 41 0F 95 C5";
 const CANUSE_CALL_OFFSET: usize = 6;
 
+/// The 2 `call GetBuddyState(mgr, -1)` in the item-cost builder
+/// `sub_1403C0930` (FP at 0x1403C0B79, HP at 0x1403C0C2F in 2.7.1.0):
+/// (pattern, offset of the 5-byte `call`). Both unique in 2.7.1.0.
+const COST_CALL_SITES: [(&str, usize); 2] = [
+    ("48 8B C8 41 8B D5 E8 ?? ?? ?? ?? 48 8B 55 C8 83 F8 02 41 0F 44 FC", 6),
+    ("48 8B C8 41 8B D5 E8 ?? ?? ?? ?? 83 F8 02 41 0F 44 FC F7 DF 89 BB B4 00 00 00", 6),
+];
+
 /// Entry of `DisappearAll(mgr)` (`sub_1404B8160`, 2.7.1.0): `push rbp;
 /// push rsi; push rdi; sub rsp,0x30; mov qword [rsp+0x20],-2; ...`
 /// (Solid Uncapper's send-back signature). Detoured for patch 6.
@@ -150,20 +169,40 @@ fn buddy_ids(manager: &SummonBuddyManager, speffect: i32) -> Vec<i32> {
         .unwrap_or_default()
 }
 
+/// Whether the Ash with this trigger SpEffect has live spirits of the
+/// local player (`groups` entries not already leaving, not remote).
+fn ash_alive(manager: &SummonBuddyManager, speffect: i32) -> bool {
+    let ids = buddy_ids(manager, speffect);
+    !ids.is_empty()
+        && manager.groups.iter().any(|pair| {
+            pair.second
+                .iter()
+                .any(|g| !g.disappear_requested && !g.is_remote && ids.contains(&g.buddy_param_id))
+        })
+}
+
+/// Called from the item-cost stubs (patch 7) when `GetBuddyState` said 2
+/// (spirits out): 2 = the pressed Ash is out, so this use sends it back -
+/// free, like vanilla; 0 = a different Ash, charge its normal cost.
+/// `goods_row` = the item's EquipParamGoods row (`refId_default` at +0).
+unsafe extern "system" fn cost_state(manager: *mut SummonBuddyManager, goods_row: *const i32) -> u32 {
+    if goods_row.is_null() {
+        return 2;
+    }
+    let result = std::panic::catch_unwind(|| ash_alive(unsafe { &*manager }, unsafe { goods_row.read_unaligned() }));
+    match result {
+        Ok(true) | Err(_) => 2,
+        Ok(false) => 0,
+    }
+}
+
 /// Called from the DoSummon stub (patch 1) when a spirit is out: 1 = this
 /// Ash already has live spirits (dismiss it - [DISMISS_TARGET] remembers
 /// which one for patch 6), 0 = a different Ash (summon it too). Runs on
 /// the game thread, inside `SummonBuddyManager::Update`.
 unsafe extern "system" fn decide_dismiss(manager: *mut SummonBuddyManager, speffect: i32) -> u8 {
     let result = std::panic::catch_unwind(|| {
-        let manager = unsafe { &*manager };
-        let ids = buddy_ids(manager, speffect);
-        let alive = !ids.is_empty()
-            && manager.groups.iter().any(|pair| {
-                pair.second
-                    .iter()
-                    .any(|g| !g.disappear_requested && !g.is_remote && ids.contains(&g.buddy_param_id))
-            });
+        let alive = ash_alive(unsafe { &*manager }, speffect);
         if alive {
             DISMISS_TARGET.store(speffect, Ordering::Relaxed);
         }
@@ -311,6 +350,58 @@ fn build_canuse_stub(enabled: u64, get_buddy_state: u64) -> Vec<u8> {
     c[jne_neg + 1] = rel8(jne_neg + 2, neg);
     c[jmp_end + 1] = rel8(jmp_end + 2, end);
     c
+}
+
+/// Stub replacing one `call GetBuddyState(mgr, -1)` in `sub_1403C0930`
+/// (args already in rcx/edx). Reached by `jmp`, so rsp is 16-aligned as
+/// for the original call; 0x30 bytes = 0x20 shadow + a slot for rcx (the
+/// manager, needed again for [cost_state]). The goods row is
+/// `[rbp-0x38]` - `sub_1403C0930` is rbp-framed and reloads rdx from that
+/// slot itself right after the FP call. Only volatile registers change.
+fn build_cost_stub(enabled: u64, get_buddy_state: u64, cost: u64) -> Vec<u8> {
+    let mut c: Vec<u8> = Vec::with_capacity(96);
+    c.extend_from_slice(&[0x48, 0x83, 0xEC, 0x30]); // sub rsp, 0x30
+    c.extend_from_slice(&[0x48, 0x89, 0x4C, 0x24, 0x20]); // mov [rsp+0x20], rcx
+    c.extend_from_slice(&[0xFF, 0x15, 0x02, 0x00, 0x00, 0x00]); // call qword [rip+2]
+    c.extend_from_slice(&[0xEB, 0x08]); // jmp over the address
+    c.extend_from_slice(&get_buddy_state.to_le_bytes());
+    c.extend_from_slice(&[0x83, 0xF8, 0x02]); // cmp eax, 2
+    let jne_end = c.len();
+    c.extend_from_slice(&[0x75, 0]); // jne end (no spirit out: cost stays)
+    c.extend_from_slice(&[0x49, 0xBB]); // mov r11, &ENABLED
+    c.extend_from_slice(&enabled.to_le_bytes());
+    c.extend_from_slice(&[0x41, 0x80, 0x3B, 0x00]); // cmp byte [r11], 0
+    let je_end = c.len();
+    c.extend_from_slice(&[0x74, 0]); // je end (feature off: vanilla free)
+    c.extend_from_slice(&[0x48, 0x8B, 0x4C, 0x24, 0x20]); // mov rcx, [rsp+0x20]
+    c.extend_from_slice(&[0x48, 0x8B, 0x55, 0xC8]); // mov rdx, [rbp-0x38] (goods row)
+    c.extend_from_slice(&[0x48, 0xB8]); // mov rax, cost_state
+    c.extend_from_slice(&cost.to_le_bytes());
+    c.extend_from_slice(&[0xFF, 0xD0]); // call rax -> eax = 2 or 0
+    let end = c.len();
+    c.extend_from_slice(&[0x48, 0x83, 0xC4, 0x30]); // add rsp, 0x30 -> appended jump back
+    c[jne_end + 1] = rel8(jne_end + 2, end);
+    c[je_end + 1] = rel8(je_end + 2, end);
+    c
+}
+
+fn install_cost_calls() -> bool {
+    for (index, (pattern, call_offset)) in COST_CALL_SITES.iter().enumerate() {
+        let Some(anchor) = memscan::wait_for_pattern_in_module(pattern, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) else {
+            logger::error(&format!("MultiSpirit: item cost call site {index} not found. Game may have been updated."));
+            return false;
+        };
+        let site = unsafe { anchor.add(*call_offset) };
+        let rel = unsafe { (site.add(1) as *const i32).read_unaligned() };
+        let target = (site as u64 + 5).wrapping_add_signed(rel as i64);
+        let stub = build_cost_stub(ENABLED.as_ptr() as u64, target, cost_state as *const () as usize as u64);
+        let Some(at) = codepatch::install_jmp_hook(site, 5, &stub) else {
+            logger::error(&format!("MultiSpirit: item cost call site {index} hook install failed."));
+            return false;
+        };
+        logger::log(&format!("MultiSpirit: item cost call site {index} patched at {site:p}, stub at {at:p}."));
+    }
+    true
 }
 
 fn install_canuse() -> bool {
@@ -559,7 +650,8 @@ pub fn run() {
         && install_disappear_all()
         && install_dosummon()
         && install_ui_calls()
-        && install_canuse())
+        && install_canuse()
+        && install_cost_calls())
     {
         logger::error("MultiSpirit: not installed - summoning another Ash still sends the current spirits back.");
         return;
@@ -605,6 +697,7 @@ mod tests {
         println!("RECALL_STUB={}", hex(&build_recall_stub(0x1122334455667788, 0x1404BB9A0)));
         println!("UI_STUB={}", hex(&build_ui_call_stub(0x1122334455667788, 0x1404B72F0)));
         println!("CANUSE_STUB={}", hex(&build_canuse_stub(0x1122334455667788, 0x1404B72F0)));
+        println!("COST_STUB={}", hex(&build_cost_stub(0x1122334455667788, 0x1404B72F0, 0x99AABBCCDDEEFF00)));
         println!("STONE_STUB={}", hex(&build_stone_stub(0x1122334455667788)));
         let stolen = [0x40, 0x55, 0x56, 0x57, 0x48, 0x83, 0xEC, 0x30, 0x48, 0xC7, 0x44, 0x24, 0x20, 0xFE, 0xFF, 0xFF, 0xFF];
         let (stub, original) = build_disappear_all_stub(0x99AABBCCDDEEFF00, &stolen);
