@@ -487,3 +487,77 @@ Ghi chú: mặc định `GhostColor` trong ini mẫu người dùng đã tự đ
 
 Commit không chạy test riêng trong game: người dùng xác nhận logic đã test
 qua `Spirit.Regen` của SomeTweaks, bản này chỉ thêm bộ lọc an toàn.
+
+## Tra cứu: cờ hành vi spirit và vì sao GhostColor chỉ cần ô 26 (2026-09-29)
+
+Tra trong Smithbox cùng người dùng (không đổi code):
+
+- **Cờ hành vi (SpEffect trong NpcParam của spirit):** mọi spirit có
+  `297000` "Follow & Warp to Player" (ô 28). Kiểu đi theo nằm ở ô 29:
+  `297100` WALK_FOLLOW (chỉ Putrid Corpse - đi bộ), `297101` REAR_FOLLOW
+  (23 spirit đánh xa/phép/hỗ trợ - đứng sau người chơi), `297102`
+  FLY_FOLLOW (Winged Misbegotten, Spirit Jellyfish, Warhawk, Stormhawk),
+  `297103` NO_FOLLOW (Latenna - đứng yên); không có cờ = đi theo mặc định
+  (Lone Wolf, Mimic Tear...). `297200` INTERCEPT_LONGRANGE (ô 24, 8 spirit
+  đánh xa) là cờ cách đánh, không phải cách đi theo. Tên `PLAN_SP_EFFECT_*`
+  gợi ý đây là cờ cho AI; chưa đổi thử trong game.
+- **Puppet có thêm SpEffect 295201-295204 (ô 24)**, cũng trong dải 295xxx
+  nhưng GhostColor không đụng tới (chỉ đọc ô 26). Tra `SpEffectVfxParam`:
+  `295200` "Color (Puppet)" → VFX `57100` có `phantomParamOverwriteType=2,
+  Id=201` (đổi màu nhân vật - đây mới là màu ma); `295201`-`295204` → VFX
+  `57101`-`57104`/`57130`-`57133` **không** ghi đè phantom, chỉ gắn SFX
+  (`60104x`/`60105x` ở dummy poly 199/905) - trang trí của Puppet, không
+  phải màu ma. Nên GhostColor giữ nguyên chỉ ô 26 là đúng.
+
+## Tra cứu cơ chế dịch chuyển spirit, thêm WarpDistance/WarpBlockedTime để thử nghiệm (2026-09-29)
+
+Người dùng thấy spirit không dịch chuyển về khi cưỡi Torrent bỏ xa. Tra
+param (Smithbox export):
+
+- `GameSystemCommonParam`: `buddyWarp_TriggerDistToPlayer = 33`,
+  `buddyWarp_TriggerTimeRayBlocked = 5`,
+  `buddyWarp_ThresholdTimePathStacked = 3`,
+  `buddyWarp_ThresholdRangePathStacked = 1`. Engine giữ bản sao lúc chạy
+  ở `SummonBuddyManager.warp_manager` (`SummonBuddyWarpManager`, các giai
+  đoạn `RequestWarp → Warping → FadeIn`). Chỉ xa thôi không đủ (quan sát
+  của người dùng) - còn phải khuất tầm nhìn và/hoặc bị kẹt; cách kết hợp
+  AND/OR chưa đọc trong code.
+- `NpcThinkParam` Latenna và Lone Wolf giống nhau ở mọi field "quay về"
+  (`maxBackhomeDist 9999`, `backhomeDist 9979`, `isBuddyAI 1`,
+  `backToHomeStuckAct 0`) → đi theo/dịch chuyển không do các field này;
+  Latenna đứng yên do SpEffect `297103` NO_FOLLOW (script AI khác nhau:
+  `battleGoalID` 317000 vs 407000; Latenna không nhảy/rơi, có
+  `rangedAttackId`). Nhận định của GPT "warp nằm ở AI/NpcThinkParam" không
+  khớp dữ liệu này.
+
+**Đã làm** `src/warp.rs` (ini `WarpDistance=33`, `WarpBlockedTime=5`, hot
+reload): mỗi giây, sau khi vào game, ghi 2 giá trị vào
+`warp_manager.trigger_dist_to_player` / `trigger_time_ray_block` nếu khác
+(log mỗi lần đổi). Mục đích: người dùng tăng/giảm trong game để tìm cách
+các điều kiện kết hợp.
+
+**Kết quả test (người dùng):** log xác nhận giá trị được ghi (tới `0 m`/`0 s`;
+game tự đặt lại 33/5 khi load khu vực - manager nạp lại từ
+`GameSystemCommonParam` - và mod ghi đè lại), nhưng **không có tác dụng**:
+spirit vẫn không dịch chuyển. Chỉ sửa ngưỡng là chưa đủ - nghi dịch chuyển
+chỉ xét spirit đã có trong `SummonBuddyWarpManager::entries` (cần 1 cơ chế
+khác yêu cầu trước), hoặc engine đọc thẳng param ở chỗ khác. **Đã gỡ
+`src/warp.rs` và 2 key `WarpDistance`/`WarpBlockedTime`** khỏi bản sắp phát
+hành; người dùng tạm dừng hướng này, làm lại sau khi đăng 1.0.0 (bước tiếp:
+đọc hàm update của `SummonBuddyWarpManager` trong IDA).
+
+## Chuẩn bị phát hành 1.0.0 (2026-09-29)
+
+- `Cargo.toml`: version `0.2.0` → `1.0.0`.
+- `DESCRIPTION.bbcode` mới (theo `template/DESCRIPTION.bbcode`): intro 1
+  câu, Features (nhân spirit theo hệ số/số cố định, mọi Ash kể cả Ash của
+  mod khác, hồi máu, bỏ màu ma, Seamless Co-op, phím reload), Notes (60 là
+  ngưỡng an toàn, có thể tăng nếu máy đủ khoẻ), EAC disclaimer, Credits
+  (10x Spirit Summons, fromsoftware-rs), changelog `1.0.0: Initial
+  release`. Người dùng bỏ phần "Why this mod?"; việc kẻ địch không biến
+  mất không ghi là tính năng (đó là lỗi do chính mod gây ra, đã sửa).
+- Ini mặc định chốt: `Multiplier=2`, `Amount=0`, `MaxSpirits=60`,
+  `GhostColor=false`, `Regen=0.75`, `LogFile=true`; các key debug
+  (`SlotProbe`, `EnemyProbe`, `ActiveCharacterLimit`) giữ, mặc định tắt.
+- Tính năng dịch chuyển spirit để sau 1.0.0 (xem mục trước).
+- Chưa có mod ID trên Nexus - người dùng tạo trang mod rồi mới deploy.
