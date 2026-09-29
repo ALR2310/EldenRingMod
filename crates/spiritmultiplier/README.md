@@ -732,3 +732,46 @@ Stub disassemble lại bằng capstone (test `dump_stubs`). **Test lần 6: đú
 - 4 Ash (SpEffect 213000/229000/236000/241000) cùng ra, bấm lại từng cái
 chỉ cho về đúng Ash đó (log `1 spirit(s), 3 → 2 → 1 → 0 other(s) kept`),
 bấm lại Ash gọi trước đó cũng được, các nhóm còn lại không tự biến mất.
+
+## NoRestResummon + SummonAnywhere: sửa BuddyStoneParam (2026-09-29)
+
+Người dùng muốn thêm 2 tính năng mà Solid Uncapper 2.3.3 có: triệu hồi
+lại sau khi spirit chết mà không cần nghỉ ở Site of Grace, và triệu hồi ở
+bất cứ đâu. Quét chuỗi trong `SolidUncapper.dll` (IDA): ini của họ ghi
+thẳng "Spirit summoning pools (BuddyStoneParam). No-Rest lifts the
+once-per-rest lock ... Anywhere opens summoning outside the vanilla
+monument/pool areas" - cả 2 **chỉ sửa param**, không patch code:
+
+- `sub_180031D30`: chụp mỗi dòng `BuddyStoneParam` (id, +0xC, +0x8,
+  +0x1C, +0x1E, +0x20) để khôi phục khi tắt.
+- `sub_180031EC0` (No-Rest): `summonedEventFlagId` (+0xC) = 0. Event flag
+  này được bật khi triệu hồi ở bia đá đó và chỉ tắt khi nghỉ - chính là
+  khoá "mỗi lần nghỉ 1 lần". Nếu mọi dòng đã là 0 sẵn, họ log "another mod
+  already removed the rest requirement".
+- `sub_1800321B0` (Anywhere): `activateRange` (+0x1C) = 65535,
+  `overwriteReturnRange` (+0x1E) = -1, `overwriteActivateRegionEntityId`
+  (+0x20) = 0 (dùng bán kính thay cho vùng trên map),
+  `eliminateTargetEntityId` (+0x8) = 0 (bia đá không đóng lại sau khi boss
+  của nó chết).
+
+Viết lại trong `src/buddy_stone.rs`, cùng kiểu `ghost_color.rs`: gate
+`main_player_chr_ins_ptr()`, `common::params::check` + duyệt dòng theo
+index, chụp giá trị gốc 1 lần rồi mọi lần áp dụng đều tính từ bản chụp
+(F5 bật/tắt được cả 2 chiều). 2 key mới, hot reload:
+
+- `NoRestResummon` (mặc định `true`).
+- `SummonAnywhere` (mặc định `false` - đổi luật chơi nhiều hơn: gọi được
+  cả ở boss không có bia đá).
+
+Giới hạn dự kiến (chưa kiểm chứng): Anywhere chỉ nới bán kính các bia đá
+có sẵn, nên vẫn cần ít nhất 1 bia đá thuộc vùng map đang nạp. Vùng không
+có bia đá nào gần đó có thể vẫn không gọi được.
+
+**Test lần 1: cả 2 hoạt động** (người dùng xác nhận). Log: `304 summoning
+pool row(s), 302 with a once-per-rest flag`. Với Anywhere, `stones:
+current=` (`+0x38`, bia đá game chọn) đổi theo chỗ đứng - `1045380100`,
+`1045390100`, `1046380100`, `1047400102`... (2 cặp số giữa = ô map
+`m60_XX_YY`), tức game chọn 1 bia đá thuộc các ô map đang nạp gần đó; đôi
+lúc về `0` (không có bia nào) - nếu có chỗ không gọi được thì nhiều khả
+năng là lúc đó. Mỗi bia có `dopingSpEffectId` riêng nên buff của spirit
+có thể khác nhau tuỳ bia được chọn.
