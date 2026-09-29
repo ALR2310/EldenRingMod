@@ -406,3 +406,66 @@ bật/tắt - xoá key `KeepEnemySlots` khỏi ini và code; `activate_limit.rs`
 luôn đặt giới hạn = giá trị gốc + số spirit đang có. `ActiveCharacterLimit`
 giữ lại chỉ để debug (comment ini: "DO NOT CHANGE THIS VALUE"). Các mục
 phía trên nhắc `KeepEnemySlots` đã lỗi thời.
+
+## Log in phiên bản game + danh sách DLL đã nạp (2026-09-27)
+
+Đồng bộ với các mod khác sau khi merge `main` (commit `7bf7300`, module
+`common::diag`, chi tiết trong `crates/weightmultiplier/README.md` mục
+2026-09-26): `lib.rs` gọi `common::diag::log_environment_when_game_ready()`
+ngay trước `chain::run()` (tính năng chính, không bao giờ trả về) - chờ
+`CSTaskImp` rồi ghi 1 dòng `Game: eldenring.exe v<version> ...` và danh
+sách DLL đã nạp (ẩn DLL của Windows/Steam/game kèm theo, `steam_api64`,
+`OnlineFix64`; không in đường dẫn đầy đủ), để log gửi kèm báo lỗi tự trả
+lời "khác phiên bản game?" và "có mod summon nào khác chạy cùng?". Không
+đổi hành vi. Chưa có phần "phát hiện mod khác đã patch AOB" như
+`weightmultiplier` - để sau.
+
+## GhostColor: bật/tắt màu ma của spirit (2026-09-27)
+
+Người dùng muốn bật/tắt lớp màu ma (tint xanh/bạc) game gốc áp lên mọi
+spirit ash - không phải màu kim loại lạ thấy trước đó (cái đó do Seamless
+Co-op, đã xác nhận, không liên quan mod).
+
+- `src/ghost_color.rs` (ini `GhostColor`, `[Settings]`, mặc định `true` =
+  vanilla, hot reload 1 chiều): khi `false`, mỗi frame gỡ SpEffect
+  295000-295999 (dải tint theo `er10x.ini`) khỏi spirit trong
+  `summon_buddy_chr_set`. **Copy** từ `sometweaks/src/spirit/color.rs`,
+  không đưa lên `common` (người dùng chọn 2026-09-27).
+- Khác bản SomeTweaks: chỉ đọc `ChrIns` của entry `Active`/
+  `ReadyForActivation` (tránh con trỏ cũ - bài học từ `enemy_probe.rs`),
+  bỏ qua slot < `BAND_START` (Torrent).
+- Đổi `false` → `true` bằng F5: spirit mới gọi có lại màu ma, spirit đang
+  có mặt giữ nguyên không màu tới khi gọi lại (không áp lại SpEffect).
+
+**Chưa test trong game.**
+
+## GhostColor: chuyển sang sửa NpcParam thay vì gỡ SpEffect mỗi frame (2026-09-27)
+
+Người dùng hỏi sao phải gỡ màu mỗi frame khi màu vốn là 1 tham số
+regulation - đúng. Xác định chuỗi tham số (Paramdex + fromsoftware-rs):
+`BuddyParam.npcParamId` → `NpcParam.spEffectID26` (offset `0x210`, khớp
+`ghost_slot = 528` của er10x) = 295000/295200 → `SpEffectParam.vfxId*` →
+`SpEffectVfxParam.phantomParamOverwriteId` → `PhantomParam` (màu RGBA thật).
+**Người dùng xác nhận trong Smithbox:** NpcParam `140700000` (Lone Wolf)
+có `spEffectID26 = 295000` "[Spirit Summon] Color". (Tính offset bằng
+Paramdex ban đầu lệch 1 byte - `u8 disableParam_NT:1` +
+`dummy8 disableParamReserve1:7` là cùng 1 byte.)
+
+`src/ghost_color.rs` viết lại (bỏ bản gỡ SpEffect mỗi frame):
+
+- Lần đầu vào game (gate `main_player`): `common::params::check` cho
+  `BuddyParam`/`NpcParam`; gom `npcParamId`/`npcParamId_ridden` của mọi
+  hàng BuddyParam; lưu `(row index, giá trị gốc)` của các hàng NpcParam
+  thuộc tập đó có `spEffectID26` trong 295000-295999.
+- Mỗi giây đọc `GhostColor`, chỉ khi đổi mới ghi `-1` (tắt) hoặc giá trị
+  gốc (bật) - hot reload 2 chiều, áp cho spirit gọi sau khi đổi.
+- ID hàng NpcParam đọc qua **`common::params::row_ids`**
+  (`shared/src/params.rs`): đọc row descriptor của file param (không qua
+  bảng lookup), kiểm tra `data_offset` khớp địa chỉ hàng thật, không khớp
+  thì trả `None`. (Lúc đầu tự viết 1 bản chỉ cho descriptor 64-bit; khi
+  merge `main` 2026-09-29 thì `main` đã có sẵn `row_ids` cùng chữ ký, xử lý
+  cả descriptor 32/64-bit theo `format_2d` - giữ bản của `main`, bỏ bản
+  riêng.) Không dùng `get_mut`/bảng lookup - trên regulation mod (vd.
+  Convergence) bảng đó có thể có entry rác, tra ID có thể ra nhầm hàng.
+
+**Đã test trong game, hoạt động đúng** (người dùng xác nhận).
