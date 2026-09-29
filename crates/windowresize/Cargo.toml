@@ -1,0 +1,12 @@
+[package]
+name = "windowresize"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "WindowResize"
+crate-type = ["cdylib"]
+
+[dependencies]
+common = { path = "../../shared" }
