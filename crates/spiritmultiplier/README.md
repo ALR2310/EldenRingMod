@@ -469,3 +469,21 @@ Paramdex ban đầu lệch 1 byte - `u8 disableParam_NT:1` +
   Convergence) bảng đó có thể có entry rác, tra ID có thể ra nhầm hàng.
 
 **Đã test trong game, hoạt động đúng** (người dùng xác nhận).
+
+## Regen: spirit tự hồi máu (2026-09-29)
+
+Key mới `Regen` (`[Settings]`, mặc định `0.5`, `0` = tắt, hot reload):
+`src/regen.rs` mỗi giây hồi `Regen`% HP tối đa (ít nhất 1 điểm, không vượt
+max, bỏ qua con đã chết) cho mọi nhân vật trong `summon_buddy_chr_set` -
+**cả spirit lẫn Torrent** (người dùng chọn).
+
+**Copy** từ `sometweaks/src/spirit/regen.rs` (`Spirit.Regen`), không đưa
+lên `common` (người dùng chọn 2026-09-29). Khác bản SomeTweaks: chỉ đọc
+`ChrIns` của entry `Active`/`ReadyForActivation` thay vì `characters()`
+(mọi entry có con trỏ) - cùng bài học con trỏ cũ từ `enemy_probe.rs`.
+
+Ghi chú: mặc định `GhostColor` trong ini mẫu người dùng đã tự đổi thành
+`false`.
+
+Commit không chạy test riêng trong game: người dùng xác nhận logic đã test
+qua `Spirit.Regen` của SomeTweaks, bản này chỉ thêm bộ lọc an toàn.
