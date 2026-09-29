@@ -319,9 +319,12 @@ sửa code để "cho qua".
   nhận tường minh trong lượt chạy hiện tại).
 - Không tự bịa version hay nội dung changelog - luôn lấy nguyên văn từ
   `DESCRIPTION.bbcode`, không suy đoán. **Không** lấy version từ
-  `Cargo.toml` của crate - version đó không đồng bộ với version publish
-  trên Nexus trong workspace này (VD `autoregen` Cargo.toml đang `2.0.0`
-  trong khi Nexus đã publish tới `2.4.0`).
+  `Cargo.toml` của crate làm nguồn - nhiều crate cũ chưa đồng bộ (VD
+  `autoregen` Cargo.toml đang `2.0.0` trong khi Nexus đã lên 2.6.x). Từ
+  2026-09-29, rule trong `CLAUDE.md` yêu cầu bump `Cargo.toml` cùng lúc với
+  mục changelog mới - nên ở Bước 3, nếu `version` trong `Cargo.toml` khác
+  version đã chốt, báo cho người dùng (có thể quên bump) thay vì build
+  luôn.
 - Nếu bất kỳ bước nào trả lỗi (401/403/422...) - dừng lại, đọc
   `ProblemDetails.detail` trong response, báo người dùng nguyên văn lỗi
   thay vì tự thử lại nhiều lần.
