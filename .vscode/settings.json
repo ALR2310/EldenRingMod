@@ -1,14 +1,32 @@
 {
     "cSpell.words": [
+        "autoregen",
+        "backstepping",
+        "chrono",
+        "dropmultiplier",
+        "eldenring",
+        "fasterrevival",
+        "fromsoftware",
         "Gloveworts",
         "Greatbow",
         "Herba",
+        "infiniteailment",
         "lifesteal",
         "mili",
+        "passiverunes",
         "Regen",
+        "risearcher",
         "Rowa",
+        "runemultiplier",
         "Scadutree",
-        "Smithing"
+        "Smithing",
+        "sometweaks",
+        "soulsteleport",
+        "speedmultiplier",
+        "spiritmultiplier",
+        "vtable",
+        "weightmultiplier",
+        "windowresize"
     ],
     "[toml]": {
         "editor.formatOnSave": false
