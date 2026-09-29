@@ -246,5 +246,18 @@
         "commit": "3e9b5d69fe178fb6dec40554d990a7163ba80db0"
       }
     ]
+  },
+  {
+    "id": "11173",
+    "internalId": "18610093304741",
+    "name": "Speed Multiplier",
+    "crate": "speedmultiplier",
+    "modFileId": "8049852",
+    "deploys": [
+      {
+        "version": "1.0.0",
+        "commit": "e51b1a0683a0d225a1a9c27ff9257631c71a4755"
+      }
+    ]
   }
 ]
