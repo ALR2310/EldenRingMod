@@ -732,3 +732,87 @@ Stub disassemble lại bằng capstone (test `dump_stubs`). **Test lần 6: đú
 - 4 Ash (SpEffect 213000/229000/236000/241000) cùng ra, bấm lại từng cái
 chỉ cho về đúng Ash đó (log `1 spirit(s), 3 → 2 → 1 → 0 other(s) kept`),
 bấm lại Ash gọi trước đó cũng được, các nhóm còn lại không tự biến mất.
+
+## NoRestResummon + SummonAnywhere: sửa BuddyStoneParam (2026-09-29)
+
+Người dùng muốn thêm 2 tính năng mà Solid Uncapper 2.3.3 có: triệu hồi
+lại sau khi spirit chết mà không cần nghỉ ở Site of Grace, và triệu hồi ở
+bất cứ đâu. Quét chuỗi trong `SolidUncapper.dll` (IDA): ini của họ ghi
+thẳng "Spirit summoning pools (BuddyStoneParam). No-Rest lifts the
+once-per-rest lock ... Anywhere opens summoning outside the vanilla
+monument/pool areas" - cả 2 **chỉ sửa param**, không patch code:
+
+- `sub_180031D30`: chụp mỗi dòng `BuddyStoneParam` (id, +0xC, +0x8,
+  +0x1C, +0x1E, +0x20) để khôi phục khi tắt.
+- `sub_180031EC0` (No-Rest): `summonedEventFlagId` (+0xC) = 0. Event flag
+  này được bật khi triệu hồi ở bia đá đó và chỉ tắt khi nghỉ - chính là
+  khoá "mỗi lần nghỉ 1 lần". Nếu mọi dòng đã là 0 sẵn, họ log "another mod
+  already removed the rest requirement".
+- `sub_1800321B0` (Anywhere): `activateRange` (+0x1C) = 65535,
+  `overwriteReturnRange` (+0x1E) = -1, `overwriteActivateRegionEntityId`
+  (+0x20) = 0 (dùng bán kính thay cho vùng trên map),
+  `eliminateTargetEntityId` (+0x8) = 0 (bia đá không đóng lại sau khi boss
+  của nó chết).
+
+Viết lại trong `src/buddy_stone.rs`, cùng kiểu `ghost_color.rs`: gate
+`main_player_chr_ins_ptr()`, `common::params::check` + duyệt dòng theo
+index, chụp giá trị gốc 1 lần rồi mọi lần áp dụng đều tính từ bản chụp
+(F5 bật/tắt được cả 2 chiều). 2 key mới, hot reload:
+
+- `NoRestResummon` (mặc định `true`).
+- `SummonAnywhere` (mặc định `false` - đổi luật chơi nhiều hơn: gọi được
+  cả ở boss không có bia đá).
+
+Giới hạn dự kiến (chưa kiểm chứng): Anywhere chỉ nới bán kính các bia đá
+có sẵn, nên vẫn cần ít nhất 1 bia đá thuộc vùng map đang nạp. Vùng không
+có bia đá nào gần đó có thể vẫn không gọi được.
+
+**Test lần 1: cả 2 hoạt động** (người dùng xác nhận). Log: `304 summoning
+pool row(s), 302 with a once-per-rest flag`. Với Anywhere, `stones:
+current=` (`+0x38`, bia đá game chọn) đổi theo chỗ đứng - `1045380100`,
+`1045390100`, `1046380100`, `1047400102`... (2 cặp số giữa = ô map
+`m60_XX_YY`), tức game chọn 1 bia đá thuộc các ô map đang nạp gần đó; đôi
+lúc về `0` (không có bia nào) - nếu có chỗ không gọi được thì nhiều khả
+năng là lúc đó. Mỗi bia có `dopingSpEffectId` riêng nên buff của spirit
+có thể khác nhau tuỳ bia được chọn.
+
+## MultiSpirit: Ash gọi thêm cũng tốn FP/HP (2026-09-29)
+
+Người dùng báo: gọi A (11 FP) rồi B (40 FP), C (25 FP) - chỉ lần đầu bị
+trừ FP, các Ash gọi thêm đều miễn phí. Tra IDA: `GetBuddyState` còn 2
+chỗ gọi chưa patch, cả 2 trong `sub_1403C0930` - hàm dựng chi phí dùng
+item (gọi `sub_140689F60` = FP `goods+0x80` × hệ số). Với Ash (goodsType
+7/8, `goods+0x3E`), nếu `GetBuddyState(mgr, -1) == 2` thì FP cost
+(`+0xB8`) và HP cost (`+0xB4`, từ `consumeHP` `goods+0x82`) = 0 - vanilla
+coi dùng Ash khi đang có spirit là "cho về", nên miễn phí.
+
+**Patch 7:** thay 2 `call` đó (AOB duy nhất, `0x1403C0B79` FP /
+`0x1403C0C2F` HP, cùng dạng `48 8B C8 41 8B D5 E8 ...`) bằng stub: gọi
+`GetBuddyState` thật; nếu ra 2 và bật thì hỏi `cost_state(mgr,
+goods_row)` (Rust): trả 2 (miễn phí) chỉ khi chính Ash được bấm còn spirit
+sống (= cho về), ngược lại 0 (tính giá bình thường). Dòng goods lấy từ
+`[rbp-0x38]` của hàm (rbp-frame; chính hàm cũng reload rdx từ đó ngay sau
+lần gọi FP). Nối goods → SpEffect: `.docs/EquipParamGoods.csv` cho thấy
+mọi Ash có `refCategory = 2` (SpEffect) và `refId_default` (+0) = SpEffect
+kích hoạt (vd. Black Knife Tiche 200000 → 200000), đúng khoá của
+`trigger_speffect_to_buddy_map`. Logic "Ash còn spirit sống" tách thành
+`ash_alive`, dùng chung với `decide_dismiss`.
+
+Stub disassemble lại bằng capstone. **Test lần 1: đúng** (người dùng xác
+nhận) - mỗi Ash gọi thêm bị trừ đúng FP của nó, bấm lại để cho về vẫn
+miễn phí. Theo người dùng, Solid Uncapper 2.3.3 không có phần này.
+
+## Chuẩn bị phát hành 1.1.0 (2026-09-29)
+
+Changelog thật trên Nexus (API `changelogs.json`, mod 11168) mới có
+`1.0.0` → bản này là `1.1.0` (toàn tính năng mới). `DESCRIPTION.bbcode`:
+thêm 3 dòng Features (MultiSpirit kèm "mỗi Ash tốn FP riêng, dùng lại chỉ
+cho về Ash đó"; NoRestResummon; SummonAnywhere), 1 dòng
+Notes (không dùng chung với mod khác sửa việc triệu hồi spirit, vd. phần
+spirit của Solid Uncapper - cả 2 patch cùng các hàm `SummonBuddyManager`),
+và mục changelog 1.1.0 (3 dòng, 1 dòng/tính năng). `Cargo.toml` bump
+lên `1.1.0` - rule mới trong `CLAUDE.md`: version crate luôn khớp với
+version mới nhất trên Nexus.
+
+Đổi mặc định `SummonAnywhere` thành `true` (người dùng chọn khi phát hành;
+code, ini và description đồng bộ theo).
