@@ -93,7 +93,7 @@ pub fn run() {
             };
 
             let no_rest = config::get_bool("NoRestResummon", true);
-            let anywhere = config::get_bool("SummonAnywhere", false);
+            let anywhere = config::get_bool("SummonAnywhere", true);
             let Some(rows) = originals.get_or_insert_with(|| capture(repo)) else {
                 return;
             };
