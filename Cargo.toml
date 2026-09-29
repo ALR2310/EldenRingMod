@@ -1,21 +1,29 @@
 [workspace]
 resolver = "2"
-members = ["shared", "crates/autoregen", "crates/sometweaks", "crates/passiverunes", "crates/runemultiplier", "crates/weightmultiplier", "crates/risearcher", "crates/dropmultiplier", "crates/infiniteailment", "crates/soulsteleport", "crates/spiritmultiplier", "crates/fasterrevival", "crates/windowresize"]
+members = [
+    "shared",
+    "crates/autoregen",
+    "crates/sometweaks",
+    "crates/passiverunes",
+    "crates/runemultiplier",
+    "crates/weightmultiplier",
+    "crates/risearcher",
+    "crates/dropmultiplier",
+    "crates/infiniteailment",
+    "crates/soulsteleport",
+    "crates/spiritmultiplier",
+    "crates/fasterrevival",
+    "crates/windowresize",
+    "crates/speedmultiplier",
+]
 
 [workspace.dependencies]
-# https://github.com/vswarte/fromsoftware-rs - safe Rust bindings to Elden Ring's
-# own engine structures (WorldChrMan/ChrIns/CSTaskImp/...), used instead of hand
-# rolled AOB scanning + manual offsets. Declared once here so every mod crate
-# builds against the exact same version.
+# https://github.com/vswarte/fromsoftware-rs - Rust bindings to the game's engine
+# structs. Same rev for both crates so every mod builds against one version.
 eldenring = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
 fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev = "59fbd3b3b7daaf14aca47c9f73530493dba6bc79" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
-# Builds the fake C++ vtable `fromsoftware-shared`'s own
-# `SharedTaskImpExt::run_recurring` uses to masquerade a Rust closure as a
-# native engine task - needed directly by `autoregen::task_hook` since that
-# module reimplements task registration itself (AOB instead of
-# `eldenring::rva::get()`, see its doc comment) and can't reach
-# `fromsoftware-shared`'s own private copy of this mechanism.
+# Fake C++ vtable for registering a Rust closure as a game task
 vtable-rs = "0.1.5"
 
 [profile.release]

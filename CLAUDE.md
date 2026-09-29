@@ -45,6 +45,7 @@ Mod ID theo từng mod trong workspace này (game domain luôn là `eldenring`):
 - `soulsteleport` → 11119 (Souls Teleport)
 - `fasterrevival` → 11160 (Faster Revival)
 - `spiritmultiplier` → 11168 (Spirit Multiplier)
+- `speedmultiplier` → 11173 (Speed Multiplier)
 - `windowresize` → **chưa có, chưa đăng lên Nexus**
 
 Key API cá nhân của người dùng lưu ở `.secrets/nexus_api_key.txt` (đã

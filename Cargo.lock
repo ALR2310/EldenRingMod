@@ -692,6 +692,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "speedmultiplier"
+version = "1.0.0"
+dependencies = [
+ "common",
+ "eldenring",
+ "fromsoftware-shared",
+]
+
+[[package]]
 name = "spiritmultiplier"
 version = "1.0.0"
 dependencies = [
