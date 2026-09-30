@@ -5,9 +5,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 ## SpiritMultiplier
 
-- [ ] GhostColor=false không có tác dụng với ELDEN RING Reforged (Nexus, Quantum240, 2026-09-30)
-  - Test bằng launcher Offline của Reforged (`E:\ERRv2.3.5.3`), gửi log `dll\offline\SpiritMultiplier.log`
-  - Đối chiếu `E:\ERRv2.3.5.3\mod\regulation.bin` (NpcParam `spEffectID0..31`, SpEffect màu ma)
+- [x] GhostColor=false không có tác dụng với ELDEN RING Reforged (Nexus, Quantum240, 2026-09-30) - sửa ở 1.1.2 (tắt vfx màu, không gỡ SpEffect)
 - [ ] Spirit dịch chuyển tới người chơi khi bị bỏ lại (hoãn từ trước 1.0.0; chỉ chỉnh `buddyWarp_*` không có tác dụng)
 - [ ] Quyết định giữ hay bỏ log `stones:` trong SlotProbe (thêm để dò lỗi MultiSpirit/SummonAnywhere)
 - [ ] `EnemyProbe` dễ crash - sửa hoặc bỏ hẳn
