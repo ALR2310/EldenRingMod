@@ -816,3 +816,72 @@ version mới nhất trên Nexus.
 
 Đổi mặc định `SummonAnywhere` thành `true` (người dùng chọn khi phát hành;
 code, ini và description đồng bộ theo).
+
+## SummonAnywhere: không còn phụ thuộc bia đá được nạp (2026-09-30)
+
+Bản 1.1.0 lên Nexus hôm qua, có 2 bình luận: gọi ngoài pool không được ở
+Shadowlands (JASONL4D41148), và "không gọi được ở đâu ngoài pool"
+(HDLegion, config đúng). Hôm qua test ở Limgrave thì chạy - log khi đó
+đã có dấu hiệu: `stones: current=` đôi lúc về `0`.
+
+Tra IDA - sửa param (cách của Solid Uncapper) không đủ vì còn 3 chỗ cần
+**đối tượng bia đá đang được nạp** gần người chơi:
+
+1. `GetBuddyState` (`sub_1404B72F0`) chỉ cho dùng Ash khi người chơi mang
+   SpEffect có **stateInfo 373** (`sub_1404FA370(player+0x178, 0x175)` tại
+   `0x1404B7368`); `sub_1404B7610` (tail-call cùng check, gọi từ
+   `sub_140771A20` - có vẻ là HUD) cũng vậy. Hiệu ứng này do vùng pool
+   gắn lên người chơi.
+2. Bia hiện tại `+0x38` chỉ được đặt bởi **script ESD của chính bia đá**:
+   lệnh ESD 122 trong bộ xử lý lệnh `sub_140EA7100` → `sub_1404B8050(mgr,
+   entityId)` (xoá list `+0x40`, `+0x38 = id`, tìm vị trí bia qua
+   `sub_1404BCBA0`). Không bia nào được nạp → `+0x38 = 0` → `GetBuddyState`
+   = -1 (xám). `activateRange` = 65535 chỉ giúp khi đối tượng bia còn được
+   nạp (chạy script).
+3. `sub_1404BD870` (gọi trong `Update` tại `0x1404B8B2E`) tính lại
+   `+0xB5`/`+0xB7` mỗi frame bằng cách **tìm đối tượng bia `+0x3C`**
+   (`sub_1405EEFD0`) rồi đo khoảng cách với `activateRange` (hoặc region
+   nếu `overwriteActivateRegionEntityId` ≠ 0). Bia bị gỡ khỏi bộ nhớ →
+   cờ false → nhánh "rời khu" của `sub_1404B92B0` cho về hết.
+
+Xác nhận thêm: `+0x3C` được đưa về 0 trong `sub_1404B8EB0` khi hết spirit
+(nên bia dự phòng không vướng điều kiện `+0x38 != +0x3C`); param 134
+(BuddyStoneParam) được tra thẳng bằng entity id (`sub_140D28320`) → row
+id = entity id của bia.
+
+Sửa trong `src/buddy_stone.rs` (chỉ khi `SummonAnywhere` bật, cờ
+`ANYWHERE` mà stub đọc):
+
+- 2 stub cho check stateInfo 373: bản `call` (AOB `BA 75 01 00 00 48 8B
+  88 78 01 00 00 E8 ...`, `0x1404B735C`) gọi hàm thật rồi `al = 1`; bản
+  tail (`... 48 83 C4 28 E9`, `0x1404B7655`) tự căn stack (`sub rsp,28h`),
+  gọi, `al = 1`, `ret`.
+- Stub cho `call sub_1404BD870` (AOB `41 0F 28 CA 49 8B CF E8 ...`,
+  `0x1404B8B1B`, r15 = manager): sau khi gọi, `+0xB5 = 1`, `+0xB7 = 0`.
+- Mỗi frame: nếu `+0x38 == 0` → ghi bia thật gần nhất vừa thấy; chưa thấy
+  bia nào trong phiên thì lấy dòng BuddyStoneParam đầu tiên không có
+  `dopingSpEffectId`. Không gọi `sub_1404B8050` (list vị trí `+0x40` để
+  trống, giống trường hợp script không tìm được vị trí bia). Log 1 dòng
+  mỗi khi bắt đầu dùng bia dự phòng.
+
+Nếu 3 patch không cài được, Anywhere lùi về chỉ sửa param (log lỗi).
+Stub disassemble lại bằng capstone.
+
+**Test lần 1: vẫn xám** (biểu tượng triệu hồi trên HUD đã hiện - patch
+stateInfo của `sub_1404B7610` có tác dụng). Log: tick có ghi bia dự
+phòng (`using stone 10000100`, rồi `1047390100`) nhưng SlotProbe vẫn đọc
+`current=0` suốt 10 s sau. Tra tiếp: `+0x38` bị **xoá mỗi frame** bởi
+`sub_1404B6E80` (gọi từ `sub_140EAFDE0` - bộ cập nhật script hội thoại),
+sau đó script của bia đá nào đang chạy mới đặt lại (lệnh 122) - tick
+FrameBegin ghi trước lúc xoá nên vô ích.
+
+**Sửa:** bỏ việc ghi từ tick; patch chính lệnh xoá `mov dword
+[rsi+38h],0` (AOB `48 8D 4E 40 E8 ?? ?? ?? ?? 48 8B 5C 24 30 C7 46 38 00
+00 00 00 ...`, `0x1404B6EB1` + 14, 7 byte) thành `+0x38 =
+FALLBACK_STONE` (bia thật gần nhất tick thấy, hoặc dòng mặc định; 0 khi
+Anywhere tắt = vanilla). Bia thật gần đó vẫn ghi đè sau như cũ.
+
+**Test lần 2: đúng** (người dùng xác nhận) - gọi được ở chỗ không có
+summoning pool cả ở Lands Between lẫn Shadowlands; gọi ở pool thật rồi
+cưỡi Torrent ra xa, spirit vẫn ở lại (patch in-range); bấm lại để cho
+về rồi gọi lại vẫn được.
