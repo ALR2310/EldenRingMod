@@ -2,50 +2,117 @@
 //! tint every summoned spirit ash carries, so spirits look like ordinary
 //! characters.
 //!
-//! The tint is a resident SpEffect listed in the spirit's own NpcParam row:
-//! `NpcParam.spEffectID26` (offset 0x210, same slot `er10x.dll` clears via
-//! its `ghost_slot = 528`) holds 295000 or 295200 ("[Spirit Summon] Color"
-//! in Smithbox - verified by the user on NpcParam 140700000, Lone Wolf,
-//! 2026-09-27). The game applies it when the spirit spawns, so editing the
-//! param in memory is enough - no per-frame work, and spirits spawn
-//! untinted instead of losing the tint a frame late.
+//! What the tint is: a SpEffect on the spirit whose visual (`vfxId` ..
+//! `vfxId7` -> SpEffectVfxParam) forces a PhantomParam onto the model
+//! (`phantomParamOverwriteType` != 0, `phantomParamOverwriteId` = the
+//! colour). Vanilla: NpcParam `spEffectID26` = 295000 "[Spirit Summon]
+//! Color" -> vfx 57000 -> PhantomParam 200 (Puppet: 295200 -> 57100 ->
+//! 201). ELDEN RING Reforged 2.3.5.3 (checked on its param exports,
+//! 2026-09-30): no 295000; each Ash's own balance SpEffect in
+//! `spEffectID4` (200100, 201100, ... 292100) carries vfx 70000 / 70010 /
+//! 70020 -> PhantomParam 2000 / 2010 / 420 - 121 of its 125 spirits, and
+//! those vfx rows are used by no other NpcParam row.
 //!
-//! First version (same day) copied `sometweaks`'s `spirit/color.rs`
-//! instead: strip the SpEffect from live spirits every frame. Replaced at
-//! the user's suggestion (the tint is just a param).
+//! So this edits the vfx, not the SpEffect: `phantomParamOverwriteType`
+//! is set to 0 (no overwrite) on every SpEffectVfx row reached from a
+//! spirit, keeping the SpEffect itself - in Reforged it also carries the
+//! Ash's stat adjustments and effect chains, which removing it would lose.
 //!
-//! Which rows: only NpcParam rows some `BuddyParam` row spawns
-//! (`npcParamId` / `npcParamId_ridden`) - `er10x.ini` counts 129 NpcParam
-//! rows carrying a 295xxx effect but only 106 are spirit ashes - and only
-//! when slot 26 holds a value in [GHOST_SPEFFECT_MIN, GHOST_SPEFFECT_MAX]
-//! (`er10x.ini`'s range; anything else a param mod put there is left
-//! alone). Rows are addressed by row index, with IDs read through
-//! `common::params::row_ids` - never through the runtime lookup table
-//! (`get_mut` / `rows_mut`), which can misbehave on modded regulations.
+//! Which rows: spirits = NpcParam rows some `BuddyParam` row spawns
+//! (`npcParamId` / `npcParamId_ridden`, not row names - a param mod's
+//! names can be wrong), all 32 `spEffectID` slots, every `vfxId` of those
+//! SpEffects. IDs come from `common::params::row_ids`, rows are addressed
+//! by index - never through the runtime lookup table (`get_mut` /
+//! `rows_mut`), which can misbehave on modded regulations.
+//!
+//! History: first version (2026-09-27) copied `sometweaks`'s
+//! `spirit/color.rs` (strip the SpEffect from live spirits every frame);
+//! then (same day) cleared `spEffectID26` when it held 295000-295999 -
+//! which found nothing in Reforged (Nexus report, 2026-09-30).
 //!
 //! Original values are captured once, before the first write, and every
-//! later change is applied from that snapshot, so F5 works both ways
-//! (spirits summoned after the change get the new look; spirits already out
-//! keep theirs until re-summoned).
+//! later change is applied from that snapshot, so F5 works both ways.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
-use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, SoloParamRepository};
+use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, SoloParamRepository, SpEffectParam, SpEffectVfxParam};
+use eldenring::param::{NPC_PARAM_ST, SP_EFFECT_PARAM_ST};
 use fromsoftware_shared::FromStatic;
 
 use common::{config, logger};
 
-const GHOST_SPEFFECT_MIN: i32 = 295000;
-const GHOST_SPEFFECT_MAX: i32 = 295999;
-const REMOVED: i32 = -1;
+/// "No PhantomParam overwrite".
+const NO_OVERWRITE: u8 = 0;
 
 const TICK_INTERVAL_MS: f64 = 1000.0;
 
-/// `(NpcParam row index, original spEffectID26)` for every tinted spirit
-/// row, or `None` if the params couldn't be read safely.
-fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, i32)>> {
-    for check in [common::params::check::<BuddyParam>(repo), common::params::check::<NpcParam>(repo)] {
+fn sp_effect_slots(row: &NPC_PARAM_ST) -> [i32; 32] {
+    [
+        row.sp_effect_id0(),
+        row.sp_effect_id1(),
+        row.sp_effect_id2(),
+        row.sp_effect_id3(),
+        row.sp_effect_id4(),
+        row.sp_effect_id5(),
+        row.sp_effect_id6(),
+        row.sp_effect_id7(),
+        row.sp_effect_id8(),
+        row.sp_effect_id9(),
+        row.sp_effect_id10(),
+        row.sp_effect_id11(),
+        row.sp_effect_id12(),
+        row.sp_effect_id13(),
+        row.sp_effect_id14(),
+        row.sp_effect_id15(),
+        row.sp_effect_id16(),
+        row.sp_effect_id17(),
+        row.sp_effect_id18(),
+        row.sp_effect_id19(),
+        row.sp_effect_id20(),
+        row.sp_effect_id21(),
+        row.sp_effect_id22(),
+        row.sp_effect_id23(),
+        row.sp_effect_id24(),
+        row.sp_effect_id25(),
+        row.sp_effect_id26(),
+        row.sp_effect_id27(),
+        row.sp_effect_id28(),
+        row.sp_effect_id29(),
+        row.sp_effect_id30(),
+        row.sp_effect_id31(),
+    ]
+}
+
+fn vfx_ids(row: &SP_EFFECT_PARAM_ST) -> [i32; 8] {
+    [
+        row.vfx_id(),
+        row.vfx_id1(),
+        row.vfx_id2(),
+        row.vfx_id3(),
+        row.vfx_id4(),
+        row.vfx_id5(),
+        row.vfx_id6(),
+        row.vfx_id7(),
+    ]
+}
+
+/// ID -> row index for `P`, or `None` if the IDs couldn't be read safely.
+fn index_by_id<P: eldenring::cs::SoloParam>(repo: &SoloParamRepository) -> Option<HashMap<u32, usize>> {
+    let ids = common::params::row_ids::<P>(repo)?;
+    Some(ids.into_iter().enumerate().map(|(index, id)| (id, index)).collect())
+}
+
+/// `(SpEffectVfxParam row index, original phantomParamOverwriteType)` for
+/// every tinting vfx reached from a spirit, or `None` if the params
+/// couldn't be read safely.
+fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, u8)>> {
+    for check in [
+        common::params::check::<BuddyParam>(repo),
+        common::params::check::<NpcParam>(repo),
+        common::params::check::<SpEffectParam>(repo),
+        common::params::check::<SpEffectVfxParam>(repo),
+    ] {
         if let Err(err) = check {
             logger::error(&format!("GhostColor: {err} - not touching params."));
             return None;
@@ -61,24 +128,82 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, i32)>> {
         }
     });
 
-    let Some(npc_ids) = common::params::row_ids::<NpcParam>(repo) else {
-        logger::error("GhostColor: NpcParam row IDs could not be read safely - not touching params.");
+    let (Some(npc_ids), Some(sp_effect_index), Some(vfx_index)) = (
+        common::params::row_ids::<NpcParam>(repo),
+        index_by_id::<SpEffectParam>(repo),
+        index_by_id::<SpEffectVfxParam>(repo),
+    ) else {
+        logger::error("GhostColor: param row IDs could not be read safely - not touching params.");
         return None;
     };
 
-    let mut tinted = Vec::new();
+    // Every NpcParam row's SpEffects, flagged spirit / not.
+    let mut npc_rows: Vec<(bool, [i32; 32])> = Vec::new();
     common::params::for_each_row_mut::<NpcParam>(repo, |index, row| {
-        let tint = row.sp_effect_id26();
-        if spirit_npc_ids.contains(&npc_ids[index]) && (GHOST_SPEFFECT_MIN..=GHOST_SPEFFECT_MAX).contains(&tint) {
-            tinted.push((index, tint));
-        }
+        npc_rows.push((spirit_npc_ids.contains(&npc_ids[index]), sp_effect_slots(row)));
     });
+
+    // Per vfx: how many spirit / other NpcParam rows reach it.
+    let mut vfx_of_sp_effect: HashMap<i32, Vec<u32>> = HashMap::new();
+    let mut uses: HashMap<u32, (u32, u32)> = HashMap::new();
+    let mut spirit_rows = 0;
+    for (is_spirit, slots) in &npc_rows {
+        spirit_rows += *is_spirit as u32;
+        let mut row_vfx: HashSet<u32> = HashSet::new();
+        for id in slots.iter().copied().filter(|&id| id > 0) {
+            let vfx = vfx_of_sp_effect.entry(id).or_insert_with(|| {
+                sp_effect_index
+                    .get(&(id as u32))
+                    .and_then(|&i| repo.get_row_by_index::<SpEffectParam>(i))
+                    .map(|row| vfx_ids(row).into_iter().filter(|&v| v > 0).map(|v| v as u32).collect())
+                    .unwrap_or_default()
+            });
+            row_vfx.extend(vfx.iter().copied());
+        }
+        for v in row_vfx {
+            let count = uses.entry(v).or_default();
+            if *is_spirit {
+                count.0 += 1;
+            } else {
+                count.1 += 1;
+            }
+        }
+    }
+
+    // A tint vfx is the summon ghost colour if spirits carry it more than
+    // other NPCs do (vanilla 57000: ~106 spirit rows vs ~23 unused/NPC-summon
+    // rows); one that mostly other NPCs carry is a character's own look -
+    // vanilla 54183 (SpEffect 14495, PhantomParam 240) is the Mausoleum
+    // Knight's, also on 1 spirit. Clearing that would strip the enemies too.
+    let mut tinting: Vec<(usize, u8)> = Vec::new();
+    let mut kept: Vec<String> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+    let mut ids: Vec<(&u32, &(u32, u32))> = uses.iter().filter(|(_, c)| c.0 > 0).collect();
+    ids.sort_unstable();
+    for (&id, &(spirits, others)) in ids {
+        let Some(&index) = vfx_index.get(&id) else {
+            continue;
+        };
+        let Some(row) = repo.get_row_by_index::<SpEffectVfxParam>(index) else {
+            continue;
+        };
+        let kind = row.phantom_param_overwrite_type();
+        if kind == NO_OVERWRITE {
+            continue;
+        }
+        let entry = format!("{id} ({spirits} spirit / {others} other)");
+        if spirits > others {
+            tinting.push((index, kind));
+            kept.push(entry);
+        } else {
+            skipped.push(entry);
+        }
+    }
     logger::log(&format!(
-        "GhostColor: {} spirit NpcParam row(s) from {} BuddyParam NPC id(s) carry the ghost tint in spEffectID26.",
-        tinted.len(),
+        "GhostColor: {spirit_rows} spirit NpcParam row(s) from {} BuddyParam NPC id(s); tint vfx {kept:?}; left alone (mostly non-spirit) {skipped:?}.",
         spirit_npc_ids.len()
     ));
-    Some(tinted)
+    Some(tinting)
 }
 
 pub fn run() {
@@ -86,7 +211,7 @@ pub fn run() {
 
     let mut elapsed_ms: f64 = 0.0;
     // None = not captured yet; Some(None) = capture failed, stay off.
-    let mut tinted: Option<Option<Vec<(usize, i32)>>> = None;
+    let mut tinting: Option<Option<Vec<(usize, u8)>>> = None;
     let mut applied: Option<bool> = None;
 
     let _handle = common::task::run_recurring_safe(
@@ -111,7 +236,7 @@ pub fn run() {
             };
 
             let ghost = config::get_bool("GhostColor", true);
-            let Some(rows) = tinted.get_or_insert_with(|| capture(repo)) else {
+            let Some(rows) = tinting.get_or_insert_with(|| capture(repo)) else {
                 return;
             };
             if applied == Some(ghost) {
@@ -119,12 +244,12 @@ pub fn run() {
             }
 
             for &(index, original) in rows.iter() {
-                if let Some(row) = repo.get_row_by_index_mut::<NpcParam>(index) {
-                    row.set_sp_effect_id26(if ghost { original } else { REMOVED });
+                if let Some(row) = repo.get_row_by_index_mut::<SpEffectVfxParam>(index) {
+                    row.set_phantom_param_overwrite_type(if ghost { original } else { NO_OVERWRITE });
                 }
             }
             logger::log(&format!(
-                "GhostColor={ghost}: ghost tint {} on {} spirit row(s).",
+                "GhostColor={ghost}: ghost tint {} on {} vfx row(s).",
                 if ghost { "restored" } else { "removed" },
                 rows.len()
             ));
