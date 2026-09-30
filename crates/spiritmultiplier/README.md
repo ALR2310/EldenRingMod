@@ -891,4 +891,4 @@ về rồi gọi lại vẫn được.
 Changelog Nexus (API) có `1.0.0`, `1.1.0` → bản sửa SummonAnywhere ở trên
 là `1.1.1`: 1 dòng changelog "Fixed summoning outside summoning pool
 areas." `Cargo.toml` bump lên `1.1.1`. GhostColor với Reforged chưa làm
-(đang điều tra, xem `E:\ERRv2.3.5.3\modegulation.bin`).
+(đang điều tra `regulation.bin` của Reforged 2.3.5.3).
