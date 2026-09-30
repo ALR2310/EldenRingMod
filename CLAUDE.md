@@ -17,6 +17,24 @@ Không cần hỏi lại người dùng trước khi làm việc này - tự th�
 code đã ổn định, coi đây là 1 bước không thể thiếu của việc "xong việc",
 giống như build/test.
 
+## Cập nhật `.vscode/tasks.json` khi thêm / xoá / đổi tên mod
+
+Mỗi mod trong `crates/` có 1 task build riêng trong `.vscode/tasks.json`
+và nằm trong `dependsOn` của task `Cargo: Build All (Release)`. Khi
+**thêm, xoá hoặc đổi tên** 1 mod, **luôn cập nhật file này cùng lúc**:
+
+- Thêm: 1 task mới theo đúng mẫu các task sẵn có - `label` =
+  `Cargo: Build <Mod> (Release)`, `-Mod <Mod>` với `<Mod>` lấy từ
+  `[lib] name` trong `crates/<mod>/Cargo.toml` (PascalCase, không tự
+  viết hoa tên thư mục) - và thêm label đó vào `dependsOn` của Build All.
+- Xoá: bỏ task của mod đó và dòng tương ứng trong `dependsOn`.
+- Đổi tên: sửa `label`, `detail`, `-Mod` và dòng trong `dependsOn`.
+
+Sau khi sửa, kiểm tra file vẫn là JSON hợp lệ và số task build riêng
+bằng đúng số thư mục trong `crates/`. Không cần hỏi lại người dùng.
+Người dùng yêu cầu (2026-09-30) sau khi phát hiện thiếu task của
+FasterRevival, SpeedMultiplier, SpiritMultiplier, WindowResize.
+
 ## Đối chiếu changelog thật trên Nexus Mods trước khi viết `[Changelog]` trong DESCRIPTION.bbcode
 
 Trước khi thêm/sửa mục changelog trong `crates/<mod>/DESCRIPTION.bbcode`,
