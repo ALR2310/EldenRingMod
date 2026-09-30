@@ -155,6 +155,74 @@
             "problemMatcher": "$rustc"
         },
         {
+            "label": "Cargo: Build FasterRevival (Release)",
+            "detail": "Builds FasterRevival (release), then copies FasterRevival.dll + FasterRevival.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "FasterRevival"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build SpeedMultiplier (Release)",
+            "detail": "Builds SpeedMultiplier (release), then copies SpeedMultiplier.dll + SpeedMultiplier.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "SpeedMultiplier"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build SpiritMultiplier (Release)",
+            "detail": "Builds SpiritMultiplier (release), then copies SpiritMultiplier.dll + SpiritMultiplier.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "SpiritMultiplier"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
+            "label": "Cargo: Build WindowResize (Release)",
+            "detail": "Builds WindowResize (release), then copies WindowResize.dll + WindowResize.ini into build/",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${workspaceFolder}\\scripts\\build-mod.ps1",
+                "-Mod", "WindowResize"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "problemMatcher": "$rustc"
+        },
+        {
             "label": "Cargo: Build All (Release)",
             "detail": "Runs every per-mod build task - build/ ends up with every mod's .dll + .ini",
             "dependsOrder": "sequence",
@@ -167,7 +235,11 @@
                 "Cargo: Build RiseArcher (Release)",
                 "Cargo: Build DropMultiplier (Release)",
                 "Cargo: Build InfiniteAilment (Release)",
-                "Cargo: Build SoulsTeleport (Release)"
+                "Cargo: Build SoulsTeleport (Release)",
+                "Cargo: Build FasterRevival (Release)",
+                "Cargo: Build SpeedMultiplier (Release)",
+                "Cargo: Build SpiritMultiplier (Release)",
+                "Cargo: Build WindowResize (Release)"
             ],
             "group": "build",
             "problemMatcher": []
