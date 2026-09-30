@@ -885,3 +885,10 @@ Anywhere tắt = vanilla). Bia thật gần đó vẫn ghi đè sau như cũ.
 summoning pool cả ở Lands Between lẫn Shadowlands; gọi ở pool thật rồi
 cưỡi Torrent ra xa, spirit vẫn ở lại (patch in-range); bấm lại để cho
 về rồi gọi lại vẫn được.
+
+## Phát hành 1.1.1 (2026-09-30)
+
+Changelog Nexus (API) có `1.0.0`, `1.1.0` → bản sửa SummonAnywhere ở trên
+là `1.1.1`: 1 dòng changelog "Fixed summoning outside summoning pool
+areas." `Cargo.toml` bump lên `1.1.1`. GhostColor với Reforged chưa làm
+(đang điều tra, xem `E:\ERRv2.3.5.3\modegulation.bin`).
