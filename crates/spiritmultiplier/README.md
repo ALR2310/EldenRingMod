@@ -892,3 +892,83 @@ Changelog Nexus (API) có `1.0.0`, `1.1.0` → bản sửa SummonAnywhere ở tr
 là `1.1.1`: 1 dòng changelog "Fixed summoning outside summoning pool
 areas." `Cargo.toml` bump lên `1.1.1`. GhostColor với Reforged chưa làm
 (đang điều tra `regulation.bin` của Reforged 2.3.5.3).
+
+## GhostColor: tắt màu ở SpEffectVfx thay vì gỡ SpEffect ô 26 (2026-09-30)
+
+Nexus (Quantum240): `GhostColor=false` không có tác dụng với ELDEN RING
+Reforged. Người dùng export param của Reforged 2.3.5.3 bằng Smithbox
+(NpcParam, SpEffectParam, SpEffectVfxParam, BuddyParam, GameSystemCommonParam)
+và cùng dò:
+
+- Vanilla: `295000` "[Spirit Summon] Color" (`stateInfo 432`, `vfxId
+  57000`) / `295200` Puppet (`vfxId 57100`) - 2 dòng chỉ khác `vfxId`.
+  SpEffectVfx `57000`: `phantomParamOverwriteType 2`,
+  `phantomParamOverwriteId 200` → PhantomParam 200 = màu ma thật.
+- Reforged: không có `295000`; ô 26 của spirit trống. Đi từ **BuddyParam**
+  (không dựa vào tên dòng - người dùng nhắc: tên trong Smithbox lấy theo
+  game gốc, modpack có thể sai): 126 NpcParam spirit, 121/125 mang màu qua
+  **`spEffectID4`** = SpEffect riêng của từng Ash (`200100`, `201100`, ...
+  `292100`, vd. Noble Sorcerer `143002000` → `241100`) → vfx `70000`
+  (109 spirit) / `70010` (7) / `70020` (5) → PhantomParam `2000` / `2010` /
+  `420`. Các SpEffect này còn mang chỉnh chỉ số + chuỗi
+  `cycleOccurrenceSpEffectId` (`241100` → `299020` → `299010`) - gỡ cả
+  SpEffect sẽ mất phần cân bằng của Reforged. 3 vfx đó không NpcParam nào
+  ngoài spirit dùng. `298020` (giống hệt `295000`, vfx 57000) không gắn
+  trên spirit nào. 4 spirit không có đường màu nào (`44300488`,
+  `153300000`, `100000000`, `150000001`).
+- Đoán sai trên đường đi (ghi lại để khỏi lặp): `298091` là SpEffect chỉ
+  số, không phải màu; `stateInfo 432` không phải dấu hiệu màu (11 dòng
+  Reforged có, `299010` có mà không vfx); màu không đến từ
+  `GameSystemCommonParam`.
+
+**Sửa:** `src/ghost_color.rs` viết lại. Spirit = NpcParam mà BuddyParam
+trỏ tới → cả 32 ô `spEffectID` → SpEffect `vfxId`..`vfxId7` → mọi
+SpEffectVfx có `phantomParamOverwriteType != 0`. `GhostColor=false` đặt
+`phantomParamOverwriteType = 0` (không ghi đè) trên các dòng vfx đó, giữ
+nguyên SpEffect; lưu giá trị gốc 1 lần, F5 bật lại được. Tra ID bằng
+`common::params::row_ids` (SpEffectParam, SpEffectVfxParam), ghi theo
+index. Bỏ cách cũ (gỡ `spEffectID26` 295000-295999). Log: `tinting vfx:
+[...]` liệt kê vfx bị tắt.
+
+Giả định chưa kiểm chứng: `phantomParamOverwriteType = 0` = không ghi đè
+(Paramdex: enum `SP_EFFECT_OVERWRITE_PHANTOM_PARAM_TYPE`, không có mô tả
+giá trị). Test trên vanilla trước (cùng cơ chế vfx).
+
+**Test vanilla: đúng** (người dùng xác nhận) - `GhostColor=false` bỏ màu
+ma, và **có tác dụng ngay với spirit đang ở ngoài**, không cần gọi lại
+(cách cũ gỡ SpEffect ở NpcParam chỉ áp dụng cho spirit gọi sau đó); F5
+bật/tắt được cả 2 chiều. Log vanilla: `106 spirit NpcParam row(s) from 107
+BuddyParam NPC id(s), 314 SpEffect(s), 23 vfx; tinting vfx: [54183, 57000,
+57100]`. `54183` chưa rõ là gì (không phải 2 vfx màu ma đã biết) - có thể
+là hiệu ứng riêng của 1 spirit, cần xem trong Smithbox. Chưa test với
+Reforged trong game.
+
+**Loại vfx không phải màu triệu hồi:** người dùng export vanilla: `54183`
+= SpEffect `14495` → PhantomParam `240` (`isVisibleDeadChr`), gắn trên các
+dòng **Mausoleum Knight** (kẻ địch vốn trong suốt) - vẻ ngoài riêng của
+nhân vật, 1 spirit dùng chung. Tắt nó làm mất cả dáng của kẻ địch. Quy
+tắc tuyệt đối "không NPC thường nào dùng" thì quá chặt: vanilla có ~129
+dòng mang `295xxx` nhưng chỉ 106 là spirit (dòng thừa / NPC triệu hồi
+khác) - sẽ loại luôn `57000`. Chọn quy tắc tỉ lệ: vfx chỉ bị tắt khi
+**số dòng NpcParam spirit dùng nó > số dòng không phải spirit**. Chạy thử
+trên export Reforged: `70000` 109/0, `70010` 7/0, `70020` 5/0 → cả 3 đều
+tắt, không bắt thêm gì. Log in cả 2 danh sách (`tint vfx` / `left
+alone`) kèm số đếm.
+
+**Test lại vanilla: đúng** - log: tint vfx `57000 (99 spirit / 40
+other)`, `57100 (7 spirit / 4 other)`; left alone `54183 (1 spirit / 16
+other)`; F5 bật/tắt 2 chiều.
+
+**Test Reforged 2.3.5.3 trong game: đúng** (người dùng, qua launcher
+Offline + me3 0.13.0) - log: `125 spirit NpcParam row(s) from 126
+BuddyParam NPC id(s); tint vfx [70000 (109/0), 70010 (7/0), 70020
+(5/0)]`, khớp hoàn toàn với kiểm chứng trên file export; F5 → spirit
+đang ở ngoài mất màu ngay. Mọi tính năng khác cũng chạy trên Reforged
+(Chain nhận 104 Ash, BuddyStone 305 pool, MultiSpirit, SummonAnywhere,
+ActiveLimit), không xung đột với các DLL của Reforged.
+
+## Phát hành 1.1.2 (2026-09-30)
+
+Changelog Nexus (API) có tới `1.1.1` → bản sửa GhostColor ở trên là
+`1.1.2`: "Fixed GhostColor not working with ELDEN RING Reforged."
+`Cargo.toml` bump lên `1.1.2`.
