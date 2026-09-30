@@ -970,5 +970,5 @@ ActiveLimit), không xung đột với các DLL của Reforged.
 ## Phát hành 1.1.2 (2026-09-30)
 
 Changelog Nexus (API) có tới `1.1.1` → bản sửa GhostColor ở trên là
-`1.1.2`: "Fixed GhostColor not working with ELDEN RING Reforged."
+`1.1.2`: "Fixed ghost color removal not working with ELDEN RING Reforged."
 `Cargo.toml` bump lên `1.1.2`.
