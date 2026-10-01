@@ -1078,6 +1078,13 @@ Changelog Nexus (API) có tới `1.1.3` → bản sửa xung đột Seamless Co-
 trên là `1.1.4`: "Fixed the game closing with a "No such pattern" error when using Seamless Co-op."
 `Cargo.toml` bump lên `1.1.4`.
 
+Bổ sung vào 1.1.4 (chưa phát hành lúc đó) 2 bản sửa Reforged ở mục trên:
+"Fixed the Fortune of the Spiritcaller's Spirit Ring not working with
+ELDEN RING Reforged." và "Fixed the Spirit-Severing Blade not sending
+spirits back in ELDEN RING Reforged." Test bản sạch (không key test):
+vanilla + Seamless (`ersc.dll` nạp, 12 patch, MultiSpirit cho về đúng) và
+Reforged (`reforged.dll` nạp, 12 patch, không lỗi) - 2026-10-01.
+
 ## Reforged: Spirit Ring của Spiritcaller hỏng do SummonAnywhere; Blade với MultiSpirit (2026-10-01)
 
 Nexus (puffintoast, Reforged + Fortune of the Spiritcaller): từ "bản mới
