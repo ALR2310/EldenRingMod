@@ -9,9 +9,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 - [ ] Spirit dịch chuyển tới người chơi khi bị bỏ lại (hoãn từ trước 1.0.0; chỉ chỉnh `buddyWarp_*` không có tác dụng)
 - [ ] Quyết định giữ hay bỏ log `stones:` trong SlotProbe (thêm để dò lỗi MultiSpirit/SummonAnywhere)
 - [ ] `EnemyProbe` dễ crash - sửa hoặc bỏ hẳn
-- [ ] Bug: bấm lại Ash đã nâng cấp (+1..+10) gọi thêm spirit thay vì cho về - MultiSpirit (Nexus bug report "unsummon", MonkeyDLuffy2426, 2026-10-01, Mimic Tear / Lhutel +4, bản 1.1.2)
-  - Nguyên nhân: Ash +N dùng SpEffect riêng (goods `refId_default`, vd. Tiche +4 = 200004) nhưng `trigger_speffect_to_buddy_map` chỉ có khoá bản +0; `DoSummon` (`sub_1404B85B0`) tự làm tròn `100 * (id / 100)`, còn mod thì không → `ash_alive` = false → gọi thêm. Cũng làm việc cho về Ash nâng cấp bị trừ FP
-  - Sửa: làm tròn `100 * (speffect / 100)` trong `buddy_ids` (`multi_spirit.rs`) - dùng chung cho `decide_dismiss`, `disappear_all_hook`, `cost_state`
+- [x] Bug: bấm lại Ash đã nâng cấp (+1..+10) gọi thêm spirit thay vì cho về - MultiSpirit (Nexus bug report "unsummon", MonkeyDLuffy2426, 2026-10-01, Mimic Tear / Lhutel +4, bản 1.1.2) - sửa ở 1.1.3 (làm tròn `100 * (id / 100)` như `DoSummon`)
 
 ## SpeedMultiplier
 
