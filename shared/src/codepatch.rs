@@ -126,3 +126,54 @@ pub fn install_jmp_hook(target_addr: *mut u8, original_len: usize, stub_body: &[
 
     Some(stub)
 }
+
+/// Destination of the 5-byte `call rel32` (`E8`) or `jmp rel32` (`E9`) at
+/// `site`, or `None` if `site` holds neither.
+pub fn rel32_target(site: *const u8) -> Option<u64> {
+    let opcode = unsafe { site.read() };
+    if opcode != 0xE8 && opcode != 0xE9 {
+        return None;
+    }
+    let rel = unsafe { (site.add(1) as *const i32).read_unaligned() };
+    Some((site as u64 + 5).wrapping_add_signed(rel as i64))
+}
+
+/// Points the existing `call rel32` / `jmp rel32` at `site` to a new stub
+/// holding `stub_body`, allocated near `site` - only the 4 displacement
+/// bytes change; the opcode byte and every other byte of the game's code
+/// stay as they were.
+///
+/// Prefer this over [install_jmp_hook] whenever the patch site is a call:
+/// other DLL mods (Seamless Co-op among them) find their own patch sites by
+/// byte signature and abort the game when one no longer matches, and those
+/// signatures wildcard a call's displacement (`E8 ? ? ? ?`) but not its
+/// opcode or the instructions around it. If another mod already redirected
+/// the same call, [rel32_target] returns its stub, so the two chain.
+///
+/// `stub_body` runs exactly as the original destination would: entered by
+/// the same `call` (or `jmp`), so it must end with its own `ret` / tail
+/// jump - nothing is appended. Returns the stub's address on success; the
+/// original bytes are left untouched on any failure.
+pub fn redirect_rel32(site: *mut u8, stub_body: &[u8]) -> Option<*mut u8> {
+    rel32_target(site)?;
+    let stub = alloc_near(site, stub_body.len())?;
+    unsafe {
+        std::ptr::copy_nonoverlapping(stub_body.as_ptr(), stub, stub_body.len());
+        let rel = stub as isize - site as isize - 5;
+        if rel < i32::MIN as isize || rel > i32::MAX as isize {
+            VirtualFree(stub as *mut c_void, 0, MEM_RELEASE);
+            return None;
+        }
+        let mut old_protect: u32 = 0;
+        if VirtualProtect(site.add(1) as *mut c_void, 4, PAGE_EXECUTE_READWRITE, &mut old_protect) == 0 {
+            VirtualFree(stub as *mut c_void, 0, MEM_RELEASE);
+            return None;
+        }
+        (site.add(1) as *mut i32).write_unaligned(rel as i32);
+        let mut unused: u32 = 0;
+        VirtualProtect(site.add(1) as *mut c_void, 4, old_protect, &mut unused);
+        FlushInstructionCache(GetCurrentProcess(), site as *const c_void, 5);
+        FlushInstructionCache(GetCurrentProcess(), stub as *const c_void, stub_body.len());
+    }
+    Some(stub)
+}
