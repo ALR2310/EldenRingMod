@@ -169,15 +169,22 @@ fn buddy_ids(manager: &SummonBuddyManager, speffect: i32) -> Vec<i32> {
 }
 
 /// Whether the Ash with this trigger SpEffect has live spirits of the
-/// local player (`groups` entries not already leaving, not remote).
-fn ash_alive(manager: &SummonBuddyManager, speffect: i32) -> bool {
+/// local player (`groups` entries not already leaving, not remote), or
+/// `None` if the SpEffect summons nothing - not a Spirit Ash at all, e.g.
+/// ELDEN RING Reforged's Spirit-Severing Blade, which sends spirits back
+/// through the same path. Callers keep vanilla behavior for those (until
+/// 2026-10-01 they were treated as "a different Ash, summon it", so the
+/// Blade summoned nothing and sent nothing back).
+fn ash_alive(manager: &SummonBuddyManager, speffect: i32) -> Option<bool> {
     let ids = buddy_ids(manager, speffect);
-    !ids.is_empty()
-        && manager.groups.iter().any(|pair| {
-            pair.second
-                .iter()
-                .any(|g| !g.disappear_requested && !g.is_remote && ids.contains(&g.buddy_param_id))
-        })
+    if ids.is_empty() {
+        return None;
+    }
+    Some(manager.groups.iter().any(|pair| {
+        pair.second
+            .iter()
+            .any(|g| !g.disappear_requested && !g.is_remote && ids.contains(&g.buddy_param_id))
+    }))
 }
 
 /// Called from the item-cost stubs (patch 7) when `GetBuddyState` said 2
@@ -190,8 +197,9 @@ unsafe extern "system" fn cost_state(manager: *mut SummonBuddyManager, goods_row
     }
     let result = std::panic::catch_unwind(|| ash_alive(unsafe { &*manager }, unsafe { goods_row.read_unaligned() }));
     match result {
-        Ok(true) | Err(_) => 2,
-        Ok(false) => 0,
+        Ok(Some(false)) => 0,
+        // The pressed Ash is out, not an Ash at all, or a panic: vanilla.
+        Ok(Some(true)) | Ok(None) | Err(_) => 2,
     }
 }
 
@@ -204,9 +212,14 @@ unsafe extern "system" fn cost_state(manager: *mut SummonBuddyManager, goods_row
 unsafe extern "system" fn decide_state(manager: *mut SummonBuddyManager, speffect: i32) -> u32 {
     let result = std::panic::catch_unwind(|| {
         let manager = unsafe { &mut *manager };
-        if ash_alive(manager, speffect) {
-            DISMISS_TARGET.store(speffect, Ordering::Relaxed);
-            return 2;
+        match ash_alive(manager, speffect) {
+            // Not a Spirit Ash: vanilla dismiss-all, no target.
+            None => return 2,
+            Some(true) => {
+                DISMISS_TARGET.store(speffect, Ordering::Relaxed);
+                return 2;
+            }
+            Some(false) => {}
         }
         if manager.buddy_stone_entity_id == 0 {
             manager.buddy_stone_entity_id = manager.active_summmon_buddy_stone_entity_id;
