@@ -9,6 +9,14 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 - [ ] Spirit dịch chuyển tới người chơi khi bị bỏ lại (hoãn từ trước 1.0.0; chỉ chỉnh `buddyWarp_*` không có tác dụng)
 - [ ] Quyết định giữ hay bỏ log `stones:` trong SlotProbe (thêm để dò lỗi MultiSpirit/SummonAnywhere)
 - [ ] `EnemyProbe` dễ crash - sửa hoặc bỏ hẳn
+- [ ] Bug: bấm lại Ash đã nâng cấp (+1..+10) gọi thêm spirit thay vì cho về - MultiSpirit (Nexus bug report "unsummon", MonkeyDLuffy2426, 2026-10-01, Mimic Tear / Lhutel +4, bản 1.1.2)
+  - Nguyên nhân: Ash +N dùng SpEffect riêng (goods `refId_default`, vd. Tiche +4 = 200004) nhưng `trigger_speffect_to_buddy_map` chỉ có khoá bản +0; `DoSummon` (`sub_1404B85B0`) tự làm tròn `100 * (id / 100)`, còn mod thì không → `ash_alive` = false → gọi thêm. Cũng làm việc cho về Ash nâng cấp bị trừ FP
+  - Sửa: làm tròn `100 * (speffect / 100)` trong `buddy_ids` (`multi_spirit.rs`) - dùng chung cho `decide_dismiss`, `disappear_all_hook`, `cost_state`
+
+## SpeedMultiplier
+
+- [ ] Tách tốc độ đi bộ / chạy / chạy nhanh (sprint) thành key riêng, cho cả player lẫn Torrent (Nexus, cfzlbj, 2026-10-01)
+  - Hiện tại `PlayerMovement` và `Torrent` mỗi bên chỉ có 1 hệ số chung - cần dò đuôi anim từng kiểu: player đã thấy `020010`/`020110`/`020210` trong log nhưng chưa rõ cái nào là đi bộ / chạy / sprint; Torrent có `020000`-`020004`
 
 ## RuneMultiplier
 
@@ -17,6 +25,5 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 ## Chung
 
-- [ ] Push `main` lên remote
 - [ ] Đồng bộ `version` trong `Cargo.toml` của các mod cũ với version mới nhất trên Nexus (vd. `autoregen` vẫn `2.0.0`)
 - [ ] Đăng `windowresize` lên Nexus
