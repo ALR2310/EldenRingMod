@@ -1077,3 +1077,54 @@ cho về từng Ash nâng cấp (Mimic +10 `207010`, Lhutel +4 `258004`, Ash
 Changelog Nexus (API) có tới `1.1.3` → bản sửa xung đột Seamless Co-op ở
 trên là `1.1.4`: "Fixed the game closing with a "No such pattern" error when using Seamless Co-op."
 `Cargo.toml` bump lên `1.1.4`.
+
+## Reforged: Spirit Ring của Spiritcaller hỏng do SummonAnywhere; Blade với MultiSpirit (2026-10-01)
+
+Nexus (puffintoast, Reforged + Fortune of the Spiritcaller): từ "bản mới
+nhất" (1.1.1/1.1.2) vòng tròn Spirit Ring biến mất, không bấm lại Ash
+(kích Spirit Fury) được. Cơ chế Reforged (CHANGELOG.txt của ERR): bấm lại
+Ash khi spirit đang ở ngoài = Spirit Fury (spirit đỏ), cho về bằng item
+Spirit-Severing Blade; Spiritcaller thêm 1 vòng tròn quanh người chơi hỗ
+trợ spirit bên trong (trắng/đỏ theo trạng thái). Fortune được "examine and
+equip at sites of grace" (người dùng tự lấy để test).
+
+Người dùng test trên Reforged 2.3.5.3 (bản build có redirect `call`):
+- Mod cài vào: Noble Sorcerer Ashes + Blade **xám** khi spirit ở ngoài,
+  vòng tròn mất. `MultiSpirit=false` không đổi gì; `SummonAnywhere=false`
+  → hết lỗi.
+- Tách SummonAnywhere thành 3 key test tạm (`AnywhereDebugParams/State/
+  Range`, rồi tách State thành `Force/Fill`), mỗi lần nghỉ grace sau F5
+  để xoá trạng thái cũ, cùng 1 chỗ đứng. Kết quả cuối (bật từng phần, 2
+  phần kia tắt): Params ổn, State ổn, **Range lỗi**. (1 lần "State=false
+  thì ổn" ở vòng test đầu là nhiễu - lặp lại ở vòng sau thì vẫn lỗi.)
+
+Nguyên nhân (Range): stub sau `sub_1404BD870` ép `+0xB5 = 1, +0xB7 = 0`
+**mỗi frame, kể cả khi chưa có spirit**. `sub_1404B8EB0` (chạy ngay
+trước `sub_1404BD870` trong `Update`) gắn SpEffect "vào vùng triệu hồi"
+(`GameSystemCommonParam.onBuddySummon_inActivateRange_spEffectId_pc` =
+9540 lên người chơi, `_buddy` = 9541 lên từng spirit) khi `+0xB5` vừa đổi
+0 → 1 (`+0xB5 && !+0xB6`). Cờ đã sẵn 1 lúc gọi → không có cạnh lên → không
+SpEffect nào được gắn; Reforged có vẻ dựa vào chúng cho Spirit Ring và cho
+phép dùng Ash/Blade.
+
+**Sửa:** chỉ đặt `+0xB5 = 1` khi có spirit (`+0xB4`
+`player_has_alive_summon`, ghi ở cuối `sub_1404B8EB0`) **và** game không
+tính ra vùng nào (`+0xB5 == 0 && +0xB7 == 0` = đối tượng bia đá đã gỡ) -
+đúng mục đích ban đầu (spirit không bị cho về khi đi xa); còn lại để
+nguyên giá trị game tính. Thêm: bia dự phòng ghi vào `+0x38` ưu tiên bia
+đang hoạt động `+0x3C` khi có spirit (để `+0x38 == +0x3C`, `GetBuddyState`
+vẫn trả 2), chỉ dùng `FALLBACK_STONE` khi chưa có spirit. Bỏ các key test.
+
+**MultiSpirit + Blade:** dùng Blade khi `MultiSpirit=true` → spirit không
+biến mất. Blade đi qua cùng `DoSummon` với 1 SpEffect không thuộc Ash nào;
+`ash_alive` trả false → `decide_state` coi là "Ash khác, gọi thêm" → không
+gọi được gì, không cho về gì. Sửa: `ash_alive` trả `None` khi SpEffect
+không có chain trong `trigger_speffect_to_buddy_map` (không phải Spirit
+Ash) → `decide_state`/`cost_state` giữ hành vi vanilla (cho về tất cả /
+miễn phí).
+
+Kết quả người dùng (Reforged): gọi được ở pool và ngoài pool, có vòng
+tròn, kích Spirit Fury được; `MultiSpirit=true` gọi được nhiều Ash, chỉ 1
+nhóm vào được Spirit Fury (logic của Reforged) và Blade cho về tất cả
+(hành vi gốc - Blade không phải Ash). Chưa test lại trên vanilla (đi xa
+khi đã gọi ở chỗ không có pool) và với Seamless.

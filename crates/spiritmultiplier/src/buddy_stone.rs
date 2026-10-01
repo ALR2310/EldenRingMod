@@ -34,18 +34,27 @@
 //!    and set again only by a loaded stone's own talk script (ESD command
 //!    122 -> `sub_1404B8050`) - with none loaded it stays 0 and
 //!    `GetBuddyState` says -1 (greyed out). The same stateInfo stub inside
-//!    `GetBuddyState` writes [FALLBACK_STONE] (the last real stone seen, or
-//!    a default row) into `+0x38` when it is 0, right before
-//!    `GetBuddyState` reads it - and every summon path asks `GetBuddyState`
-//!    first. A BuddyStoneParam row id is the stone's entity id (param 134
+//!    `GetBuddyState` fills an empty `+0x38` right before `GetBuddyState`
+//!    reads it - every summon path asks `GetBuddyState` first - with the
+//!    active stone `+0x3C` while spirits are out (so `+0x38 == +0x3C` and
+//!    the state stays 2 = "this group is out"), else [FALLBACK_STONE] (the
+//!    last real stone seen, or a default row). A BuddyStoneParam row id is the stone's entity id (param 134
 //!    is looked up with it directly, `sub_140D28320`). (First try wrote
 //!    `+0x38` from the FrameBegin tick - the clear ran after it; 1.1.1-1.1.3
 //!    then patched the clear itself, an inline hook.)
 //! 3. `sub_1404BD870` recomputes "in the active stone's range" (`+0xB5`)
 //!    every frame by finding the stone object; unloaded -> false -> the
-//!    "left the summoning area" dismiss-all. [INRANGE_AOB]: `+0xB5` forced
-//!    to 1 (and the warn flag `+0xB7` to 0, as the function itself does)
-//!    right after it while Anywhere is on.
+//!    "left the summoning area" dismiss-all. [INRANGE_AOB]: right after it,
+//!    while Anywhere is on, `+0xB5` is set to 1 **only** when spirits are
+//!    out (`+0xB4`) and the game found neither range (`+0xB5` and `+0xB7`
+//!    both 0 - the stone is unloaded). Until 2026-10-01 it forced
+//!    `+0xB5 = 1, +0xB7 = 0` every frame, spirits out or not: the 0 -> 1
+//!    edge on `+0xB5` that `sub_1404B8EB0` turns into the "entered the
+//!    summoning range" SpEffects (GameSystemCommonParam
+//!    `onBuddySummon_inActivateRange_spEffectId_pc/_buddy`, 9540/9541) never
+//!    happened, which broke ELDEN RING Reforged's Fortune of the
+//!    Spiritcaller (no Spirit Ring, Ash + Spirit-Severing Blade greyed out
+//!    while spirits were out) - found by toggling each part in game.
 //!
 //! All three only redirect an existing `call` / `jmp`
 //! (`codepatch::redirect_rel32`, see `multi_spirit.rs` - Seamless Co-op
@@ -126,7 +135,7 @@ fn push_anywhere_check(c: &mut Vec<u8>, anywhere: u64) -> usize {
 /// it; while Anywhere is on answer `al = 1`, and fill an empty current
 /// stone `[rbx+0x38]` with [FALLBACK_STONE] (2.). r11 is volatile.
 fn build_state_call_stub(anywhere: u64, fallback: u64, check: u64) -> Vec<u8> {
-    let mut c = Vec::with_capacity(80);
+    let mut c = Vec::with_capacity(96);
     c.extend_from_slice(&[0x48, 0x83, 0xEC, 0x28]); // sub rsp, 0x28
     push_call(&mut c, check);
     c.extend_from_slice(&[0x48, 0x83, 0xC4, 0x28]); // add rsp, 0x28
@@ -135,14 +144,20 @@ fn build_state_call_stub(anywhere: u64, fallback: u64, check: u64) -> Vec<u8> {
     c.extend_from_slice(&[0x83, 0x7B, 0x38, 0x00]); // cmp dword [rbx+0x38], 0
     let jne_ret = c.len();
     c.extend_from_slice(&[0x75, 0]); // jne ret (a real stone is set)
+    c.extend_from_slice(&[0x44, 0x8B, 0x5B, 0x3C]); // mov r11d, [rbx+0x3C] (active stone)
+    c.extend_from_slice(&[0x45, 0x85, 0xDB]); // test r11d, r11d
+    let jnz_write = c.len();
+    c.extend_from_slice(&[0x75, 0]); // jnz write (spirits out: reuse their stone)
     c.extend_from_slice(&[0x49, 0xBB]); // mov r11, &FALLBACK_STONE
     c.extend_from_slice(&fallback.to_le_bytes());
     c.extend_from_slice(&[0x45, 0x8B, 0x1B]); // mov r11d, [r11]
+    let write = c.len();
     c.extend_from_slice(&[0x44, 0x89, 0x5B, 0x38]); // mov [rbx+0x38], r11d
     let ret = c.len();
     c.push(0xC3); // ret
     c[je_ret + 1] = rel8(je_ret + 2, ret);
     c[jne_ret + 1] = rel8(jne_ret + 2, ret);
+    c[jnz_write + 1] = rel8(jnz_write + 2, write);
     c
 }
 
@@ -171,11 +186,24 @@ fn build_inrange_stub(anywhere: u64, compute: u64) -> Vec<u8> {
     push_call(&mut c, compute);
     c.extend_from_slice(&[0x48, 0x83, 0xC4, 0x28]); // add rsp, 0x28
     let je_ret = push_anywhere_check(&mut c, anywhere);
+    // Only when spirits are out and the game found neither range (the
+    // active stone's object is unloaded) - see the doc on 3.
+    c.extend_from_slice(&[0x41, 0x80, 0xBF, 0xB4, 0x00, 0x00, 0x00, 0x00]); // cmp byte [r15+0xB4], 0
+    let je_ret2 = c.len();
+    c.extend_from_slice(&[0x74, 0]); // je ret (no spirit out)
+    c.extend_from_slice(&[0x41, 0x80, 0xBF, 0xB5, 0x00, 0x00, 0x00, 0x00]); // cmp byte [r15+0xB5], 0
+    let jne_ret = c.len();
+    c.extend_from_slice(&[0x75, 0]); // jne ret (in range, computed)
+    c.extend_from_slice(&[0x41, 0x80, 0xBF, 0xB7, 0x00, 0x00, 0x00, 0x00]); // cmp byte [r15+0xB7], 0
+    let jne_ret2 = c.len();
+    c.extend_from_slice(&[0x75, 0]); // jne ret (in warn range, computed)
     c.extend_from_slice(&[0x41, 0xC6, 0x87, 0xB5, 0x00, 0x00, 0x00, 0x01]); // mov byte [r15+0xB5], 1
-    c.extend_from_slice(&[0x41, 0xC6, 0x87, 0xB7, 0x00, 0x00, 0x00, 0x00]); // mov byte [r15+0xB7], 0
     let ret = c.len();
     c.push(0xC3); // ret
     c[je_ret + 1] = rel8(je_ret + 2, ret);
+    c[je_ret2 + 1] = rel8(je_ret2 + 2, ret);
+    c[jne_ret + 1] = rel8(jne_ret + 2, ret);
+    c[jne_ret2 + 1] = rel8(jne_ret2 + 2, ret);
     c
 }
 
