@@ -972,3 +972,34 @@ ActiveLimit), không xung đột với các DLL của Reforged.
 Changelog Nexus (API) có tới `1.1.1` → bản sửa GhostColor ở trên là
 `1.1.2`: "Fixed ghost color removal not working with ELDEN RING Reforged."
 `Cargo.toml` bump lên `1.1.2`.
+
+## MultiSpirit: Ash đã nâng cấp không cho về được (2026-10-01)
+
+Nexus bug report "unsummon" (MonkeyDLuffy2426, bản 1.1.2, cấu hình mặc
+định): bấm lại Mimic Tear +4 / Lhutel the Headless +4 thì **gọi thêm**
+thay vì cho về, phải ngồi Site of Grace mới hết. Các lần test trước đều
+dùng Ash +0 (log `213000`, `236000`...) nên không lộ.
+
+Nguyên nhân: mỗi cấp nâng là 1 item riêng với SpEffect riêng
+(`EquipParamGoods.refId_default`: Mimic Tear +0 = `207000`, +4 =
+`207004`), nhưng `trigger_speffect_to_buddy_map` chỉ có khoá bản +0.
+`DoSummon` (`sub_1404B85B0`) tự làm tròn trước khi tra: `v3 = 100 * (a2 /
+100)`. `buddy_ids` của mod tra thẳng `207004` → không thấy → `ash_alive` =
+false → `decide_dismiss` cho gọi thêm; cùng lý do, `cost_state` tính FP
+cho lần cho về Ash nâng cấp, và `disappear_all_hook` không lọc được.
+
+Kiểm chứng trên `.docs/EquipParamGoods.csv` (vanilla): 924 goods Ash (mọi
+cấp) → 86 khoá sau khi làm tròn, không 2 Ash nào chung khoá (1 trường hợp
+"trùng" chỉ là tên viết khác: "Winged Misbegotten Ashes + 1"); mọi Ash
+`refCategory = 2`; cấp tối đa 10.
+
+**Sửa:** `buddy_ids` làm tròn `100 * (speffect / 100)` như game - 1 chỗ,
+dùng chung cho `decide_dismiss`, `disappear_all_hook`, `cost_state`.
+
+**Test: đúng** (người dùng). Bản sửa: Ash `209003` (+3) và Mimic Tear
++10 (`207010`) - bấm lại → `sent back ... 3 spirit(s)` mỗi lần, không
+gọi thêm. Người dùng cài lại DLL 1.1.2 để đối chứng: lỗi tái hiện đúng
+(`209003`: 3 spirit `133600500`, bấm lại → 7 nhân vật). Mimic Tear: lúc
+gọi có 3 `133201000` + 3 `100000010`; 3 con `133201000` tự biến mất sau
+~8 s (hiệu ứng xuất hiện của Mimic, không qua send-back), send-back cho
+về đúng 3 con còn lại.
