@@ -1003,3 +1003,9 @@ gọi thêm. Người dùng cài lại DLL 1.1.2 để đối chứng: lỗi tá
 gọi có 3 `133201000` + 3 `100000010`; 3 con `133201000` tự biến mất sau
 ~8 s (hiệu ứng xuất hiện của Mimic, không qua send-back), send-back cho
 về đúng 3 con còn lại.
+
+## Phát hành 1.1.3 (2026-10-01)
+
+Changelog Nexus (API) có tới `1.1.2` → bản sửa Ash nâng cấp ở trên là
+`1.1.3`: "Fixed re-using an upgraded Spirit Ash summoning more spirits
+instead of sending them back." `Cargo.toml` bump lên `1.1.3`.
