@@ -1067,3 +1067,13 @@ hàm gốc của game (mod cài trước, Seamless quét sau vẫn khớp vì `E
 nguyên); MultiSpirit gọi nhiều Ash + cho về từng Ash (`3 other(s)
 kept`), cả Ash nâng cấp (`258001` = Lhutel +1) và Ash 15 spirit
 (`240000`); SummonAnywhere dùng bia dự phòng `10000100`.
+
+**Test offline (không Seamless): đúng** - 12 patch cài đủ, không lỗi;
+cho về từng Ash nâng cấp (Mimic +10 `207010`, Lhutel +4 `258004`, Ash
++3 `209003`) trong khi giữ Ash khác.
+
+## Phát hành 1.1.4 (2026-10-01)
+
+Changelog Nexus (API) có tới `1.1.3` → bản sửa xung đột Seamless Co-op ở
+trên là `1.1.4`: "Fixed the game closing with a "No such pattern" error when using Seamless Co-op."
+`Cargo.toml` bump lên `1.1.4`.
