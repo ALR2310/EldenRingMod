@@ -1075,7 +1075,7 @@ cho về từng Ash nâng cấp (Mimic +10 `207010`, Lhutel +4 `258004`, Ash
 ## Phát hành 1.1.4 (2026-10-01)
 
 Changelog Nexus (API) có tới `1.1.3` → bản sửa xung đột Seamless Co-op ở
-trên là `1.1.4`: "Fixed the game closing with a "No such pattern" error when using Seamless Co-op."
+trên là `1.1.4`: "Fixed the game failing to launch with Seamless Co-op."
 `Cargo.toml` bump lên `1.1.4`.
 
 Bổ sung vào 1.1.4 (chưa phát hành lúc đó) 2 bản sửa Reforged ở mục trên:
