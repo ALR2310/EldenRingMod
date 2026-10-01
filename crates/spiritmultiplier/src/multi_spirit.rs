@@ -160,11 +160,19 @@ fn rel8(from_next: usize, to: usize) -> u8 {
 /// BuddyParam ids the Ash with this trigger SpEffect spawns (its chain in
 /// `trigger_speffect_to_buddy_map` - also covers our own chain extension,
 /// which only repeats the original ids).
+///
+/// An upgraded Ash triggers its own SpEffect (goods `refId_default`, e.g.
+/// Mimic Tear +4 = 207004) but the map is keyed on the +0 one only;
+/// `DoSummon` (`sub_1404B85B0`) rounds it down itself: `100 * (id / 100)`
+/// (vanilla: 924 Ash goods -> 86 keys, no two Ashes share one). Same here -
+/// without it, re-using a +1..+10 Ash summoned more instead of sending it
+/// back, and its send-back was charged FP (Nexus bug report, 2026-10-01).
 fn buddy_ids(manager: &SummonBuddyManager, speffect: i32) -> Vec<i32> {
+    let key = if speffect >= 0 { 100 * (speffect / 100) } else { speffect };
     manager
         .trigger_speffect_to_buddy_map
         .iter_chains()
-        .find(|(key, _)| **key == speffect)
+        .find(|(k, _)| **k == key)
         .map(|(_, head)| head.iter().copied().collect())
         .unwrap_or_default()
 }
