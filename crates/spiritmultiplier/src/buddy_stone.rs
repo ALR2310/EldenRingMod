@@ -33,17 +33,23 @@
 //!    `sub_1404B6E80` (called from the talk-script update `sub_140EAFDE0`)
 //!    and set again only by a loaded stone's own talk script (ESD command
 //!    122 -> `sub_1404B8050`) - with none loaded it stays 0 and
-//!    `GetBuddyState` says -1 (greyed out). [CLEAR_AOB]: that clear writes
-//!    [FALLBACK_STONE] instead of 0 - the last real stone seen, or a default
-//!    row; 0 while Anywhere is off, i.e. vanilla. A BuddyStoneParam row id
-//!    is the stone's entity id (param 134 is looked up with it directly,
-//!    `sub_140D28320`). (First try wrote `+0x38` from the FrameBegin tick
-//!    instead - the clear ran after it, so the Ash stayed greyed out.)
+//!    `GetBuddyState` says -1 (greyed out). The same stateInfo stub inside
+//!    `GetBuddyState` writes [FALLBACK_STONE] (the last real stone seen, or
+//!    a default row) into `+0x38` when it is 0, right before
+//!    `GetBuddyState` reads it - and every summon path asks `GetBuddyState`
+//!    first. A BuddyStoneParam row id is the stone's entity id (param 134
+//!    is looked up with it directly, `sub_140D28320`). (First try wrote
+//!    `+0x38` from the FrameBegin tick - the clear ran after it; 1.1.1-1.1.3
+//!    then patched the clear itself, an inline hook.)
 //! 3. `sub_1404BD870` recomputes "in the active stone's range" (`+0xB5`)
 //!    every frame by finding the stone object; unloaded -> false -> the
 //!    "left the summoning area" dismiss-all. [INRANGE_AOB]: `+0xB5` forced
 //!    to 1 (and the warn flag `+0xB7` to 0, as the function itself does)
 //!    right after it while Anywhere is on.
+//!
+//! All three only redirect an existing `call` / `jmp`
+//! (`codepatch::redirect_rel32`, see `multi_spirit.rs` - Seamless Co-op
+//! aborts the game when its own byte signatures stop matching).
 
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::time::Duration;
@@ -55,7 +61,7 @@ use common::{codepatch, config, logger, memscan};
 
 /// `mov edx,0x175; mov rcx,[rax+0x178]; call sub_1404FA370; test al,al; jz
 /// ..; mov eax,[rbx+0x38]` in `GetBuddyState` (0x1404B735C in 2.7.1.0,
-/// unique). The `call` is at +12.
+/// unique; rbx = manager). The `call` is at +12.
 const STATE_CALL_AOB: &str = "BA 75 01 00 00 48 8B 88 78 01 00 00 E8 ?? ?? ?? ?? 84 C0 74 10 8B 43 38";
 const STATE_CALL_OFFSET: usize = 12;
 /// Same check as a tail call in `sub_1404B7610` (0x1404B7655, unique):
@@ -69,20 +75,13 @@ const STATE_TAIL_OFFSET: usize = 16;
 const INRANGE_AOB: &str =
     "41 0F 28 CA 49 8B CF E8 ?? ?? ?? ?? 41 0F 28 CA 49 8B CF E8 ?? ?? ?? ?? 49 83 BF E8 00 00 00 00";
 const INRANGE_OFFSET: usize = 19;
-/// `lea rcx,[rsi+0x40]; call ..; mov rbx,[rsp+0x30]; mov dword
-/// [rsi+0x38],0; mov rsi,[rsp+0x38]` in `sub_1404B6E80` (0x1404B6EB1,
-/// unique). The 7-byte `mov dword [rsi+0x38],0` is at +14.
-const CLEAR_AOB: &str = "48 8D 4E 40 E8 ?? ?? ?? ?? 48 8B 5C 24 30 C7 46 38 00 00 00 00 48 8B 74 24 38";
-const CLEAR_OFFSET: usize = 14;
-const CLEAR_LEN: usize = 7;
 
 const SCAN_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 const SCAN_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// 1 = SummonAnywhere applied. Read by every stub.
 static ANYWHERE: AtomicU8 = AtomicU8::new(0);
-/// What the per-frame clear writes into `+0x38` (2.): a stone id while
-/// Anywhere is on, 0 otherwise.
+/// Stone written into an empty `+0x38` (2.) while Anywhere is on; 0 = none.
 static FALLBACK_STONE: AtomicU32 = AtomicU32::new(0);
 
 const TICK_INTERVAL_MS: f64 = 1000.0;
@@ -122,25 +121,34 @@ fn push_anywhere_check(c: &mut Vec<u8>, anywhere: u64) -> usize {
     je
 }
 
-/// Replaces the `call` of the stateInfo check in `GetBuddyState` (args
-/// already in rcx/edx, reached by `jmp` so the stack is as for the
-/// original call): call it, then `al = 1` while Anywhere is on. r11 is
-/// volatile and unused by the code that follows.
-fn build_state_call_stub(anywhere: u64, check: u64) -> Vec<u8> {
-    let mut c = Vec::with_capacity(48);
+/// Destination of `GetBuddyState`'s `call` to the stateInfo check (args in
+/// rcx/edx, rbx = manager; entered by that `call`, rsp % 16 == 8): call
+/// it; while Anywhere is on answer `al = 1`, and fill an empty current
+/// stone `[rbx+0x38]` with [FALLBACK_STONE] (2.). r11 is volatile.
+fn build_state_call_stub(anywhere: u64, fallback: u64, check: u64) -> Vec<u8> {
+    let mut c = Vec::with_capacity(80);
+    c.extend_from_slice(&[0x48, 0x83, 0xEC, 0x28]); // sub rsp, 0x28
     push_call(&mut c, check);
-    let je_end = push_anywhere_check(&mut c, anywhere);
+    c.extend_from_slice(&[0x48, 0x83, 0xC4, 0x28]); // add rsp, 0x28
+    let je_ret = push_anywhere_check(&mut c, anywhere);
     c.extend_from_slice(&[0xB0, 0x01]); // mov al, 1
-    let end = c.len(); // -> appended jump back
-    c[je_end + 1] = rel8(je_end + 2, end);
+    c.extend_from_slice(&[0x83, 0x7B, 0x38, 0x00]); // cmp dword [rbx+0x38], 0
+    let jne_ret = c.len();
+    c.extend_from_slice(&[0x75, 0]); // jne ret (a real stone is set)
+    c.extend_from_slice(&[0x49, 0xBB]); // mov r11, &FALLBACK_STONE
+    c.extend_from_slice(&fallback.to_le_bytes());
+    c.extend_from_slice(&[0x45, 0x8B, 0x1B]); // mov r11d, [r11]
+    c.extend_from_slice(&[0x44, 0x89, 0x5B, 0x38]); // mov [rbx+0x38], r11d
+    let ret = c.len();
+    c.push(0xC3); // ret
+    c[je_ret + 1] = rel8(je_ret + 2, ret);
+    c[jne_ret + 1] = rel8(jne_ret + 2, ret);
     c
 }
 
-/// Replaces the tail `jmp` to the stateInfo check in `sub_1404B7610`. At
-/// that point the frame is already torn down (rsp % 16 == 8, return
-/// address on top), so: re-align + shadow space, call, same `al = 1`
-/// override, `ret` to the real caller. The appended jump back is never
-/// reached.
+/// Destination of the tail `jmp` to the stateInfo check in
+/// `sub_1404B7610` (frame already torn down, rsp % 16 == 8): re-align +
+/// shadow space, call, same `al = 1` override, `ret` to the real caller.
 fn build_state_tail_stub(anywhere: u64, check: u64) -> Vec<u8> {
     let mut c = Vec::with_capacity(56);
     c.extend_from_slice(&[0x48, 0x83, 0xEC, 0x28]); // sub rsp, 0x28
@@ -154,69 +162,48 @@ fn build_state_tail_stub(anywhere: u64, check: u64) -> Vec<u8> {
     c
 }
 
-/// Replaces `call sub_1404BD870` in `Update` (rcx = r15 = manager): call
-/// it, then while Anywhere is on force "in activation range" (`+0xB5` = 1)
-/// and clear "in warn range" (`+0xB7` = 0). r11 is unused afterwards.
+/// Destination of `Update`'s `call sub_1404BD870` (rcx = r15 = manager,
+/// r15 callee-saved): call it, then while Anywhere is on force "in
+/// activation range" (`+0xB5` = 1) and clear "in warn range" (`+0xB7` = 0).
 fn build_inrange_stub(anywhere: u64, compute: u64) -> Vec<u8> {
     let mut c = Vec::with_capacity(64);
+    c.extend_from_slice(&[0x48, 0x83, 0xEC, 0x28]); // sub rsp, 0x28
     push_call(&mut c, compute);
-    let je_end = push_anywhere_check(&mut c, anywhere);
+    c.extend_from_slice(&[0x48, 0x83, 0xC4, 0x28]); // add rsp, 0x28
+    let je_ret = push_anywhere_check(&mut c, anywhere);
     c.extend_from_slice(&[0x41, 0xC6, 0x87, 0xB5, 0x00, 0x00, 0x00, 0x01]); // mov byte [r15+0xB5], 1
     c.extend_from_slice(&[0x41, 0xC6, 0x87, 0xB7, 0x00, 0x00, 0x00, 0x00]); // mov byte [r15+0xB7], 0
-    let end = c.len(); // -> appended jump back
-    c[je_end + 1] = rel8(je_end + 2, end);
+    let ret = c.len();
+    c.push(0xC3); // ret
+    c[je_ret + 1] = rel8(je_ret + 2, ret);
     c
 }
 
-/// Replaces `mov dword [rsi+0x38], 0` (7 bytes) with `+0x38 =
-/// FALLBACK_STONE`. r11 is volatile and the function returns right after.
-fn build_clear_stub(fallback: u64) -> Vec<u8> {
-    let mut c = Vec::with_capacity(24);
-    c.extend_from_slice(&[0x49, 0xBB]); // mov r11, &FALLBACK_STONE
-    c.extend_from_slice(&fallback.to_le_bytes());
-    c.extend_from_slice(&[0x45, 0x8B, 0x1B]); // mov r11d, [r11]
-    c.extend_from_slice(&[0x44, 0x89, 0x5E, 0x38]); // mov [rsi+0x38], r11d
-    c
-}
-
-fn install_clear() -> bool {
-    let Some(anchor) = memscan::wait_for_pattern_in_module(CLEAR_AOB, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) else {
-        logger::error("SummonAnywhere: stone clear pattern not found. Game may have been updated.");
-        return false;
-    };
-    let site = unsafe { anchor.add(CLEAR_OFFSET) };
-    let Some(at) = codepatch::install_jmp_hook(site, CLEAR_LEN, &build_clear_stub(FALLBACK_STONE.as_ptr() as u64)) else {
-        logger::error("SummonAnywhere: stone clear hook install failed.");
-        return false;
-    };
-    logger::log(&format!("SummonAnywhere: stone clear patched at {site:p}, stub at {at:p}."));
-    true
-}
-
-/// Finds `pattern`, reads the rel32 target of the 5-byte call/jmp at
-/// `offset`, and hooks it with `build(target)`.
+/// Finds `pattern` and redirects the 5-byte call/jmp at `offset` to
+/// `build(original destination)`.
 fn install(name: &str, pattern: &str, offset: usize, build: impl Fn(u64) -> Vec<u8>) -> bool {
     let Some(anchor) = memscan::wait_for_pattern_in_module(pattern, SCAN_RETRY_INTERVAL, SCAN_TIMEOUT) else {
         logger::error(&format!("SummonAnywhere: {name} pattern not found. Game may have been updated."));
         return false;
     };
     let site = unsafe { anchor.add(offset) };
-    let rel = unsafe { (site.add(1) as *const i32).read_unaligned() };
-    let target = (site as u64 + 5).wrapping_add_signed(rel as i64);
-    let Some(at) = codepatch::install_jmp_hook(site, 5, &build(target)) else {
-        logger::error(&format!("SummonAnywhere: {name} hook install failed."));
+    let Some(target) = codepatch::rel32_target(site) else {
         return false;
     };
-    logger::log(&format!("SummonAnywhere: {name} patched at {site:p}, stub at {at:p}."));
+    let Some(at) = codepatch::redirect_rel32(site, &build(target)) else {
+        logger::error(&format!("SummonAnywhere: {name} redirect failed."));
+        return false;
+    };
+    logger::log(&format!("SummonAnywhere: {name} at {site:p} (was {target:#x}) -> stub {at:p}."));
     true
 }
 
 fn install_patches() -> bool {
     let flag = ANYWHERE.as_ptr() as u64;
-    install("stateInfo check", STATE_CALL_AOB, STATE_CALL_OFFSET, |t| build_state_call_stub(flag, t))
+    let fallback = FALLBACK_STONE.as_ptr() as u64;
+    install("stateInfo check", STATE_CALL_AOB, STATE_CALL_OFFSET, |t| build_state_call_stub(flag, fallback, t))
         && install("stateInfo tail check", STATE_TAIL_AOB, STATE_TAIL_OFFSET, |t| build_state_tail_stub(flag, t))
         && install("in-range check", INRANGE_AOB, INRANGE_OFFSET, |t| build_inrange_stub(flag, t))
-        && install_clear()
 }
 
 /// Stone used while none has been seen yet this session: the first row
@@ -358,9 +345,8 @@ mod tests {
     #[test]
     fn dump_stubs() {
         let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
-        println!("STATE_CALL_STUB={}", hex(&build_state_call_stub(0x1122334455667788, 0x1404FA370)));
+        println!("STATE_CALL_STUB={}", hex(&build_state_call_stub(0x1122334455667788, 0x5566778899AABBCC, 0x1404FA370)));
         println!("STATE_TAIL_STUB={}", hex(&build_state_tail_stub(0x1122334455667788, 0x1404FA370)));
         println!("INRANGE_STUB={}", hex(&build_inrange_stub(0x1122334455667788, 0x1404BD870)));
-        println!("CLEAR_STUB={}", hex(&build_clear_stub(0x1122334455667788)));
     }
 }
