@@ -1009,3 +1009,61 @@ về đúng 3 con còn lại.
 Changelog Nexus (API) có tới `1.1.2` → bản sửa Ash nâng cấp ở trên là
 `1.1.3`: "Fixed re-using an upgraded Spirit Ash summoning more spirits
 instead of sending them back." `Cargo.toml` bump lên `1.1.3`.
+
+## Xung đột với Seamless Co-op từ 1.1.0: chuyển mọi patch sang đổi đích `call` (2026-10-01)
+
+Người dùng test lại cùng Seamless Co-op 2.0.1 (từ 1.0.0 tới giờ toàn test
+offline không Seamless): **mọi DLL 1.1.0 → 1.1.3** đều làm game dừng ngay
+với hộp thoại "Seamless Coop 2.0.1 - Fatal Error: No such pattern `E8 ? ?
+? ? 83 F8 02 41 0F 44 FC` ... ersc\signatures\signatures.cpp 1426". Đúng
+là `call GetBuddyState; cmp eax,2; cmovz edi,r12d` - chỗ tính HP cost
+`0x1403C0C2F` mà patch 7 (FP/HP cho Ash gọi thêm, từ 1.1.0) thay bằng
+`jmp` inline (`E8` → `E9` + NOP). Seamless tìm chỗ patch của nó bằng chữ
+ký byte và **tự huỷ game** khi không khớp - mô tả trên Nexus lại cam kết
+chạy được với Seamless.
+
+Điều tra:
+- `ersc.dll` (13 MB, không có version resource, SHA256 `FCD11A18...`):
+  database IDA ở `dumps/ida/ersc/fcd11a18/` (gitignore). Chuỗi gần như
+  đều mã hoá; `ersc\buddy\buddy.cpp` / "seamless buddy system" chỉ là
+  cấp slot spirit (65 slot / người chơi, `sub_18008A7D0`).
+- Dump `dumps/eldenring.exe.180280.dmp` (400 MB, lúc lỗi): chữ ký của
+  Seamless chỉ được giải mã lúc dùng → trong dump chỉ có đúng chữ ký bị
+  lỗi (dạng `?` đơn; các chuỗi `??` là AOB của chính mod). Không liệt kê
+  được hết chữ ký của Seamless → phải giả định bất kỳ byte nào quanh chỗ
+  patch đều có thể nằm trong 1 chữ ký của họ.
+
+**Sửa:** thêm `common::codepatch::{rel32_target, redirect_rel32}`: chỉ
+ghi lại 4 byte displacement của 1 lệnh `call`/`jmp rel32` sẵn có sang stub
+gần đó; opcode và mọi byte xung quanh giữ nguyên (chữ ký Seamless để
+wildcard đúng phần displacement: `E8 ? ? ? ?`). Nếu mod khác đã đổi đích
+cùng lệnh đó, `rel32_target` trả về stub của họ → 2 mod nối tiếp nhau.
+Stub giờ là "hàm được gọi": vào với `rsp % 16 == 8`, tự `sub rsp,28h/38h`
+trước mỗi lời gọi bên trong, kết thúc bằng `ret` hoặc tail `jmp`.
+
+- `multi_spirit.rs`: UI x3, CanUseItem, FP/HP cost x2, recall - đổi đích
+  `call` như cũ (stub kiểu hàm). DoSummon: thay vì hook 14 byte sau
+  `call GetBuddyState`, đổi đích chính lệnh `call` đó; `decide_state`
+  trả state mới (2 = cho về / 0 = gọi thêm). Patch 5 (giữ bia đá khi
+  copy `+0x38` → `+0x3C`, inline 8 byte) bỏ: `decide_state` gán `+0x38 =
+  +0x3C` khi `+0x38 = 0` trước khi trả 0. Patch 6: thay detour ở prologue
+  `DisappearAll` (17 byte) bằng đổi đích đúng lệnh `call DisappearAll` của
+  nhánh `+0x28` trong `sub_1404B92B0` (`0x1404B9587`, AOB `41 80 7F 28 00
+  74 08 49 8B CF E8 ...`); stub gọi `disappear_all_hook`, không xử lý thì
+  tail-jump sang `DisappearAll` thật (hook gọi thẳng hàm thật, không còn
+  trampoline).
+- `buddy_stone.rs`: stateInfo (call) / stateInfo (tail `jmp` `E9`) /
+  in-range - đổi đích. Patch xoá bia đá (`mov [rsi+38h],0`, inline 7 byte)
+  bỏ: stub stateInfo trong `GetBuddyState` (rbx = manager) ghi
+  `FALLBACK_STONE` vào `+0x38` khi = 0, ngay trước khi `GetBuddyState` đọc
+  nó - mọi đường triệu hồi đều hỏi `GetBuddyState` trước.
+- `band.rs` giữ nguyên (y hệt 1.0.0, bản đã chạy với Seamless).
+
+Mọi stub disassemble lại bằng capstone.
+
+**Test với Seamless Co-op 2.0.1: đúng** (người dùng) - game không còn bị
+huỷ; log: `SeamlessCoop\ersc.dll` đã nạp, mọi dòng cài đặt `was` trỏ về
+hàm gốc của game (mod cài trước, Seamless quét sau vẫn khớp vì `E8` còn
+nguyên); MultiSpirit gọi nhiều Ash + cho về từng Ash (`3 other(s)
+kept`), cả Ash nâng cấp (`258001` = Lhutel +1) và Ash 15 spirit
+(`240000`); SummonAnywhere dùng bia dự phòng `10000100`.
