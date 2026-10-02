@@ -30,7 +30,9 @@ const TORRENT_NPC_PARAM_ID: i32 = 80020000;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Group {
-    Movement,
+    Walk,
+    Run,
+    Sneak,
     Roll,
     Attack,
     /// Backstabs and ripostes (`PlayerCritical`), see [group_of].
@@ -45,7 +47,9 @@ impl Group {
     /// This group's multiplier in `[Speed]`.
     fn speed(self, speed: &Speed) -> f32 {
         match self {
-            Group::Movement => speed.player_movement,
+            Group::Walk => speed.player_walk,
+            Group::Run => speed.player_run,
+            Group::Sneak => speed.player_sneak,
             Group::Roll => speed.player_roll,
             Group::Attack => speed.player_attack,
             Group::Critical => speed.player_critical,
@@ -76,7 +80,16 @@ pub fn group_of(anim_id: i32) -> Group {
         return Group::Skill;
     }
     match anim_id % 1_000_000 {
-        0 | 20_000..=26_999 => Group::Movement,
+        // Walk / run / sneak (probe, 2026-10-02 - the 3rd suffix digit is
+        // the gait, the same standing or sneaking): walk 0201xx (stop
+        // 0221xx), run - holding the dash key - 0202xx (stop 0222xx),
+        // sneaking 3xxxxx (idle 300000, sneak walk 3201xx, sneak run
+        // 3202xx, going into the sneak stance 390000). The rest of the old Movement range
+        // (standing 000000, 0200xx = the legs while using an item on the
+        // move, jumps...) is Other since `PlayerMovement` was split.
+        20_100..=20_199 | 22_100..=22_199 => Group::Walk,
+        20_200..=20_299 | 22_200..=22_299 => Group::Run,
+        300_000..=399_999 => Group::Sneak,
         27_000..=27_999 => Group::Roll,
         // Critical hits (riposte 031700, backstab 031719 -> 031710 - probe,
         // 2026-10-02) are paired with the victim's anim, which this mod
@@ -216,6 +229,20 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gaits_are_split() {
+        assert_eq!(group_of(20_110), Group::Walk);
+        assert_eq!(group_of(22_100), Group::Walk); // walk stop
+        assert_eq!(group_of(20_210), Group::Run);
+        assert_eq!(group_of(22_200), Group::Run); // run stop
+        assert_eq!(group_of(300_000), Group::Sneak); // sneak idle
+        assert_eq!(group_of(320_110), Group::Sneak); // sneak walk
+        assert_eq!(group_of(320_210), Group::Sneak); // sneak run
+        assert_eq!(group_of(390_000), Group::Sneak); // going into the sneak stance
+        assert_eq!(group_of(0), Group::Other); // standing
+        assert_eq!(group_of(20_010), Group::Other); // legs while using an item
+    }
 
     #[test]
     fn critical_hits_are_their_own_group() {
