@@ -33,6 +33,8 @@ pub enum Group {
     Movement,
     Roll,
     Attack,
+    /// Backstabs and ripostes (`PlayerCritical`), see [group_of].
+    Critical,
     Skill,
     Cast,
     Item,
@@ -46,6 +48,7 @@ impl Group {
             Group::Movement => speed.player_movement,
             Group::Roll => speed.player_roll,
             Group::Attack => speed.player_attack,
+            Group::Critical => speed.player_critical,
             Group::Skill => speed.player_skill,
             Group::Cast => speed.player_cast,
             Group::Item => speed.player_item,
@@ -75,6 +78,13 @@ pub fn group_of(anim_id: i32) -> Group {
     match anim_id % 1_000_000 {
         0 | 20_000..=26_999 => Group::Movement,
         27_000..=27_999 => Group::Roll,
+        // Critical hits (riposte 031700, backstab 031719 -> 031710 - probe,
+        // 2026-10-02) are paired with the victim's anim, which this mod
+        // doesn't speed up: a faster player pulled the blade out while the
+        // enemy was still falling (user test). Own key `PlayerCritical`,
+        // default 1 (vanilla) - first fixed at 1, made a key the same day
+        // at the user's request.
+        31_700..=31_799 => Group::Critical,
         30_000..=39_999 => Group::Attack,
         40_000..=49_999 => Group::Skill,
         // Torrent's whistle is an item, but in game it's the first part of
@@ -177,11 +187,12 @@ fn apply(last_active: &mut Vec<usize>) {
 
     if let Some(player) = world_chr_man.main_player.as_mut() {
         let chr = &mut player.chr_ins;
+        let group = group_of(current_anim_id(chr));
         let master = clamped(speed.player_all);
         let value = if (master - 1.0).abs() > 0.0001 {
             master
         } else {
-            clamped(group_of(current_anim_id(chr)).speed(&speed))
+            clamped(group.speed(&speed))
         };
         set_animation_speed(chr, value);
     }
@@ -199,5 +210,29 @@ pub fn run() {
     logger::log("Speed: per-action multipliers active.");
     loop {
         std::thread::sleep(Duration::from_secs(60));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn critical_hits_are_their_own_group() {
+        assert_eq!(group_of(23_031_700), Group::Critical); // riposte
+        assert_eq!(group_of(23_031_719), Group::Critical); // backstab start
+        assert_eq!(group_of(23_031_710), Group::Critical); // backstab
+        assert_eq!(group_of(23_030_000), Group::Attack);
+        assert_eq!(group_of(23_031_699), Group::Attack);
+        assert_eq!(group_of(23_031_800), Group::Attack);
+    }
+
+    #[test]
+    fn critical_hits_use_their_own_key() {
+        let speed = Speed { player_attack: 3.0, ..Speed::default() };
+        assert_eq!(Group::Critical.speed(&speed), 1.0); // default
+        let speed = Speed { player_critical: 1.5, ..Speed::default() };
+        assert_eq!(Group::Critical.speed(&speed), 1.5);
+        assert_eq!(Group::Attack.speed(&speed), 1.2);
     }
 }

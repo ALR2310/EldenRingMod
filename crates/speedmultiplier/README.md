@@ -394,3 +394,22 @@ Code:
 xác nhận; bản kỹ năng vũ khí là `1730`, bản item `20503170`). Log: override
 bật/tắt theo buff (`#1` → `none`), 2 override cùng lúc (`#1, #2`), reload
 giữa chừng vẫn đúng.
+
+## Đòn chí mạng: nhóm riêng `PlayerCritical` (2026-10-02)
+
+Người dùng điều tra đâm lén / riposte (Nexus, invadersnes64 muốn tăng tốc
+riposte; người dùng: đòn chí mạng phải khớp anim kẻ địch). `SpeedProbe`:
+- Riposte (sau parry `a692_044840`): `a023_031700`.
+- Backstab: `a023_031719` → `a023_031710` (các anim `32xxxx` ở lần đầu là
+  lúc cúi người lén tới).
+- Đuôi `0317xx` nằm trong dải Attack (`030000`-`039999`) → bị tăng theo
+  `PlayerAttack`. Ở 2.0 người chơi rút kiếm xong trong khi kẻ địch vẫn đang
+  ngã (người dùng xác nhận) - anim nạn nhân không được mod tăng tốc.
+
+Sửa: nhóm `Critical` = đuôi `031700`-`031799`, đặt trước Attack. Bản đầu
+ép cố định 1.0 (kể cả dưới `PlayerAll`/`[[Override]]`); cùng ngày người
+dùng muốn thành key → `PlayerCritical` (mặc định 1.0, comment cảnh báo lệch
+nhịp nếu > 1), hành xử như mọi key `Player*` (`PlayerAll` khác 1 đè lên,
+`[[Override]]` đặt được). Test `group_of` (031700/031710/031719 = Critical,
+030000/031699/031800 = Attack). **Test trong game: đúng.** Chưa thử vũ khí
+khác `a023` (vd. dao găm có đòn chí mạng riêng).

@@ -44,6 +44,7 @@ pub struct Speed {
     pub player_movement: f32,
     pub player_roll: f32,
     pub player_attack: f32,
+    pub player_critical: f32,
     pub player_skill: f32,
     pub player_cast: f32,
     pub player_item: f32,
@@ -68,6 +69,8 @@ pub struct Override {
     #[serde(default)]
     pub player_attack: Option<f32>,
     #[serde(default)]
+    pub player_critical: Option<f32>,
+    #[serde(default)]
     pub player_skill: Option<f32>,
     #[serde(default)]
     pub player_cast: Option<f32>,
@@ -87,6 +90,7 @@ impl Override {
             (self.player_movement, &mut speed.player_movement),
             (self.player_roll, &mut speed.player_roll),
             (self.player_attack, &mut speed.player_attack),
+            (self.player_critical, &mut speed.player_critical),
             (self.player_skill, &mut speed.player_skill),
             (self.player_cast, &mut speed.player_cast),
             (self.player_item, &mut speed.player_item),
@@ -207,6 +211,7 @@ impl Default for Speed {
             player_movement: 1.2,
             player_roll: 1.1,
             player_attack: 1.2,
+            player_critical: 1.0,
             player_skill: 1.2,
             player_cast: 1.2,
             player_item: 1.0,
