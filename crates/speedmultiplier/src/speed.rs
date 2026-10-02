@@ -24,7 +24,7 @@ use fromsoftware_shared::FromStatic;
 
 use common::logger;
 
-use crate::config::{self, Speed};
+use crate::config::{self, Player, Torrent};
 
 const TORRENT_NPC_PARAM_ID: i32 = 80020000;
 
@@ -33,6 +33,7 @@ pub enum Group {
     Walk,
     Run,
     Sneak,
+    Jump,
     Roll,
     Attack,
     /// Backstabs and ripostes (`PlayerCritical`), see [group_of].
@@ -44,20 +45,56 @@ pub enum Group {
 }
 
 impl Group {
-    /// This group's multiplier in `[Speed]`.
-    fn speed(self, speed: &Speed) -> f32 {
+    /// This group's multiplier in `[Player]`.
+    fn speed(self, player: &Player) -> f32 {
         match self {
-            Group::Walk => speed.player_walk,
-            Group::Run => speed.player_run,
-            Group::Sneak => speed.player_sneak,
-            Group::Roll => speed.player_roll,
-            Group::Attack => speed.player_attack,
-            Group::Critical => speed.player_critical,
-            Group::Skill => speed.player_skill,
-            Group::Cast => speed.player_cast,
-            Group::Item => speed.player_item,
-            Group::Other => speed.player_other,
+            Group::Walk => player.walk,
+            Group::Run => player.run,
+            Group::Sneak => player.sneak,
+            Group::Jump => player.jump,
+            Group::Roll => player.roll,
+            Group::Attack => player.attack,
+            Group::Critical => player.critical,
+            Group::Skill => player.skill,
+            Group::Cast => player.cast,
+            Group::Item => player.item,
+            Group::Other => player.other,
         }
+    }
+}
+
+/// Torrent's own anims (2026-10-02, `SpeedProbe` while riding): walk
+/// 0021xx (002100 start, 002110), run - the dash key, a second press
+/// included - 0022xx (002220, 002200, 002221, slowing down 002210).
+/// Jump: taking off 0061xx (006110 standing, 006130 walking or running -
+/// the same id for both) and landing 0074xx (007400, 007451). Everything
+/// else - standing 000000, turning 0051xx - is `Other`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TorrentGroup {
+    Walk,
+    Run,
+    Jump,
+    Other,
+}
+
+impl TorrentGroup {
+    /// This group's multiplier in `[Torrent]`.
+    fn speed(self, torrent: &Torrent) -> f32 {
+        match self {
+            TorrentGroup::Walk => torrent.walk,
+            TorrentGroup::Run => torrent.run,
+            TorrentGroup::Jump => torrent.jump,
+            TorrentGroup::Other => torrent.other,
+        }
+    }
+}
+
+pub fn torrent_group_of(anim_id: i32) -> TorrentGroup {
+    match anim_id {
+        2_100..=2_199 => TorrentGroup::Walk,
+        2_200..=2_299 => TorrentGroup::Run,
+        6_100..=6_199 | 7_400..=7_499 => TorrentGroup::Jump,
+        _ => TorrentGroup::Other,
     }
 }
 
@@ -90,6 +127,11 @@ pub fn group_of(anim_id: i32) -> Group {
         20_100..=20_199 | 22_100..=22_199 => Group::Walk,
         20_200..=20_299 | 22_200..=22_299 => Group::Run,
         300_000..=399_999 => Group::Sneak,
+        // Jumps (probe, 2026-10-02): taking off 2020xx (202000 standing,
+        // 202020 walking, 202030/202040 running), landing 2021xx (202100,
+        // 202115, 202126). Only the range seen - other 20xxxx anims were
+        // noted around Torrent before.
+        202_000..=202_199 => Group::Jump,
         27_000..=27_999 => Group::Roll,
         // Critical hits (riposte 031700, backstab 031719 -> 031710 - probe,
         // 2026-10-02) are paired with the victim's anim, which this mod
@@ -180,7 +222,7 @@ fn apply(last_active: &mut Vec<usize>) {
             .collect(),
         _ => Vec::new(),
     };
-    let (speed, active) = config.effective_speed(|id| sp_effects.contains(&id));
+    let (speeds, active) = config.effective_speed(|id| sp_effects.contains(&id));
     if active != *last_active {
         let list = active
             .iter()
@@ -201,16 +243,22 @@ fn apply(last_active: &mut Vec<usize>) {
     if let Some(player) = world_chr_man.main_player.as_mut() {
         let chr = &mut player.chr_ins;
         let group = group_of(current_anim_id(chr));
-        let master = clamped(speed.player_all);
+        let master = clamped(speeds.player.all);
         let value = if (master - 1.0).abs() > 0.0001 {
             master
         } else {
-            clamped(group.speed(&speed))
+            clamped(group.speed(&speeds.player))
         };
         set_animation_speed(chr, value);
     }
     if let Some(torrent) = torrent(world_chr_man) {
-        set_animation_speed(torrent, clamped(speed.torrent));
+        let master = clamped(speeds.torrent.all);
+        let value = if (master - 1.0).abs() > 0.0001 {
+            master
+        } else {
+            clamped(torrent_group_of(current_anim_id(torrent)).speed(&speeds.torrent))
+        };
+        set_animation_speed(torrent, value);
     }
 }
 
@@ -229,6 +277,30 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn torrent_gaits_are_split() {
+        assert_eq!(torrent_group_of(2_100), TorrentGroup::Walk);
+        assert_eq!(torrent_group_of(2_110), TorrentGroup::Walk);
+        assert_eq!(torrent_group_of(2_220), TorrentGroup::Run);
+        assert_eq!(torrent_group_of(2_210), TorrentGroup::Run); // slowing down
+        assert_eq!(torrent_group_of(0), TorrentGroup::Other); // standing
+        assert_eq!(torrent_group_of(5_102), TorrentGroup::Other); // turning
+        assert_eq!(torrent_group_of(6_110), TorrentGroup::Jump); // standing jump
+        assert_eq!(torrent_group_of(6_130), TorrentGroup::Jump); // moving jump
+        assert_eq!(torrent_group_of(7_400), TorrentGroup::Jump); // landing
+        assert_eq!(torrent_group_of(7_451), TorrentGroup::Jump); // moving landing
+    }
+
+    #[test]
+    fn jumps_are_their_own_group() {
+        assert_eq!(group_of(202_000), Group::Jump); // standing jump
+        assert_eq!(group_of(202_020), Group::Jump); // walking jump
+        assert_eq!(group_of(202_040), Group::Jump); // running jump
+        assert_eq!(group_of(202_100), Group::Jump); // landing
+        assert_eq!(group_of(202_126), Group::Jump); // running landing
+        assert_eq!(group_of(202_200), Group::Other);
+    }
 
     #[test]
     fn gaits_are_split() {
@@ -256,10 +328,10 @@ mod tests {
 
     #[test]
     fn critical_hits_use_their_own_key() {
-        let speed = Speed { player_attack: 3.0, ..Speed::default() };
-        assert_eq!(Group::Critical.speed(&speed), 1.0); // default
-        let speed = Speed { player_critical: 1.5, ..Speed::default() };
-        assert_eq!(Group::Critical.speed(&speed), 1.5);
-        assert_eq!(Group::Attack.speed(&speed), 1.2);
+        let player = Player { attack: 3.0, ..Player::default() };
+        assert_eq!(Group::Critical.speed(&player), 1.0); // default
+        let player = Player { critical: 1.5, ..Player::default() };
+        assert_eq!(Group::Critical.speed(&player), 1.5);
+        assert_eq!(Group::Attack.speed(&player), 1.2);
     }
 }

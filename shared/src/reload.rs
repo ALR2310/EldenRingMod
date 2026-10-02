@@ -45,6 +45,7 @@ pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 pub fn run(ini_path: String) {
     run_with(
         || config::get_string("ReloadKey", "F5"),
+        || true,
         move || {
             config::load(&ini_path);
             Ok(())
@@ -58,9 +59,14 @@ pub fn run(ini_path: String) {
 /// config. An `Err` (e.g. a TOML syntax error, the old config still in use)
 /// is logged and shown as "Config error - see log" instead of "Config
 /// reloaded"; [RELOAD_GENERATION] is only bumped on success.
-pub fn run_with<K, R>(reload_key: K, mut reload: R)
+/// `banner` (read after the reload, so a reload that turns it off takes
+/// effect at once) says whether to show the "Config reloaded" banner;
+/// the error banner always shows - without it a failed reload would be
+/// silent in game.
+pub fn run_with<K, B, R>(reload_key: K, banner: B, mut reload: R)
 where
     K: Fn() -> String + Send + 'static,
+    B: Fn() -> bool + Send + 'static,
     R: FnMut() -> Result<(), String> + Send + 'static,
 {
     let cs_task = crate::task::wait_for_cs_task();
@@ -78,7 +84,9 @@ where
                 Ok(()) => {
                     RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
                     logger::log("Reload: config reloaded (hotkey pressed).");
-                    crate::announce::show_announcement("Config reloaded");
+                    if banner() {
+                        crate::announce::show_announcement("Config reloaded");
+                    }
                 }
                 Err(err) => {
                     logger::error(&format!("Reload: config not reloaded, the previous one stays in use:
