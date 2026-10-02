@@ -1,13 +1,10 @@
 #![allow(non_snake_case)] // crate name is "SpeedMultiplier" to control the output DLL's filename
 
+mod config;
 mod probe;
 mod speed;
 
-use common::{config, dll_dir, logger};
-
-// SpeedMultiplier.ini is embedded verbatim into the binary at compile time
-// via include_str! - single source of truth for the default config.
-const DEFAULT_INI: &str = include_str!("../SpeedMultiplier.ini");
+use common::{dll_dir, logger};
 
 /// # Safety
 /// This is exposed this way so the library loader can call it. Do not call it
@@ -21,20 +18,38 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
 
     std::thread::spawn(move || {
         let dir = dll_dir(hmodule);
-        let ini_path = format!("{dir}\\SpeedMultiplier.ini");
-        let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
+        let report = config::init(&format!("{dir}\\SpeedMultiplier.toml"));
 
         // [Logging] LogFile gates the log file entirely - see common::logger.
+        logger::set_enabled(config::get().logging.log_file);
         logger::init(&dir, "SpeedMultiplier.log");
         logger::install_panic_hook();
         logger::log("Activating SpeedMultiplier...");
-        if migrated > 0 {
+        if report.created {
+            logger::log("SpeedMultiplier.toml created with the default settings.");
+        }
+        if report.added_keys > 0 {
             logger::log(&format!(
-                "SpeedMultiplier.ini updated: added {migrated} new key(s) from a newer default template."
+                "SpeedMultiplier.toml updated: added {} new key(s) from a newer default template.",
+                report.added_keys
+            ));
+        }
+        if let Some(err) = report.error {
+            logger::error(&format!(
+                "SpeedMultiplier.toml has an error, running on the default settings:\n{err}"
             ));
         }
 
-        std::thread::spawn(move || common::reload::run(ini_path));
+        std::thread::spawn(|| {
+            common::reload::run_with(
+                || config::get().general.reload_key.clone(),
+                || {
+                    config::reload()?;
+                    logger::set_enabled(config::get().logging.log_file);
+                    Ok(())
+                },
+            )
+        });
         std::thread::spawn(speed::run);
 
         common::diag::log_environment_when_game_ready();

@@ -13,7 +13,9 @@ use std::time::Duration;
 use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
-use common::{config, logger};
+use common::logger;
+
+use crate::config;
 
 use crate::speed::{current_anim_id, group_of, torrent};
 
@@ -25,7 +27,7 @@ fn fmt_anim(id: i32) -> String {
 }
 
 pub fn run() {
-    if !config::get_bool("SpeedProbe", false) {
+    if !config::get().logging.speed_probe {
         return;
     }
 

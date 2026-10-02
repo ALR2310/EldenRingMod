@@ -25,6 +25,11 @@ fromsoftware-shared = { git = "https://github.com/vswarte/fromsoftware-rs", rev 
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Fake C++ vtable for registering a Rust closure as a game task
 vtable-rs = "0.1.5"
+# TOML config (common::toml_config): typed parse via serde, comment-preserving
+# "add missing keys from the template" via toml_edit.
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+toml_edit = "0.22"
 
 [profile.release]
 lto = true

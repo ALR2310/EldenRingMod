@@ -40,6 +40,8 @@
 //!   fromsoftware-rs's `rows()`/`rows_mut()`, which panic on some modded
 //!   regulation.bin files (Convergence), and checks a param's slot really
 //!   holds that param before writing to it.
+//! - `toml_config`: typed TOML config (serde) for mods whose settings need
+//!   lists/tables an ini can't hold; the ini `config` stays for the rest.
 
 pub mod alloc_hook;
 pub mod announce;
@@ -54,6 +56,7 @@ pub mod player;
 pub mod reload;
 pub mod task;
 pub mod task_hook;
+pub mod toml_config;
 
 use std::ffi::c_void;
 

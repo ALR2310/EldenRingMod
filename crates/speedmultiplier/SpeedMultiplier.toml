@@ -1,0 +1,42 @@
+[General]
+# ; Key that reloads this config file in-game, no restart needed.
+# https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+ReloadKey = "F5"
+
+
+[Speed]
+# All player actions. Any value other than 1 overrides every
+# Player* key below.
+PlayerAll = 1.0
+
+# walking, running, sprinting
+PlayerMovement = 1.2
+
+# rolling, backstepping
+PlayerRoll = 1.1
+
+# normal attacks
+PlayerAttack = 1.2
+
+# Ashes of War / weapon skills
+PlayerSkill = 1.2
+
+# casting sorceries and incantations
+PlayerCast = 1.2
+
+# using items: flasks, consumables, throwables...
+PlayerItem = 1.0
+
+# everything else: resting at a grace, gestures...
+PlayerOther = 1.0
+
+# Torrent, all of its animations.
+Torrent = 1.3
+
+
+[Logging]
+# Write a log file next to the DLL, for troubleshooting.
+LogFile = true
+
+# Logs every animation the player plays
+SpeedProbe = false
