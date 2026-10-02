@@ -14,11 +14,14 @@
 //! Every active override applies, top to bottom, so a later one wins on a
 //! key both set - see [Config::effective_speed].
 //!
-//! `Default` must match the embedded template - the test below checks it.
+//! Defaults live only in the embedded template (2026-10-02): `Default` on
+//! these structs is the derived zero value `common::toml_config` needs
+//! while parsing, never a config in use - see [template] and the test
+//! `template_sets_every_field`.
 
 use std::sync::{Arc, OnceLock};
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use common::toml_config::{LoadReport, Migration, Step, TomlConfig};
 
@@ -32,7 +35,7 @@ pub const TEMPLATE: &str = include_str!("../SpeedMultiplier.toml");
 /// only - a released step must never change.
 const STEPS: &[Step] = &[];
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Config {
     pub general: General,
@@ -43,7 +46,7 @@ pub struct Config {
     pub overrides: Vec<Override>,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct General {
     /// File format version, managed by the mod.
@@ -53,7 +56,7 @@ pub struct General {
     pub reload_banner: bool,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Player {
     pub all: f32,
@@ -70,7 +73,7 @@ pub struct Player {
     pub other: f32,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Torrent {
     pub all: f32,
@@ -80,7 +83,7 @@ pub struct Torrent {
     pub other: f32,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Logging {
     pub log_file: bool,
@@ -98,7 +101,7 @@ pub struct Speeds {
 /// One `[[Override]]`: the keys it sets while the player has any of
 /// `sp_effect`. No `#[serde(default)]` on the struct - an override without
 /// `SpEffect` is an error, not one that is always on.
-#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Override {
     #[serde(rename = "SpEffect", deserialize_with = "sp_effect_ids")]
@@ -109,7 +112,7 @@ pub struct Override {
     pub torrent: TorrentOverride,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct PlayerOverride {
     pub all: Option<f32>,
@@ -126,7 +129,7 @@ pub struct PlayerOverride {
     pub other: Option<f32>,
 }
 
-#[derive(Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct TorrentOverride {
     pub all: Option<f32>,
@@ -241,69 +244,6 @@ fn sp_effect_ids<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<i32>,
     deserializer.deserialize_any(Ids)
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            general: General::default(),
-            player: Player::default(),
-            torrent: Torrent::default(),
-            logging: Logging::default(),
-            overrides: Vec::new(),
-        }
-    }
-}
-
-impl Default for General {
-    fn default() -> Self {
-        Self {
-            config_version: 1,
-            reload_key: "F5".to_string(),
-            reload_banner: true,
-        }
-    }
-}
-
-impl Default for Player {
-    fn default() -> Self {
-        Self {
-            all: 1.0,
-            walk: 1.1,
-            run: 1.2,
-            sneak: 1.1,
-            jump: 1.0,
-            roll: 1.1,
-            attack: 1.2,
-            critical: 1.0,
-            skill: 1.2,
-            cast: 1.2,
-            item: 1.0,
-            other: 1.0,
-        }
-    }
-}
-
-impl Default for Torrent {
-    fn default() -> Self {
-        Self {
-            all: 1.0,
-            walk: 1.1,
-            run: 1.3,
-            jump: 1.0,
-            other: 1.0,
-        }
-    }
-}
-
-impl Default for Logging {
-    fn default() -> Self {
-        Self {
-            log_file: true,
-            speed_probe: false,
-            effect_probe: false,
-        }
-    }
-}
-
 const MIGRATION: Migration = Migration {
     version_key: "General.ConfigVersion",
     steps: STEPS,
@@ -329,8 +269,13 @@ pub fn init(path: &str) -> LoadReport {
 pub fn get() -> Arc<Config> {
     match CONFIG.get() {
         Some(config) => config.get(),
-        None => Arc::new(Config::default()),
+        None => Arc::new(template()),
     }
+}
+
+/// The template's values - the defaults.
+pub fn template() -> Config {
+    common::toml_config::defaults(TEMPLATE)
 }
 
 pub fn reload() -> Result<(), String> {
@@ -345,22 +290,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn template_matches_default() {
-        let parsed: Config = toml::from_str(TEMPLATE).expect("template parses");
-        assert_eq!(parsed, Config::default());
+    fn template_sets_every_field() {
+        let missing = common::toml_config::template_missing_keys::<Config>(TEMPLATE, &["Override"]);
+        assert!(missing.is_empty(), "template lacks {missing:?}");
+    }
+
+    /// Parsed the way the loader does (two passes over the template).
+    fn parse_cfg(text: &str) -> Result<Config, String> {
+        common::toml_config::parse(text, TEMPLATE)
     }
 
     #[test]
     fn missing_keys_fall_back_to_default() {
-        let parsed: Config = toml::from_str("[Player]\nRoll = 2.0\n").unwrap();
+        let parsed: Config = parse_cfg("[Player]\nRoll = 2.0\n").unwrap();
         assert_eq!(parsed.player.roll, 2.0);
-        assert_eq!(parsed.torrent.run, 1.3);
+        assert_eq!(parsed.torrent.run, template().torrent.run);
         assert!(parsed.logging.log_file);
     }
 
     #[test]
     fn misspelled_key_is_an_error_with_its_line() {
-        let err = toml::from_str::<Config>("[Player]\nRol = 2.0\n").unwrap_err();
+        let err = parse_cfg("[Player]\nRol = 2.0\n").unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("Rol"), "{msg}");
         assert!(msg.contains("line 2"), "{msg}");
@@ -368,12 +318,12 @@ mod tests {
 
     #[test]
     fn reload_key_takes_a_name_or_a_number() {
-        let parsed: Config = toml::from_str("[General]\nReloadKey = \"0x74\"\n").unwrap();
+        let parsed: Config = parse_cfg("[General]\nReloadKey = \"0x74\"\n").unwrap();
         assert_eq!(parsed.general.reload_key, "0x74");
-        let parsed: Config = toml::from_str("[General]\nReloadKey = 116\n").unwrap();
+        let parsed: Config = parse_cfg("[General]\nReloadKey = 116\n").unwrap();
         assert_eq!(parsed.general.reload_key, "116");
         // A TOML hex literal is an integer too (user test, 2026-10-02).
-        let parsed: Config = toml::from_str("[General]\nReloadKey = 0x75\n").unwrap();
+        let parsed: Config = parse_cfg("[General]\nReloadKey = 0x75\n").unwrap();
         assert_eq!(common::input::parse_virtual_key(&parsed.general.reload_key, 0x74), 0x75);
     }
 
@@ -395,45 +345,43 @@ Torrent.All = 2.5
 
     #[test]
     fn override_needs_any_of_its_sp_effects() {
-        let config: Config = toml::from_str(OVERRIDES).unwrap();
+        let config: Config = parse_cfg(OVERRIDES).unwrap();
         let (speeds, active) = config.effective_speed(has(&[1112]));
         assert_eq!(active, vec![0]);
         assert_eq!(speeds.player.roll, 1.5);
-        assert_eq!(speeds.player.attack, 1.2); // [Player] default
-        assert_eq!(speeds.torrent.all, 1.0);
+        assert_eq!(speeds.player.attack, template().player.attack);
+        assert_eq!(speeds.torrent.all, template().torrent.all);
     }
 
     #[test]
     fn active_overrides_stack_and_the_later_one_wins() {
-        let config: Config = toml::from_str(OVERRIDES).unwrap();
+        let config: Config = parse_cfg(OVERRIDES).unwrap();
         let (speeds, active) = config.effective_speed(has(&[1111, 2222]));
         assert_eq!(active, vec![0, 1]);
         assert_eq!(speeds.player.roll, 2.0);
         assert_eq!(speeds.player.attack, 1.6);
-        assert_eq!(speeds.player.walk, 1.1);
+        assert_eq!(speeds.player.walk, template().player.walk);
         assert_eq!(speeds.torrent.all, 2.5);
     }
 
     #[test]
     fn no_active_override_keeps_speed() {
-        let config: Config = toml::from_str(OVERRIDES).unwrap();
+        let config: Config = parse_cfg(OVERRIDES).unwrap();
         let (speeds, active) = config.effective_speed(has(&[]));
         assert!(active.is_empty());
-        assert_eq!(speeds.player, Player::default());
-        assert_eq!(speeds.torrent, Torrent::default());
+        assert_eq!(speeds.player, template().player);
+        assert_eq!(speeds.torrent, template().torrent);
     }
 
     #[test]
     fn override_as_sub_tables_works_too() {
-        let config: Config =
-            toml::from_str("[[Override]]\nSpEffect = 1\n[Override.Player]\nRun = 3\n").unwrap();
+        let config: Config = parse_cfg("[[Override]]\nSpEffect = 1\n[Override.Player]\nRun = 3\n").unwrap();
         assert_eq!(config.overrides[0].player.run, Some(3.0));
     }
 
     #[test]
     fn sp_effect_ids_as_strings_are_accepted() {
-        let config: Config =
-            toml::from_str("[[Override]]\nSpEffect = [\"1111\", 2222]\nTorrent.All = 2\n").unwrap();
+        let config: Config = parse_cfg("[[Override]]\nSpEffect = [\"1111\", 2222]\nTorrent.All = 2\n").unwrap();
         assert_eq!(config.overrides[0].sp_effect, vec![1111, 2222]);
         assert_eq!(config.overrides[0].torrent.all, Some(2.0));
     }
@@ -447,7 +395,7 @@ Torrent.All = 2.5
             ("[[Override]]\nSpEffect = 1\nPlayer.Rol = 1\n", "Rol"),
             ("[[Override]]\nSpEffect = 1\nRoll = 1\n", "Roll"),
         ] {
-            let err = toml::from_str::<Config>(text).unwrap_err().to_string();
+            let err = parse_cfg(text).unwrap_err();
             assert!(err.contains(needle), "{text:?} -> {err}");
         }
     }
@@ -455,7 +403,7 @@ Torrent.All = 2.5
     #[test]
     fn integer_value_is_accepted_as_a_speed() {
         // Users will write `All = 2`, not `2.0`.
-        let parsed: Config = toml::from_str("[Torrent]\nAll = 2\n").unwrap();
+        let parsed: Config = parse_cfg("[Torrent]\nAll = 2\n").unwrap();
         assert_eq!(parsed.torrent.all, 2.0);
     }
 

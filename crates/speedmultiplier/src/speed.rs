@@ -328,10 +328,11 @@ mod tests {
 
     #[test]
     fn critical_hits_use_their_own_key() {
-        let player = Player { attack: 3.0, ..Player::default() };
-        assert_eq!(Group::Critical.speed(&player), 1.0); // default
-        let player = Player { critical: 1.5, ..Player::default() };
+        let defaults = crate::config::template().player;
+        let player = Player { attack: 3.0, ..defaults.clone() };
+        assert_eq!(Group::Critical.speed(&player), defaults.critical);
+        let player = Player { critical: 1.5, ..crate::config::template().player };
         assert_eq!(Group::Critical.speed(&player), 1.5);
-        assert_eq!(Group::Attack.speed(&player), 1.2);
+        assert_eq!(Group::Attack.speed(&player), defaults.attack);
     }
 }
