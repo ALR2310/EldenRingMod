@@ -1,0 +1,17 @@
+[package]
+name = "config_ui_derive"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+# `#[derive(ConfigUi)]` - builds the in-game menu's description of a config
+# struct (labels, ranges, control kinds) from the struct itself. Used through
+# `common::menu_schema`, which re-exports it.
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

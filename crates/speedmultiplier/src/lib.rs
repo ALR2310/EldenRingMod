@@ -6,6 +6,21 @@ mod speed;
 
 use common::{dll_dir, logger};
 
+// The in-game config menu (`common::menu_schema`): this mod's tab.
+common::export_menu_api! {
+    tab: "Speed Multiplier",
+    config: config::Config,
+    path: config::path,
+    reload: reload_config,
+}
+
+/// Reload from the hotkey or the menu: the config, then the log switch.
+fn reload_config() -> Result<(), String> {
+    config::reload()?;
+    logger::set_enabled(config::get().logging.log_file);
+    Ok(())
+}
+
 /// # Safety
 /// This is exposed this way so the library loader can call it. Do not call it
 /// yourself.
@@ -59,11 +74,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             common::reload::run_with(
                 || config::get().general.reload_key.clone(),
                 || config::get().general.reload_banner,
-                || {
-                    config::reload()?;
-                    logger::set_enabled(config::get().logging.log_file);
-                    Ok(())
-                },
+                reload_config,
             )
         });
         std::thread::spawn(speed::run);

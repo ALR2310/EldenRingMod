@@ -23,6 +23,7 @@ use std::sync::{Arc, OnceLock};
 
 use serde::{Deserialize, Deserializer, Serialize};
 
+use common::menu_schema::ConfigUi;
 use common::toml_config::{LoadReport, Migration, Step, TomlConfig};
 
 /// Embedded verbatim at compile time - single source of truth for the
@@ -35,59 +36,89 @@ pub const TEMPLATE: &str = include_str!("../SpeedMultiplier.toml");
 /// only - a released step must never change.
 const STEPS: &[Step] = &[];
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, ConfigUi)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Config {
     pub general: General,
     pub player: Player,
     pub torrent: Torrent,
     pub logging: Logging,
+    /// Not in the menu yet (editing a list comes after the first version).
+    #[ui(hidden)]
     #[serde(rename = "Override")]
     pub overrides: Vec<Override>,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, ConfigUi)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct General {
     /// File format version, managed by the mod.
+    #[ui(hidden)]
     pub config_version: u32,
+    /// Key that reloads the config file in-game
+    #[ui(key)]
     #[serde(deserialize_with = "common::toml_config::key_name")]
     pub reload_key: String,
+    /// Show a banner at the top of the screen after a reload
     pub reload_banner: bool,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, ConfigUi)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
+/// Every speed slider: 0.1 (slow motion) to 10, like `speed.rs` clamps.
+#[ui(min = 0.1, max = 10.0, step = 0.05)]
 pub struct Player {
+    /// All player actions - when not 1, overrides every key below
     pub all: f32,
+    /// Walking
     pub walk: f32,
+    /// Running
     pub run: f32,
+    /// Sneaking
     pub sneak: f32,
+    /// Jumping and landing
     pub jump: f32,
+    /// Rolling, backstepping
     pub roll: f32,
+    /// Normal attacks
     pub attack: f32,
+    /// Critical hits - above 1 the player finishes before the enemy does
     pub critical: f32,
+    /// Weapon skills
     pub skill: f32,
+    /// Casting sorceries and incantations
     pub cast: f32,
+    /// Using items (flasks, consumables, throwables...)
     pub item: f32,
+    /// Any action not covered by the keys above
     pub other: f32,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, ConfigUi)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
+/// Every speed slider: 0.1 (slow motion) to 10, like `speed.rs` clamps.
+#[ui(min = 0.1, max = 10.0, step = 0.05)]
 pub struct Torrent {
+    /// All of Torrent's actions - when not 1, overrides every key below
     pub all: f32,
+    /// Walking
     pub walk: f32,
+    /// Running
     pub run: f32,
+    /// Jumping and landing
     pub jump: f32,
+    /// Any action not covered by the keys above
     pub other: f32,
 }
 
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, ConfigUi)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Logging {
+    /// Write a log file next to the DLL, for troubleshooting
     pub log_file: bool,
+    /// Log every animation the player plays
     pub speed_probe: bool,
+    /// Log the player's SpEffect ids when they change
     pub effect_probe: bool,
 }
 
@@ -278,6 +309,11 @@ pub fn template() -> Config {
     common::toml_config::defaults(TEMPLATE)
 }
 
+/// The config file's path, once [init] ran - for the in-game menu.
+pub fn path() -> Option<String> {
+    CONFIG.get().map(|config| config.path().to_string())
+}
+
 pub fn reload() -> Result<(), String> {
     match CONFIG.get() {
         Some(config) => config.reload(),
@@ -293,6 +329,23 @@ mod tests {
     fn template_sets_every_field() {
         let missing = common::toml_config::template_missing_keys::<Config>(TEMPLATE, &["Override"]);
         assert!(missing.is_empty(), "template lacks {missing:?}");
+    }
+
+    #[test]
+    fn menu_covers_every_template_key() {
+        use common::menu_schema::field_paths;
+        let mut menu = field_paths(&Config::ui_fields());
+        menu.sort();
+        let template: toml::Table = toml::from_str(TEMPLATE).unwrap();
+        let mut keys = Vec::new();
+        for (table, values) in &template {
+            for key in values.as_table().unwrap().keys() {
+                keys.push(format!("{table}.{key}"));
+            }
+        }
+        keys.retain(|k| k != "General.ConfigVersion");
+        keys.sort();
+        assert_eq!(menu, keys);
     }
 
     /// Parsed the way the loader does (two passes over the template).

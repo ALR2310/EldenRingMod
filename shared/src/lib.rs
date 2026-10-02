@@ -40,8 +40,14 @@
 //!   fromsoftware-rs's `rows()`/`rows_mut()`, which panic on some modded
 //!   regulation.bin files (Convergence), and checks a param's slot really
 //!   holds that param before writing to it.
+//! - `menu_schema`: `#[derive(ConfigUi)]` + the text schema the in-game
+//!   config menu draws a mod's settings from.
 //! - `toml_config`: typed TOML config (serde) for mods whose settings need
 //!   lists/tables an ini can't hold; the ini `config` stays for the rest.
+
+// `#[derive(ConfigUi)]` expands to `::common::...` paths; this lets the
+// derive be used (and tested) inside this crate too.
+extern crate self as common;
 
 pub mod alloc_hook;
 pub mod announce;
@@ -51,6 +57,7 @@ pub mod diag;
 pub mod input;
 pub mod logger;
 pub mod memscan;
+pub mod menu_schema;
 pub mod params;
 pub mod player;
 pub mod reload;
