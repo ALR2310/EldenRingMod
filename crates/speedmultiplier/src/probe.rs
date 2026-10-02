@@ -21,7 +21,7 @@ use common::logger;
 
 use crate::config;
 
-use crate::speed::{current_anim_id, group_of, torrent};
+use crate::speed::{current_anim_id, group_of, torrent, torrent_group_of};
 
 fn fmt_anim(id: i32) -> String {
     if id < 0 {
@@ -100,8 +100,9 @@ pub fn run() {
                 if speed_probe && anim != last_torrent {
                     last_torrent = anim;
                     logger::log(&format!(
-                        "T {} ({anim}) speed={:.2}",
+                        "T {} ({anim}) {:?} speed={:.2}",
                         fmt_anim(anim),
+                        torrent_group_of(anim),
                         chr.modules.behavior.animation_speed,
                     ));
                 }

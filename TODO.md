@@ -9,11 +9,13 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 - [ ] Spirit dịch chuyển tới người chơi khi bị bỏ lại (hoãn từ trước 1.0.0; chỉ chỉnh `buddyWarp_*` không có tác dụng)
 - [ ] Quyết định giữ hay bỏ log `stones:` trong SlotProbe (thêm để dò lỗi MultiSpirit/SummonAnywhere)
 - [ ] `EnemyProbe` dễ crash - sửa hoặc bỏ hẳn
-- [ ] Reforged: Spirit Fury / Fortune of the Spiritcaller hỏng - "cannot resummon/aggro the spirits", Spiritcaller ring không hoạt động (Nexus, puffintoast, 2026-10-01; chưa rõ bản mod họ dùng)
+- [x] Reforged: Spirit Fury / Fortune of the Spiritcaller hỏng - "cannot resummon/aggro the spirits", Spiritcaller ring không hoạt động (Nexus, puffintoast, 2026-10-01; chưa rõ bản mod họ dùng)
   - Cơ chế Reforged (CHANGELOG.txt của ERR): bấm lại Ash khi spirit đang ở ngoài = **kích nộ (Spirit Fury)**, không phải cho về; cho về bằng item Spirit-Severing Blade. "Aggro" = Spirit Fury, "un-aggro'ed" = trạng thái bình tĩnh mặc định
   - Nghi MultiSpirit: chiếm đúng thao tác bấm lại Ash (patch `DoSummon`, `DisappearAll`, `GetBuddyState`/`CanUseItem`/UI) - có thể đè lên hook của `reforged.dll` ở cùng hàm. Đã nhờ họ thử `MultiSpirit=false` (F5), chờ phản hồi
   - Hướng sửa lâu dài: nhận diện Reforged (vd. `reforged.dll` trong module đã nạp) rồi nhường thao tác bấm lại Ash cho Spirit Fury; cần tự tái hiện (cần fortune Spiritcaller, rơi từ boss Road's End Catacombs)
-- [ ] Reforged: làm rõ đề xuất "summon spirits un-aggro'ed" (cùng người báo) - chờ họ giải thích
+- [ ] Reforged: spirit gọi ra mặc định ở trạng thái đỏ (Spirit Fury) thay vì trắng "passive" (puffintoast giải thích 2026-10-01, sau khi xác nhận 1.1.4 chạy tốt)
+  - Muốn: gọi ra ở trạng thái trắng như spirit thường; hoặc tuỳ chọn bảng màu trong ini (vd. bản đen của trạng thái đỏ)
+  - Chưa rõ màu đỏ là do mod (vd. `GhostColor=false` tắt vfx 70000/70010/70020 của Reforged, chỉ còn màu Fury) hay thiết kế Reforged - cần test `GhostColor=true` vs `false` trên Reforged
 - [ ] Reforged + MultiSpirit: kích Spirit Fury riêng cho từng Ash (hiện Fury 1 nhóm thì mọi Ash đều xám) - cần tìm cách Reforged đánh dấu "đang Fury" và cái gì làm Ash xám (SpEffect trên người chơi/spirit? `reforged.dll`?); lưu ý cân bằng
 - [ ] Reforged: NoRestResummon không có tác dụng sau khi cho về bằng Spirit-Severing Blade - Ash đã gọi trước đó không gọi lại được tới khi nghỉ (người dùng test 2026-10-01)
   - Là luật của Reforged gốc (người dùng xác nhận: sau Blade ô Ash xám tới khi ngồi grace), không phải do mod; NoRest chỉ gỡ khoá vanilla (`summonedEventFlagId` của bia đá)
@@ -28,14 +30,14 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 ## SpeedMultiplier
 
 - [x] Tách tốc độ đi bộ / chạy cho player (Nexus, cfzlbj, 2026-10-01) - xong 2026-10-02: `PlayerWalk` / `PlayerRun` / `PlayerSneak`, bỏ `PlayerMovement` (bàn phím chỉ có đi bộ + chạy giữ Shift, không có sprint riêng)
-- [ ] Tách tốc độ Torrent theo kiểu di chuyển (cùng yêu cầu của cfzlbj) - Torrent có `020000`-`020004`, cần probe
+- [x] Tách tốc độ Torrent theo kiểu di chuyển (cùng yêu cầu của cfzlbj) - xong 2026-10-02: `[Torrent]` `Walk` (`0021xx`) / `Run` (`0022xx`) / `Jump` (`0061xx`, `0074xx`) / `Other`
 - [x] ~~Bug: uống bình HP/FP khi đang di chuyển thì không được tăng tốc~~ (Nexus, 13586927500, 2026-10-01) - **giới hạn, không sửa** (người dùng chốt 2026-10-02)
   - Uống khi chạy: `anim_queue` giữ anim chạy (`0201xx`), anim uống chỉ ở lớp nửa thân trên → mod áp `PlayerMovement`, không phải `PlayerItem` (người dùng xác nhận: tăng `PlayerMovement` thì uống khi chạy nhanh lên). Game chỉ có 1 `animation_speed` cho cả nhân vật
   - Đã thử: `time_act +0xD0` = anim nửa thân trên (050110→050111→050112) nhưng **không bị xoá khi uống xong** (giữ tới khi anim chính đổi) → dùng nó thì tốc độ Item kéo dài tới lúc ngừng chạy. `+0xC8`=-1, `+0xCC`=thời gian blend 0.2/0.233, `+0xD4`=0 - không có field "đang chạy"
   - Hardware breakpoint (DR0) trên `animation_speed`: game chỉ đọc ở 1 chỗ - getter `sub_14036834A` (`[rcx+18h]`, rcx = behavior+0x17B0, Arxan) gọi từ `sub_14041DCA0` (update behavior: dt × animation_speed × behavior+0x15C0 → hkbCharacter)
 - [ ] Hệ số tốc độ đánh riêng cho từng loại vũ khí (Nexus, InvertedButt, 2026-10-01)
   - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `.docs/Elden Ring tae list updated for SOTE.txt`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
-- [ ] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01)
+- [x] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01) - xong 2026-10-02: `Player.Critical` (đuôi `031700`-`031799`, mặc định 1.0); đâm lén từ tư thế ngồi cũng là `0317xx`
   - Là anim cặp (pair anim) - player bị tăng tốc nhưng kẻ địch không. Hướng: giữ 1.0 cho các anim này (cùng ý với nhóm "luôn 1.0" cho anim chết / bị túm đã bàn trước 1.0.0); cần log anim id của critical/sneak attack
 
 - [x] Hệ số tốc độ theo SpEffect đang có trên người chơi (Nexus, Lwingr - Linear Convergence, 2026-10-02)

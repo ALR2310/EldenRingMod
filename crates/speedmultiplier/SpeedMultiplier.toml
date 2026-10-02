@@ -1,48 +1,39 @@
 [General]
-# ; Key that reloads this config file in-game, no restart needed.
+# file format version, managed by the mod - don't change
+ConfigVersion = 1   
+
+# Key that reloads this config file in-game, no restart needed.
 # https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
 ReloadKey = "F5"
 
+# Show banner at the top of the screen after a reload.
+# Errors always show.
+ReloadBanner = true
 
-[Speed]
-# All player actions. Any value other than 1 overrides every
-# Player* key below.
-PlayerAll = 1.0
 
-# walking
-PlayerWalk = 1.2
+[Player]
+# Groups of player actions.
+All = 1.0           # all player actions - when not 1, overrides every key below
+Walk = 1.2          # walking
+Run = 1.2           # running
+Sneak = 1.2         # sneaking
+Jump = 1.0          # jumping and landing
+Roll = 1.1          # rolling, backstepping
+Attack = 1.2        # normal attacks
+Critical = 1.0      # critical hits
+Skill = 1.2         # weapon skills
+Cast = 1.2          # casting sorceries and incantations
+Item = 1.0          # using items (flasks, consumables, throwables...)
+Other = 1.0         # any action not covered by the keys above
 
-# running
-PlayerRun = 1.2
 
-# everything while sneaking: sneak walking, sneak running...
-PlayerSneak = 1.2
-
-# rolling, backstepping
-PlayerRoll = 1.1
-
-# normal attacks
-PlayerAttack = 1.2
-
-# backstabs and ripostes - above 1 the player finishes before
-# the enemy does
-PlayerCritical = 1.0
-
-# Ashes of War / weapon skills
-PlayerSkill = 1.2
-
-# casting sorceries and incantations
-PlayerCast = 1.2
-
-# using items: flasks, consumables, throwables...
-PlayerItem = 1.0
-
-# any action not covered by the keys above,
-# e.g. resting at a grace, gestures...
-PlayerOther = 1.0
-
-# Torrent speed.
-Torrent = 1.3
+[Torrent]
+# Groups of Torrent's actions.
+All = 1.0           # all of Torrent's actions - when not 1, overrides every key below
+Walk = 1.0          # walking
+Run = 1.3           # running
+Jump = 1.0          # jumping and landing
+Other = 1.0         # any action not covered by the keys above
 
 
 # Override: different speeds while the player has a SpEffect.
@@ -50,15 +41,16 @@ Torrent = 1.3
 # many [[Override]] blocks as you like.
 #
 # SpEffect: one id, or a list - on while the player has ANY of them.
-# Then any of the [Speed] keys above; the ones left out keep their
-# [Speed] value.
+# Then any [Player] / [Torrent] key above, written as Player.<key> or
+# Torrent.<key>; the ones left out keep their value above.
 # When several overrides are on and set the same key, the lowest one
 # in the file wins.
 #
 # [[Override]]
-# SpEffect = [1234, 1235]
-# PlayerRoll = 1.5
-# PlayerRun = 1.4
+# SpEffect = [1660000, 1605000]   # Golden Vow or Flame, Grant Me Strength
+# Player.Roll = 1.5
+# Player.Run = 1.4
+# Torrent.Run = 1.4
 
 
 [Logging]

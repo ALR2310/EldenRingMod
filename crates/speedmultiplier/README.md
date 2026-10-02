@@ -464,3 +464,50 @@ Tên ban đầu `PlayerCrouch`, người dùng đổi thành `PlayerSneak` cho h
 DESCRIPTION: "Faster walking, running and sneaking". Torrent vẫn 1 key.
 
 **Test trong game (người dùng): 3 key hoạt động đúng.**
+
+## `[Player]` / `[Torrent]`, tốc độ Torrent và nhảy, migration theo phiên bản, `ReloadBanner` (2026-10-02)
+
+**Bố cục `[Player]` / `[Torrent]`** (người dùng): `[Speed]` với key
+`Player*` / `Torrent` → `[Player]` (`All`, `Walk`, `Run`, `Sneak`, `Jump`,
+`Roll`, `Attack`, `Critical`, `Skill`, `Cast`, `Item`, `Other`) và
+`[Torrent]` (`All`, `Walk`, `Run`, `Jump`, `Other`). `[[Override]]` dùng
+dotted key `Player.Roll = 1.5` / `Torrent.Run = 2` (bảng con
+`[Override.Player]` cũng được). Comment cùng dòng (người dùng viết lại
+template). `All` khác 1 đè mọi key của bảng đó.
+
+**Torrent** (`SpeedProbe` khi cưỡi; người cưỡi chạy `12xxxx`): đứng
+`000000`, đi `0021xx` (002100, 002110), chạy - giữ Shift, cả lần bấm thêm
+và giảm tốc - `0022xx` (002220, 002200, 002221, 002210), quẹo/xoay
+`0051xx`, nhảy `0061xx` (006110 đứng, 006130 đi hoặc chạy - cùng id) và tiếp
+đất `0074xx` (007400, 007451) → `Walk` / `Run` / `Jump` / `Other`. Mặc định
+`All 1.0, Walk 1.0, Run 1.3, Jump 1.0, Other 1.0` (trước đây mọi anim 1.3).
+`SpeedProbe` ghi nhóm cho dòng `T`.
+
+**Nhảy của người chơi**: cất nhảy `2020xx` (202000 đứng, 202020 đi,
+202030/202040 chạy), tiếp đất `2021xx` (202100, 202115, 202126) →
+`Player.Jump` (mặc định 1.0; trước rơi vào `Other`). Chỉ lấy dải đã thấy,
+không cả `20xxxx`.
+
+**Key lạ / đổi tên (`common::toml_config`)**: ini chuyển key lạ vào
+`[Legacy]`, TOML trước đây báo lỗi. Giờ lúc khởi động key không có trong
+template được gỡ và ghi lại thành comment ở cuối file (log WARN); F5 vẫn
+báo lỗi kèm dòng (người dùng đang sửa file). `[[Override]]` được giữ
+(`Migration::keep`). Bản đầu dùng danh sách đổi tên phẳng (`Speed.PlayerRun`
+→ `Player.Run`...) - đã chuyển file test thật của người dùng đúng - nhưng
+người dùng hỏi trường hợp nhảy phiên bản (1.0.0 → 1.2.0): danh sách phẳng
+phụ thuộc thứ tự, không tách/quy đổi được key, xoá 1 cặp là mất giá trị.
+Thay bằng **migration theo phiên bản**: `General.ConfigVersion` (phiên bản
+hiện tại = giá trị trong template), `STEPS[i]` đưa file từ `i+1` lên `i+2`,
+mỗi bước chạy đúng 1 lần mỗi file; helper `rename_key` / `get_value` /
+`remove_value` / `set_value`; file không có version = 1; file mới hơn mod
+(hạ cấp) không bị đụng. **Bước đã phát hành không bao giờ được sửa** - sửa
+sai bằng bước mới. SpeedMultiplier: `ConfigVersion = 1` = định dạng TOML
+phát hành đầu (1.1.0), `STEPS` rỗng, bỏ danh sách đổi tên (bản TOML chưa
+phát hành, không ai có file `[Speed]`); test `steps_cover_every_version`.
+
+**`ReloadBanner`** (`[General]`, mặc định true): tắt banner "Config
+reloaded"; banner lỗi luôn hiện (tắt luôn thì reload hỏng sẽ im lặng).
+`common::reload::run_with` nhận thêm `banner: Fn() -> bool` (đọc sau reload);
+mod ini (`reload::run`) luôn hiện như cũ.
+
+**Test trong game (người dùng): mọi thứ hoạt động.**

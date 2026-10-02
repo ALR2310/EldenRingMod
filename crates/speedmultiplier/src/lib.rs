@@ -34,6 +34,21 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
                 report.added_keys
             ));
         }
+        if let Some((from, to)) = report.migrated {
+            logger::log(&format!("SpeedMultiplier.toml updated from format version {from} to {to}."));
+        }
+        if let Some((file, current)) = report.newer {
+            logger::warn(&format!(
+                "SpeedMultiplier.toml is from a newer version of the mod (format {file}, this one knows {current}) - left as it is."
+            ));
+        }
+        if !report.unknown.is_empty() {
+            logger::warn(&format!(
+                "SpeedMultiplier.toml: {} key(s) this version doesn't use were moved to comments at the end of the file:\n  {}",
+                report.unknown.len(),
+                report.unknown.join("\n  ")
+            ));
+        }
         if let Some(err) = report.error {
             logger::error(&format!(
                 "SpeedMultiplier.toml has an error, running on the default settings:\n{err}"
@@ -43,6 +58,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(|| {
             common::reload::run_with(
                 || config::get().general.reload_key.clone(),
+                || config::get().general.reload_banner,
                 || {
                     config::reload()?;
                     logger::set_enabled(config::get().logging.log_file);
