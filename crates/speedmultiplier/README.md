@@ -343,7 +343,7 @@ TOML trước khi làm tính năng, để còn mở rộng.
 - `DESCRIPTION.bbcode`: "ini" → "config file", file cài đặt
   `SpeedMultiplier.toml`.
 
-Tính năng quy tắc theo SpEffect (`[[Rule]]`) chưa làm - xem `TODO.md`.
+Tính năng ghi đè theo SpEffect (`[[Override]]`) chưa làm - xem `TODO.md`.
 
 **Test trong game (người dùng): đúng.** Lần đầu ghi `ReloadKey = 0x75` báo
 lỗi "invalid type: integer `117`, expected a string" - trong TOML `0x75`
