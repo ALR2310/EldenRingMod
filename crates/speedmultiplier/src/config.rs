@@ -41,7 +41,9 @@ pub struct General {
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Speed {
     pub player_all: f32,
-    pub player_movement: f32,
+    pub player_walk: f32,
+    pub player_run: f32,
+    pub player_sneak: f32,
     pub player_roll: f32,
     pub player_attack: f32,
     pub player_critical: f32,
@@ -63,7 +65,11 @@ pub struct Override {
     #[serde(default)]
     pub player_all: Option<f32>,
     #[serde(default)]
-    pub player_movement: Option<f32>,
+    pub player_walk: Option<f32>,
+    #[serde(default)]
+    pub player_run: Option<f32>,
+    #[serde(default)]
+    pub player_sneak: Option<f32>,
     #[serde(default)]
     pub player_roll: Option<f32>,
     #[serde(default)]
@@ -87,7 +93,9 @@ impl Override {
     fn apply_to(&self, speed: &mut Speed) {
         let pairs = [
             (self.player_all, &mut speed.player_all),
-            (self.player_movement, &mut speed.player_movement),
+            (self.player_walk, &mut speed.player_walk),
+            (self.player_run, &mut speed.player_run),
+            (self.player_sneak, &mut speed.player_sneak),
             (self.player_roll, &mut speed.player_roll),
             (self.player_attack, &mut speed.player_attack),
             (self.player_critical, &mut speed.player_critical),
@@ -208,7 +216,9 @@ impl Default for Speed {
     fn default() -> Self {
         Self {
             player_all: 1.0,
-            player_movement: 1.2,
+            player_walk: 1.2,
+            player_run: 1.2,
+            player_sneak: 1.2,
             player_roll: 1.1,
             player_attack: 1.2,
             player_critical: 1.0,
@@ -342,7 +352,7 @@ PlayerRoll = 2.0
         assert_eq!(active, vec![0, 1]);
         assert_eq!(speed.player_roll, 2.0);
         assert_eq!(speed.player_attack, 1.6);
-        assert_eq!(speed.player_movement, 1.2);
+        assert_eq!(speed.player_walk, 1.2);
     }
 
     #[test]

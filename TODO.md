@@ -27,11 +27,12 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 ## SpeedMultiplier
 
-- [ ] Tách tốc độ đi bộ / chạy / chạy nhanh (sprint) thành key riêng, cho cả player lẫn Torrent (Nexus, cfzlbj, 2026-10-01)
-  - Hiện tại `PlayerMovement` và `Torrent` mỗi bên chỉ có 1 hệ số chung - cần dò đuôi anim từng kiểu: player đã thấy `020010`/`020110`/`020210` trong log nhưng chưa rõ cái nào là đi bộ / chạy / sprint; Torrent có `020000`-`020004`
-- [ ] Bug: uống bình HP/FP khi đang di chuyển thì không được tăng tốc, chỉ đúng khi đứng yên (Nexus, 13586927500, 2026-10-01)
-  - Đã tái hiện (2026-10-02, `PlayerItem = 2.0`): phân nhóm ĐÚNG - đứng yên `050110`→`050111`→`050112`, di chuyển `050111`→`050112`, cả 2 nhóm Item, mod đặt `animation_speed = 2.0` cả 2 lần; nhưng uống khi di chuyển vẫn chậm như thường
-  - Nguyên nhân: uống khi di chuyển là anim nửa thân trên phát chồng lên anim đi (lớp behavior riêng) - `CSChrBehaviorModule.animation_speed` không tác động lớp đó. Bảng CE TGA chỉ có 1 mục "Animation Speed" (field đang dùng) → phải dò trong IDA nơi đọc `animation_speed` / tốc độ của lớp nửa thân trên
+- [x] Tách tốc độ đi bộ / chạy cho player (Nexus, cfzlbj, 2026-10-01) - xong 2026-10-02: `PlayerWalk` / `PlayerRun` / `PlayerSneak`, bỏ `PlayerMovement` (bàn phím chỉ có đi bộ + chạy giữ Shift, không có sprint riêng)
+- [ ] Tách tốc độ Torrent theo kiểu di chuyển (cùng yêu cầu của cfzlbj) - Torrent có `020000`-`020004`, cần probe
+- [x] ~~Bug: uống bình HP/FP khi đang di chuyển thì không được tăng tốc~~ (Nexus, 13586927500, 2026-10-01) - **giới hạn, không sửa** (người dùng chốt 2026-10-02)
+  - Uống khi chạy: `anim_queue` giữ anim chạy (`0201xx`), anim uống chỉ ở lớp nửa thân trên → mod áp `PlayerMovement`, không phải `PlayerItem` (người dùng xác nhận: tăng `PlayerMovement` thì uống khi chạy nhanh lên). Game chỉ có 1 `animation_speed` cho cả nhân vật
+  - Đã thử: `time_act +0xD0` = anim nửa thân trên (050110→050111→050112) nhưng **không bị xoá khi uống xong** (giữ tới khi anim chính đổi) → dùng nó thì tốc độ Item kéo dài tới lúc ngừng chạy. `+0xC8`=-1, `+0xCC`=thời gian blend 0.2/0.233, `+0xD4`=0 - không có field "đang chạy"
+  - Hardware breakpoint (DR0) trên `animation_speed`: game chỉ đọc ở 1 chỗ - getter `sub_14036834A` (`[rcx+18h]`, rcx = behavior+0x17B0, Arxan) gọi từ `sub_14041DCA0` (update behavior: dt × animation_speed × behavior+0x15C0 → hkbCharacter)
 - [ ] Hệ số tốc độ đánh riêng cho từng loại vũ khí (Nexus, InvertedButt, 2026-10-01)
   - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `.docs/Elden Ring tae list updated for SOTE.txt`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
 - [ ] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01)

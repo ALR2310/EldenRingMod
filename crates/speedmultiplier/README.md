@@ -413,3 +413,54 @@ nhịp nếu > 1), hành xử như mọi key `Player*` (`PlayerAll` khác 1 đè
 `[[Override]]` đặt được). Test `group_of` (031700/031710/031719 = Critical,
 030000/031699/031800 = Attack). **Test trong game: đúng.** Chưa thử vũ khí
 khác `a023` (vd. dao găm có đòn chí mạng riêng).
+
+## Uống bình khi đang chạy: giới hạn, không sửa (2026-10-02)
+
+Nexus (13586927500): uống bình khi di chuyển không được tăng tốc. Điều tra:
+- `SpeedProbe` + `play_time` của `anim_queue` mỗi frame: uống khi đứng yên
+  = `050110`→`050111`→`050112`, chạy đúng 2.0× theo `PlayerItem`. Uống khi
+  chạy: anim uống **không vào `anim_queue`** (giữ anim chạy `0201xx`) → mod
+  áp `PlayerMovement`. Người dùng xác nhận bằng bản DLL cũ: tăng
+  `PlayerMovement` thì uống khi chạy nhanh lên.
+- Anim nửa thân trên nằm ở `CSChrTimeActModule +0xD0` (`unkd0`), nhưng giá
+  trị này **không bị xoá khi anim xong** - giữ tới khi anim chính đổi (dừng
+  chạy). Bản thử dùng nó (Item khi `+0xD0` là anim item) làm tốc độ cao kéo
+  dài tới lúc ngừng chạy. `+0xC8`/`+0xCC` (blend 0.2/0.233)/`+0xD4` không
+  báo được anim còn chạy hay không.
+- Hardware breakpoint (DR0, đặt từ mod, VEH ghi RIP; Arxan không phản ứng):
+  game chỉ đọc `animation_speed` ở 1 chỗ - getter `sub_14036834A`
+  (`movss xmm0,[rcx+18h]`, rcx = behavior+0x17B0, code Arxan) gọi từ
+  `sub_14041DCA0` (update behavior mỗi frame: dt × `animation_speed` ×
+  behavior+0x15C0 [hệ số đặt lại 1.0 mỗi frame từ +0x15C4] → hkbCharacter).
+  Game có đúng 1 tốc độ anim cho cả nhân vật nên không thể tăng riêng lớp
+  nửa thân trên.
+
+Người dùng chốt: giới hạn hiện tại - uống khi chạy thuộc nhóm Movement. Gỡ
+toàn bộ code thử (probe dò `+0xD0`/timer, `watch.rs`, `group_now`).
+
+## Tách `PlayerMovement` → `PlayerWalk` / `PlayerRun` / `PlayerSneak` (2026-10-02)
+
+Yêu cầu Nexus (cfzlbj): chỉnh riêng đi bộ / chạy. Trên bàn phím của người
+dùng chỉ có 2 kiểu: đi bộ và chạy (giữ Shift) - không có sprint riêng.
+`SpeedProbe` (đứng yên → đi → chạy → dừng → ngồi → ngồi đi → ngồi chạy):
+
+| | Đứng | Lén (sneak) |
+|---|---|---|
+| Đi bộ | `0201xx`, dừng `0221xx` | `3201xx`, dừng `3221xx` |
+| Chạy | `0202xx`, dừng `0222xx` | `3202xx`, dừng `3222xx` |
+| Yên | `000000` | `300000`, vào tư thế `390000` |
+
+Chữ số thứ 3 của đuôi = kiểu di chuyển. `0200xx` (`020010`) chỉ xuất hiện
+khi đang dùng item lúc di chuyển (chân trong 2 đoạn đầu của uống bình) -
+không phải "chạy thường" như đoán trước đó.
+
+Sửa: bỏ `PlayerMovement` (người dùng: không cần nữa, phần còn lại rơi vào
+`Other`), thêm `PlayerWalk` (`0201xx`/`0221xx`), `PlayerRun`
+(`0202xx`/`0222xx`), `PlayerSneak` (đuôi `300000`-`399999`; trước đây rơi
+vào `Other`, giờ mặc định 1.2). Đứng yên, nhảy/rơi, `0200xx`... → `Other`.
+Tên ban đầu `PlayerCrouch`, người dùng đổi thành `PlayerSneak` cho hợp hơn.
+`[[Override]]` nhận 3 key mới. File toml cũ có `PlayerMovement` sẽ báo
+"unknown field" (bản TOML chưa phát hành nên chấp nhận). Features trong
+DESCRIPTION: "Faster walking, running and sneaking". Torrent vẫn 1 key.
+
+**Test trong game (người dùng): 3 key hoạt động đúng.**

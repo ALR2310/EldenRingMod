@@ -9,8 +9,14 @@ ReloadKey = "F5"
 # Player* key below.
 PlayerAll = 1.0
 
-# walking, running, sprinting
-PlayerMovement = 1.2
+# walking
+PlayerWalk = 1.2
+
+# running
+PlayerRun = 1.2
+
+# everything while sneaking: sneak walking, sneak running...
+PlayerSneak = 1.2
 
 # rolling, backstepping
 PlayerRoll = 1.1
@@ -52,7 +58,7 @@ Torrent = 1.3
 # [[Override]]
 # SpEffect = [1234, 1235]
 # PlayerRoll = 1.5
-# PlayerMovement = 1.4
+# PlayerRun = 1.4
 
 
 [Logging]
