@@ -301,3 +301,213 @@ file đầu tiên của trang, nên được tạo bằng `POST /mod-files` (tra
 chưa có update group nào, giống lần đầu của spiritmultiplier). Build từ
 commit `e51b1a0`. Changelog Nexus: `1.0.0: Initial release.` Đã ghi vào
 `manifest.json`.
+
+## Chuyển cấu hình sang TOML: `SpeedMultiplier.toml` (2026-10-02)
+
+Yêu cầu từ Nexus (Lwingr, Linear Convergence): hệ số tốc độ khác nhau theo
+SpEffect đang có trên người chơi. Cấu hình kiểu đó là **danh sách quy tắc**,
+mà ini của workspace không chứa nổi: `common::config` gộp mọi `[Section]`
+vào 1 namespace (phải đánh số `PlayerMovement01`, `02`...), không có mảng,
+và `migrate` dựa theo tên key. Người dùng chọn chuyển hẳn mod này sang
+TOML trước khi làm tính năng, để còn mở rộng.
+
+**`common` (dùng chung, các mod ini không đổi gì):**
+- `shared/src/toml_config.rs` mới: `TomlConfig<T>` - mỗi mod khai báo 1
+  struct serde (`#[serde(default, deny_unknown_fields)]`, `Default` = giá
+  trị template). Key thiếu lấy mặc định; key sai tên / sai kiểu là lỗi kèm
+  số dòng (thông báo của crate `toml`); file lỗi không bao giờ thay cấu hình
+  đang chạy (khởi động: chạy bằng `T::default()`, reload: giữ bản cũ).
+  Khởi động: chưa có file thì ghi template; có rồi thì thêm key/bảng còn
+  thiếu từ template bằng `toml_edit` (giữ comment, giá trị, bố cục của
+  người dùng) - tương đương `config::migrate` của ini. Cấu hình là snapshot
+  `Arc<T>`: tick lấy 1 lần rồi đọc field, không tra chuỗi mỗi giá trị.
+- `logger::set_enabled(bool)`: mod TOML tự bật/tắt log (mặc định vẫn đọc
+  `LogFile` trong ini).
+- `reload::run_with(key_fn, reload_fn)`: watcher F5 cho cấu hình không phải
+  ini; reload lỗi thì log lỗi + banner "Config error - see log" thay cho
+  "Config reloaded". `reload::run(ini)` giờ gọi lại `run_with`.
+- Dependency workspace mới: `serde`, `toml` 0.8, `toml_edit` 0.22.
+- `scripts/build-mod.ps1`: tìm `<Mod>.toml` trước, rồi `<Mod>.ini`, và
+  đóng gói đúng file đó.
+
+**SpeedMultiplier:**
+- `SpeedMultiplier.ini` → `SpeedMultiplier.toml` (cùng 3 bảng `[General]`,
+  `[Speed]`, `[Logging]`, key giữ PascalCase như ini theo lựa chọn của người
+  dùng). Không tự chuyển giá trị từ ini cũ (người dùng: ini còn ít key) -
+  người cập nhật từ 1.0.0 được file mặc định mới, ini cũ không còn được đọc.
+- `src/config.rs` mới: struct `Config`, `init`/`get`/`reload`; test kiểm
+  template == `Config::default()`, key thiếu, key gõ sai (báo dòng), và số
+  nguyên (`Torrent = 2`) vẫn nhận làm f32.
+- `speed.rs`: `Group::key()` (tên key ini) → `Group::speed(&Speed)`;
+  `multiplier(key)` → `clamped(value)` (giữ khoảng 0.1–10, NaN/inf → 1).
+- `DESCRIPTION.bbcode`: "ini" → "config file", file cài đặt
+  `SpeedMultiplier.toml`.
+
+Tính năng ghi đè theo SpEffect (`[[Override]]`) chưa làm - xem `TODO.md`.
+
+**Test trong game (người dùng): đúng.** Lần đầu ghi `ReloadKey = 0x75` báo
+lỗi "invalid type: integer `117`, expected a string" - trong TOML `0x75`
+không có nháy là số nguyên, ini thì nhận cả hai. Thêm
+`common::toml_config::key_name` (nhận chuỗi hoặc số, số → chuỗi thập phân
+cho `parse_virtual_key`). Sau đó: F6 (`0x75`) reload được, tốc độ đổi theo;
+gõ sai `PlayerRol` → log lỗi dòng 16 kèm danh sách key hợp lệ, cấu hình cũ
+giữ nguyên.
+
+## `[[Override]]`: tốc độ khác khi người chơi có SpEffect (2026-10-02)
+
+Yêu cầu Nexus (Lwingr, Linear Convergence). Thiết kế chốt với người dùng
+sau vài vòng:
+- Tên `[[Override]]` (không phải `Rule`/`Condition`/`Profile`): nói đúng
+  việc nó làm - ghi đè giá trị `[Speed]` khi khớp. `[[...]]` = danh sách
+  bảng TOML, viết bao nhiêu khối cũng được.
+- **Chỉ 1 điều kiện `SpEffect`**, nằm thẳng trong khối (bỏ bảng con `When`
+  đã đề xuất): mod chỉ đổi tốc độ anim, SpEffect đã gồm buff/debuff/
+  talisman; HP/vũ khí/giờ trong game là thừa.
+- `SpEffect = 1234` hoặc `[1234, 1235]` = có **bất kỳ** id nào (người dùng
+  từng cân nhắc "mảng = phải có đủ" rồi bỏ). Id số hoặc chuỗi; mảng rỗng,
+  id không phải số, thiếu `SpEffect`, key lạ = lỗi kèm dòng.
+- **Xếp chồng**: mọi override khớp đều áp từ trên xuống, trùng key thì khối
+  viết sau thắng (2 buff độc lập - 1 tăng lăn, 1 tăng đánh - có tác dụng
+  cùng lúc, không phải viết thêm khối gộp như kiểu "khối đầu tiên thắng").
+  `PlayerAll` cũng đi qua quy trình này. Torrent theo SpEffect của người chơi.
+
+Code:
+- `config.rs`: struct `Override` (key tốc độ là `Option<f32>`, không
+  `#[serde(default)]` ở struct để thiếu `SpEffect` là lỗi), visitor
+  `sp_effect_ids`, `Config::effective_speed(has_sp_effect)` trả tốc độ cuối
+  + chỉ số các override đang bật. 6 test mới (khớp bất kỳ id, xếp chồng,
+  không override nào, id dạng chuỗi, các lỗi).
+- `speed.rs::apply`: mỗi frame lấy `special_effect.entries()` của người
+  chơi (bỏ qua nếu không có override nào) → `effective_speed`; log 1 dòng
+  `Speed: active overrides: #1, #2` / `none` khi tập override đổi.
+- Probe: `EffectProbe` mới (mặc định false) log SpEffect người chơi khi đổi
+  (`P SpEffect +[thêm] -[mất] now [...]`); lúc đầu nằm trong `SpeedProbe`,
+  người dùng tách ra cùng ngày. Không quảng cáo trong comment - người cần
+  tính năng này tự biết tra id (người dùng).
+- Template: mô tả + ví dụ `[[Override]]` dạng comment giữa `[Speed]` và
+  `[Logging]`; chú giải `PlayerOther` đổi thành "any action not covered by
+  the keys above". File toml đã có của người dùng không nhận comment mới
+  (`toml_config` chỉ thêm key thiếu).
+
+**Test trong game (người dùng): hoạt động hoàn hảo.** Probe cho Golden Vow
+(phép) = SpEffect `1660000`/`1660001`/`1660002`, khoảng 80 giây (Smithbox
+xác nhận; bản kỹ năng vũ khí là `1730`, bản item `20503170`). Log: override
+bật/tắt theo buff (`#1` → `none`), 2 override cùng lúc (`#1, #2`), reload
+giữa chừng vẫn đúng.
+
+## Đòn chí mạng: nhóm riêng `PlayerCritical` (2026-10-02)
+
+Người dùng điều tra đâm lén / riposte (Nexus, invadersnes64 muốn tăng tốc
+riposte; người dùng: đòn chí mạng phải khớp anim kẻ địch). `SpeedProbe`:
+- Riposte (sau parry `a692_044840`): `a023_031700`.
+- Backstab: `a023_031719` → `a023_031710` (các anim `32xxxx` ở lần đầu là
+  lúc cúi người lén tới).
+- Đuôi `0317xx` nằm trong dải Attack (`030000`-`039999`) → bị tăng theo
+  `PlayerAttack`. Ở 2.0 người chơi rút kiếm xong trong khi kẻ địch vẫn đang
+  ngã (người dùng xác nhận) - anim nạn nhân không được mod tăng tốc.
+
+Sửa: nhóm `Critical` = đuôi `031700`-`031799`, đặt trước Attack. Bản đầu
+ép cố định 1.0 (kể cả dưới `PlayerAll`/`[[Override]]`); cùng ngày người
+dùng muốn thành key → `PlayerCritical` (mặc định 1.0, comment cảnh báo lệch
+nhịp nếu > 1), hành xử như mọi key `Player*` (`PlayerAll` khác 1 đè lên,
+`[[Override]]` đặt được). Test `group_of` (031700/031710/031719 = Critical,
+030000/031699/031800 = Attack). **Test trong game: đúng.** Chưa thử vũ khí
+khác `a023` (vd. dao găm có đòn chí mạng riêng).
+
+## Uống bình khi đang chạy: giới hạn, không sửa (2026-10-02)
+
+Nexus (13586927500): uống bình khi di chuyển không được tăng tốc. Điều tra:
+- `SpeedProbe` + `play_time` của `anim_queue` mỗi frame: uống khi đứng yên
+  = `050110`→`050111`→`050112`, chạy đúng 2.0× theo `PlayerItem`. Uống khi
+  chạy: anim uống **không vào `anim_queue`** (giữ anim chạy `0201xx`) → mod
+  áp `PlayerMovement`. Người dùng xác nhận bằng bản DLL cũ: tăng
+  `PlayerMovement` thì uống khi chạy nhanh lên.
+- Anim nửa thân trên nằm ở `CSChrTimeActModule +0xD0` (`unkd0`), nhưng giá
+  trị này **không bị xoá khi anim xong** - giữ tới khi anim chính đổi (dừng
+  chạy). Bản thử dùng nó (Item khi `+0xD0` là anim item) làm tốc độ cao kéo
+  dài tới lúc ngừng chạy. `+0xC8`/`+0xCC` (blend 0.2/0.233)/`+0xD4` không
+  báo được anim còn chạy hay không.
+- Hardware breakpoint (DR0, đặt từ mod, VEH ghi RIP; Arxan không phản ứng):
+  game chỉ đọc `animation_speed` ở 1 chỗ - getter `sub_14036834A`
+  (`movss xmm0,[rcx+18h]`, rcx = behavior+0x17B0, code Arxan) gọi từ
+  `sub_14041DCA0` (update behavior mỗi frame: dt × `animation_speed` ×
+  behavior+0x15C0 [hệ số đặt lại 1.0 mỗi frame từ +0x15C4] → hkbCharacter).
+  Game có đúng 1 tốc độ anim cho cả nhân vật nên không thể tăng riêng lớp
+  nửa thân trên.
+
+Người dùng chốt: giới hạn hiện tại - uống khi chạy thuộc nhóm Movement. Gỡ
+toàn bộ code thử (probe dò `+0xD0`/timer, `watch.rs`, `group_now`).
+
+## Tách `PlayerMovement` → `PlayerWalk` / `PlayerRun` / `PlayerSneak` (2026-10-02)
+
+Yêu cầu Nexus (cfzlbj): chỉnh riêng đi bộ / chạy. Trên bàn phím của người
+dùng chỉ có 2 kiểu: đi bộ và chạy (giữ Shift) - không có sprint riêng.
+`SpeedProbe` (đứng yên → đi → chạy → dừng → ngồi → ngồi đi → ngồi chạy):
+
+| | Đứng | Lén (sneak) |
+|---|---|---|
+| Đi bộ | `0201xx`, dừng `0221xx` | `3201xx`, dừng `3221xx` |
+| Chạy | `0202xx`, dừng `0222xx` | `3202xx`, dừng `3222xx` |
+| Yên | `000000` | `300000`, vào tư thế `390000` |
+
+Chữ số thứ 3 của đuôi = kiểu di chuyển. `0200xx` (`020010`) chỉ xuất hiện
+khi đang dùng item lúc di chuyển (chân trong 2 đoạn đầu của uống bình) -
+không phải "chạy thường" như đoán trước đó.
+
+Sửa: bỏ `PlayerMovement` (người dùng: không cần nữa, phần còn lại rơi vào
+`Other`), thêm `PlayerWalk` (`0201xx`/`0221xx`), `PlayerRun`
+(`0202xx`/`0222xx`), `PlayerSneak` (đuôi `300000`-`399999`; trước đây rơi
+vào `Other`, giờ mặc định 1.2). Đứng yên, nhảy/rơi, `0200xx`... → `Other`.
+Tên ban đầu `PlayerCrouch`, người dùng đổi thành `PlayerSneak` cho hợp hơn.
+`[[Override]]` nhận 3 key mới. File toml cũ có `PlayerMovement` sẽ báo
+"unknown field" (bản TOML chưa phát hành nên chấp nhận). Features trong
+DESCRIPTION: "Faster walking, running and sneaking". Torrent vẫn 1 key.
+
+**Test trong game (người dùng): 3 key hoạt động đúng.**
+
+## `[Player]` / `[Torrent]`, tốc độ Torrent và nhảy, migration theo phiên bản, `ReloadBanner` (2026-10-02)
+
+**Bố cục `[Player]` / `[Torrent]`** (người dùng): `[Speed]` với key
+`Player*` / `Torrent` → `[Player]` (`All`, `Walk`, `Run`, `Sneak`, `Jump`,
+`Roll`, `Attack`, `Critical`, `Skill`, `Cast`, `Item`, `Other`) và
+`[Torrent]` (`All`, `Walk`, `Run`, `Jump`, `Other`). `[[Override]]` dùng
+dotted key `Player.Roll = 1.5` / `Torrent.Run = 2` (bảng con
+`[Override.Player]` cũng được). Comment cùng dòng (người dùng viết lại
+template). `All` khác 1 đè mọi key của bảng đó.
+
+**Torrent** (`SpeedProbe` khi cưỡi; người cưỡi chạy `12xxxx`): đứng
+`000000`, đi `0021xx` (002100, 002110), chạy - giữ Shift, cả lần bấm thêm
+và giảm tốc - `0022xx` (002220, 002200, 002221, 002210), quẹo/xoay
+`0051xx`, nhảy `0061xx` (006110 đứng, 006130 đi hoặc chạy - cùng id) và tiếp
+đất `0074xx` (007400, 007451) → `Walk` / `Run` / `Jump` / `Other`. Mặc định
+`All 1.0, Walk 1.0, Run 1.3, Jump 1.0, Other 1.0` (trước đây mọi anim 1.3).
+`SpeedProbe` ghi nhóm cho dòng `T`.
+
+**Nhảy của người chơi**: cất nhảy `2020xx` (202000 đứng, 202020 đi,
+202030/202040 chạy), tiếp đất `2021xx` (202100, 202115, 202126) →
+`Player.Jump` (mặc định 1.0; trước rơi vào `Other`). Chỉ lấy dải đã thấy,
+không cả `20xxxx`.
+
+**Key lạ / đổi tên (`common::toml_config`)**: ini chuyển key lạ vào
+`[Legacy]`, TOML trước đây báo lỗi. Giờ lúc khởi động key không có trong
+template được gỡ và ghi lại thành comment ở cuối file (log WARN); F5 vẫn
+báo lỗi kèm dòng (người dùng đang sửa file). `[[Override]]` được giữ
+(`Migration::keep`). Bản đầu dùng danh sách đổi tên phẳng (`Speed.PlayerRun`
+→ `Player.Run`...) - đã chuyển file test thật của người dùng đúng - nhưng
+người dùng hỏi trường hợp nhảy phiên bản (1.0.0 → 1.2.0): danh sách phẳng
+phụ thuộc thứ tự, không tách/quy đổi được key, xoá 1 cặp là mất giá trị.
+Thay bằng **migration theo phiên bản**: `General.ConfigVersion` (phiên bản
+hiện tại = giá trị trong template), `STEPS[i]` đưa file từ `i+1` lên `i+2`,
+mỗi bước chạy đúng 1 lần mỗi file; helper `rename_key` / `get_value` /
+`remove_value` / `set_value`; file không có version = 1; file mới hơn mod
+(hạ cấp) không bị đụng. **Bước đã phát hành không bao giờ được sửa** - sửa
+sai bằng bước mới. SpeedMultiplier: `ConfigVersion = 1` = định dạng TOML
+phát hành đầu (1.1.0), `STEPS` rỗng, bỏ danh sách đổi tên (bản TOML chưa
+phát hành, không ai có file `[Speed]`); test `steps_cover_every_version`.
+
+**`ReloadBanner`** (`[General]`, mặc định true): tắt banner "Config
+reloaded"; banner lỗi luôn hiện (tắt luôn thì reload hỏng sẽ im lặng).
+`common::reload::run_with` nhận thêm `banner: Fn() -> bool` (đọc sau reload);
+mod ini (`reload::run`) luôn hiện như cũ.
+
+**Test trong game (người dùng): mọi thứ hoạt động.**

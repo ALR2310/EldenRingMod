@@ -43,6 +43,32 @@ pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// the reload is visible without checking the log file. Meant to run on its
 /// own worker thread spawned from `DllMain`; never returns.
 pub fn run(ini_path: String) {
+    run_with(
+        || config::get_string("ReloadKey", "F5"),
+        || true,
+        move || {
+            config::load(&ini_path);
+            Ok(())
+        },
+    );
+}
+
+/// [run] for a config that isn't the ini map ([`crate::toml_config`]):
+/// `reload_key` returns the current key name (re-read every frame, so a
+/// reload that changes it takes effect at once), `reload` re-reads the
+/// config. An `Err` (e.g. a TOML syntax error, the old config still in use)
+/// is logged and shown as "Config error - see log" instead of "Config
+/// reloaded"; [RELOAD_GENERATION] is only bumped on success.
+/// `banner` (read after the reload, so a reload that turns it off takes
+/// effect at once) says whether to show the "Config reloaded" banner;
+/// the error banner always shows - without it a failed reload would be
+/// silent in game.
+pub fn run_with<K, B, R>(reload_key: K, banner: B, mut reload: R)
+where
+    K: Fn() -> String + Send + 'static,
+    B: Fn() -> bool + Send + 'static,
+    R: FnMut() -> Result<(), String> + Send + 'static,
+{
     let cs_task = crate::task::wait_for_cs_task();
 
     crate::task::run_recurring_safe(
@@ -50,12 +76,23 @@ pub fn run(ini_path: String) {
         "Reload",
         CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
-            let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
-            if input::is_key_pressed(reload_key) {
-                config::load(&ini_path);
-                RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
-                logger::log("Reload: config reloaded (hotkey pressed).");
-                crate::announce::show_announcement("Config reloaded");
+            let key = parse_virtual_key(&reload_key(), VK_F5);
+            if !input::is_key_pressed(key) {
+                return;
+            }
+            match reload() {
+                Ok(()) => {
+                    RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
+                    logger::log("Reload: config reloaded (hotkey pressed).");
+                    if banner() {
+                        crate::announce::show_announcement("Config reloaded");
+                    }
+                }
+                Err(err) => {
+                    logger::error(&format!("Reload: config not reloaded, the previous one stays in use:
+{err}"));
+                    crate::announce::show_announcement("Config error - see log");
+                }
             }
         },
     );

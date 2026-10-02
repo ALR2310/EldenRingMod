@@ -20,3 +20,6 @@ chrono.workspace = true
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
 vtable-rs.workspace = true
+serde.workspace = true
+toml.workspace = true
+toml_edit.workspace = true

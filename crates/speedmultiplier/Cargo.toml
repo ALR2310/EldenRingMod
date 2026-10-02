@@ -12,3 +12,7 @@ crate-type = ["cdylib"]
 common = { path = "../../shared" }
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+toml.workspace = true

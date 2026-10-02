@@ -9,9 +9,14 @@
 //! unconditionally, so the file was always created and `LogFile` only gated
 //! a mod's own verbose lines - not what the key's name says. A mod that
 //! wants a log out of the box ships with `LogFile=true` as its default.
+//!
+//! A mod on [`crate::toml_config`] has no ini key to read: it calls
+//! [set_enabled] with its own `LogFile` value instead (after loading and
+//! after every reload), which overrides the ini lookup from then on.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{LazyLock, Mutex, Once};
 
 use crate::config;
@@ -25,6 +30,22 @@ struct LogState {
 
 static LOG: LazyLock<Mutex<LogState>> = LazyLock::new(|| Mutex::new(LogState { path: None, file: None }));
 static PANIC_HOOK_INSTALLED: Once = Once::new();
+
+/// 0 = read the ini's `LogFile`, 1 = off, 2 = on (see [set_enabled]).
+static ENABLED: AtomicU8 = AtomicU8::new(0);
+
+/// Turns the log file on/off directly, for mods whose `LogFile` isn't in
+/// the ini map (TOML config). Same effect as flipping the ini key.
+pub fn set_enabled(enabled: bool) {
+    ENABLED.store(if enabled { 2 } else { 1 }, Ordering::Relaxed);
+}
+
+fn enabled() -> bool {
+    match ENABLED.load(Ordering::Relaxed) {
+        0 => config::get_bool("LogFile", false),
+        state => state == 2,
+    }
+}
 
 /// Records where the log goes (`file_name`, e.g. "AutoRegen.log", in
 /// `log_dir`) without touching the disk - the file is only created by the
@@ -64,7 +85,7 @@ fn open(path: &str) -> Option<File> {
 /// typo to users.
 fn write_line(level: &str, message: &str) {
     // Read before taking the log lock - never hold both at once.
-    if !config::get_bool("LogFile", false) {
+    if !enabled() {
         return;
     }
     let mut guard = LOG.lock().unwrap();
