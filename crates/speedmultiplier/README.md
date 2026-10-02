@@ -511,3 +511,31 @@ reloaded"; banner lỗi luôn hiện (tắt luôn thì reload hỏng sẽ im l�
 mod ini (`reload::run`) luôn hiện như cũ.
 
 **Test trong game (người dùng): mọi thứ hoạt động.**
+
+## Giá trị mặc định chỉ nằm trong template (2026-10-02, nhánh `feat/modmenu`)
+
+Trước: mỗi giá trị mặc định viết 2 lần - template `SpeedMultiplier.toml` và
+`impl Default` trong `config.rs` - giữ khớp bằng test (người dùng đổi
+`Walk`/`Sneak` 1.1 phải sửa cả code + test). Bước đầu của việc làm menu
+(menu sẽ lấy metadata từ struct, mặc định từ template).
+
+Giờ (cấu hình xếp lớp - template là lớp dưới, file người dùng là lớp trên):
+- `common::toml_config::parse` đọc 2 lượt: (1) chỉ file người dùng → lỗi
+  kèm số dòng như cũ (key thiếu nhận giá trị rỗng của `#[derive(Default)]`);
+  (2) giá trị người dùng đặt lên template (bảng trộn từng key, giá trị /
+  mảng / `[[...]]` thay nguyên) → cấu hình thật. File lỗi → chạy bằng
+  `defaults(template)`, không còn `T::default()`.
+- SpeedMultiplier: bỏ ~60 dòng `impl Default`; struct
+  `#[derive(Default, Serialize)]` (Default = rỗng, không bao giờ là cấu hình
+  đang chạy); `config::template()` = mặc định. Test
+  `template_sets_every_field` (`common::toml_config::template_missing_keys`)
+  báo field nào template chưa khai báo; các test so với `template()` thay vì
+  ghi cứng số.
+- Kiểm chứng: đổi `Torrent.Run` trong template 1.3 → 1.7 thì mặc định trong
+  code đổi theo, 17 test vẫn qua; bỏ `EffectProbe` khỏi template → test báo
+  `template lacks ["Logging.EffectProbe"]`.
+- Hiệu năng: đọc 2 lượt chỉ chạy lúc khởi động / reload (cỡ trăm µs), mỗi
+  frame vẫn chỉ lấy snapshot `Arc`. DLL 864 KB → ~1.04 MB (merge + `Serialize`)
+  - người dùng chốt kích thước vài MB không đáng lo, chỉ quan tâm hiệu năng.
+
+**Test trong game (người dùng): hoạt động.**
