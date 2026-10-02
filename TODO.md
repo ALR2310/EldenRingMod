@@ -38,7 +38,9 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 - [ ] Hệ số tốc độ theo SpEffect đang có trên người chơi (Nexus, Lwingr - Linear Convergence, 2026-10-02)
   - Trong `SpeedMultiplier.toml` (đã chuyển sang TOML, commit `00d1321`): danh sách `[[Override]]` - tên chọn 2026-10-02 vì nói đúng việc nó làm (ghi đè `[Speed]` khi khớp), vẫn đúng nếu sau này thêm điều kiện khác SpEffect (vũ khí, % máu...)
-  - `SpEffect = [..]` khớp bất kỳ id nào; thứ tự trong file = ưu tiên (override đầu tiên khớp thắng); chỉ ghi key muốn đổi (`Player*`, `Torrent`), còn lại giữ giá trị `[Speed]`
+  - Điều kiện tách vào bảng con `When = { ... }` (không lẫn với key tốc độ; thêm loại điều kiện mới = thêm field). Giữa các loại điều kiện là "và"; `When` rỗng = lỗi; điều kiện lạ (mod cũ gặp field mới) = lỗi, không bỏ qua
+  - `SpEffect = 1234` (1 id) hoặc `SpEffect = [1234, 1235]` = **phải có đủ** mọi id (người dùng chốt 2026-10-02); "hoặc" = viết nhiều `[[Override]]`. Id là số, nhận cả chuỗi `"1234"`
+  - Thứ tự trong file = ưu tiên (override đầu tiên khớp thắng); chỉ ghi key muốn đổi (`Player*`, `Torrent`), còn lại giữ giá trị `[Speed]`
   - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
   - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
