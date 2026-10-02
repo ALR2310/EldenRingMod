@@ -1,19 +1,21 @@
 <#
 .SYNOPSIS
-    Builds one mod's release DLL and copies it next to its .ini into build/,
+    Builds one mod's release DLL and copies it next to its config file
+    (<Mod>.toml, or <Mod>.ini for mods still on the ini config) into build/,
     so both files sit in one flat, easy-to-find folder instead of buried
     among the many other files cargo puts in target/release/. Optionally
     also zips the pair for uploading (e.g. to Nexus).
 
 .PARAMETER Mod
     The mod's PascalCase name, matching both its [lib] name in Cargo.toml
-    (the built DLL's filename) and its .ini filename - e.g. "AutoRegen" for
-    AutoRegen.dll/AutoRegen.ini. The crate/package name is derived by
+    (the built DLL's filename) and its config filename - e.g. "AutoRegen" for
+    AutoRegen.dll/AutoRegen.ini, "SpeedMultiplier" for SpeedMultiplier.dll/
+    SpeedMultiplier.toml. The crate/package name is derived by
     lowercasing this (AutoRegen -> autoregen), which matches how every mod
     crate in this workspace is named.
 
 .PARAMETER Zip
-    When set, also packages build\<Mod>.dll + build\<Mod>.ini into
+    When set, also packages build\<Mod>.dll + its config file into
     build\<Mod>-<version>.zip. No zip is created unless this switch is
     passed - most local test builds don't need one.
 
@@ -45,14 +47,22 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Crate = $Mod.ToLower()
 $CrateDir = Join-Path $RepoRoot "crates\$Crate"
-$IniPath = Join-Path $CrateDir "$Mod.ini"
 
 if (-not (Test-Path $CrateDir)) {
     throw "No crate directory found at '$CrateDir' - is '$Mod' spelled the same as its Cargo package (lowercased)?"
 }
-if (-not (Test-Path $IniPath)) {
-    throw "No ini found at '$IniPath' - expected '$Mod.ini' next to the crate's Cargo.toml."
+# Config file: <Mod>.toml (common::toml_config, 2026-10-02) or <Mod>.ini.
+$ConfigName = $null
+foreach ($Ext in @("toml", "ini")) {
+    if (Test-Path (Join-Path $CrateDir "$Mod.$Ext")) {
+        $ConfigName = "$Mod.$Ext"
+        break
+    }
 }
+if (-not $ConfigName) {
+    throw "No config found in '$CrateDir' - expected '$Mod.toml' or '$Mod.ini' next to the crate's Cargo.toml."
+}
+$ConfigPath = Join-Path $CrateDir $ConfigName
 
 Write-Host "==> Building $Mod (release)..." -ForegroundColor Cyan
 & cargo build --release -p $Crate --manifest-path (Join-Path $RepoRoot "Cargo.toml")
@@ -72,11 +82,11 @@ $BuildDir = Join-Path $RepoRoot "build"
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
 $BuildDllPath = Join-Path $BuildDir "$Mod.dll"
-$BuildIniPath = Join-Path $BuildDir "$Mod.ini"
+$BuildConfigPath = Join-Path $BuildDir $ConfigName
 Copy-Item $DllPath -Destination $BuildDllPath -Force
-Copy-Item $IniPath -Destination $BuildIniPath -Force
+Copy-Item $ConfigPath -Destination $BuildConfigPath -Force
 
-Write-Host "==> build\$Mod.dll + build\$Mod.ini ready" -ForegroundColor Green
+Write-Host "==> build\$Mod.dll + build\$ConfigName ready" -ForegroundColor Green
 
 if ($Zip) {
     $ZipVersion = $Version
@@ -100,7 +110,7 @@ if ($Zip) {
     # License/notice files that must ship with the mod (e.g. SoulsTeleport's
     # embedded Noto Sans font: SIL OFL 1.1 requires the license to travel
     # with it) - any *.txt in the crate's assets/ folder goes into the zip.
-    $ZipItems = @($BuildDllPath, $BuildIniPath)
+    $ZipItems = @($BuildDllPath, $BuildConfigPath)
     $AssetsDir = Join-Path $CrateDir "assets"
     if (Test-Path $AssetsDir) {
         $ZipItems += Get-ChildItem -Path $AssetsDir -Filter "*.txt" -File | ForEach-Object { $_.FullName }

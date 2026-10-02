@@ -301,3 +301,54 @@ file đầu tiên của trang, nên được tạo bằng `POST /mod-files` (tra
 chưa có update group nào, giống lần đầu của spiritmultiplier). Build từ
 commit `e51b1a0`. Changelog Nexus: `1.0.0: Initial release.` Đã ghi vào
 `manifest.json`.
+
+## Chuyển cấu hình sang TOML: `SpeedMultiplier.toml` (2026-10-02)
+
+Yêu cầu từ Nexus (Lwingr, Linear Convergence): hệ số tốc độ khác nhau theo
+SpEffect đang có trên người chơi. Cấu hình kiểu đó là **danh sách quy tắc**,
+mà ini của workspace không chứa nổi: `common::config` gộp mọi `[Section]`
+vào 1 namespace (phải đánh số `PlayerMovement01`, `02`...), không có mảng,
+và `migrate` dựa theo tên key. Người dùng chọn chuyển hẳn mod này sang
+TOML trước khi làm tính năng, để còn mở rộng.
+
+**`common` (dùng chung, các mod ini không đổi gì):**
+- `shared/src/toml_config.rs` mới: `TomlConfig<T>` - mỗi mod khai báo 1
+  struct serde (`#[serde(default, deny_unknown_fields)]`, `Default` = giá
+  trị template). Key thiếu lấy mặc định; key sai tên / sai kiểu là lỗi kèm
+  số dòng (thông báo của crate `toml`); file lỗi không bao giờ thay cấu hình
+  đang chạy (khởi động: chạy bằng `T::default()`, reload: giữ bản cũ).
+  Khởi động: chưa có file thì ghi template; có rồi thì thêm key/bảng còn
+  thiếu từ template bằng `toml_edit` (giữ comment, giá trị, bố cục của
+  người dùng) - tương đương `config::migrate` của ini. Cấu hình là snapshot
+  `Arc<T>`: tick lấy 1 lần rồi đọc field, không tra chuỗi mỗi giá trị.
+- `logger::set_enabled(bool)`: mod TOML tự bật/tắt log (mặc định vẫn đọc
+  `LogFile` trong ini).
+- `reload::run_with(key_fn, reload_fn)`: watcher F5 cho cấu hình không phải
+  ini; reload lỗi thì log lỗi + banner "Config error - see log" thay cho
+  "Config reloaded". `reload::run(ini)` giờ gọi lại `run_with`.
+- Dependency workspace mới: `serde`, `toml` 0.8, `toml_edit` 0.22.
+- `scripts/build-mod.ps1`: tìm `<Mod>.toml` trước, rồi `<Mod>.ini`, và
+  đóng gói đúng file đó.
+
+**SpeedMultiplier:**
+- `SpeedMultiplier.ini` → `SpeedMultiplier.toml` (cùng 3 bảng `[General]`,
+  `[Speed]`, `[Logging]`, key giữ PascalCase như ini theo lựa chọn của người
+  dùng). Không tự chuyển giá trị từ ini cũ (người dùng: ini còn ít key) -
+  người cập nhật từ 1.0.0 được file mặc định mới, ini cũ không còn được đọc.
+- `src/config.rs` mới: struct `Config`, `init`/`get`/`reload`; test kiểm
+  template == `Config::default()`, key thiếu, key gõ sai (báo dòng), và số
+  nguyên (`Torrent = 2`) vẫn nhận làm f32.
+- `speed.rs`: `Group::key()` (tên key ini) → `Group::speed(&Speed)`;
+  `multiplier(key)` → `clamped(value)` (giữ khoảng 0.1–10, NaN/inf → 1).
+- `DESCRIPTION.bbcode`: "ini" → "config file", file cài đặt
+  `SpeedMultiplier.toml`.
+
+Tính năng quy tắc theo SpEffect (`[[Rule]]`) chưa làm - xem `TODO.md`.
+
+**Test trong game (người dùng): đúng.** Lần đầu ghi `ReloadKey = 0x75` báo
+lỗi "invalid type: integer `117`, expected a string" - trong TOML `0x75`
+không có nháy là số nguyên, ini thì nhận cả hai. Thêm
+`common::toml_config::key_name` (nhận chuỗi hoặc số, số → chuỗi thập phân
+cho `parse_virtual_key`). Sau đó: F6 (`0x75`) reload được, tốc độ đổi theo;
+gõ sai `PlayerRol` → log lỗi dòng 16 kèm danh sách key hợp lệ, cấu hình cũ
+giữ nguyên.

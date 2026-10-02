@@ -22,7 +22,9 @@ use std::time::Duration;
 use eldenring::cs::{CSTaskGroupIndex, ChrIns, ChrLoadStatus, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
-use common::{config, logger};
+use common::logger;
+
+use crate::config::{self, Speed};
 
 const TORRENT_NPC_PARAM_ID: i32 = 80020000;
 
@@ -38,15 +40,16 @@ pub enum Group {
 }
 
 impl Group {
-    fn key(self) -> &'static str {
+    /// This group's multiplier in `[Speed]`.
+    fn speed(self, speed: &Speed) -> f32 {
         match self {
-            Group::Movement => "PlayerMovement",
-            Group::Roll => "PlayerRoll",
-            Group::Attack => "PlayerAttack",
-            Group::Skill => "PlayerSkill",
-            Group::Cast => "PlayerCast",
-            Group::Item => "PlayerItem",
-            Group::Other => "PlayerOther",
+            Group::Movement => speed.player_movement,
+            Group::Roll => speed.player_roll,
+            Group::Attack => speed.player_attack,
+            Group::Skill => speed.player_skill,
+            Group::Cast => speed.player_cast,
+            Group::Item => speed.player_item,
+            Group::Other => speed.player_other,
         }
     }
 }
@@ -113,10 +116,10 @@ pub fn torrent(world_chr_man: &mut WorldChrMan) -> Option<&mut ChrIns> {
     None
 }
 
-/// Reads a multiplier key, clamped to a sane range (0 or negative would
-/// freeze or reverse the animation).
-fn multiplier(key: &str) -> f32 {
-    (config::get_double(key, 1.0) as f32).clamp(0.1, 10.0)
+/// A multiplier clamped to a sane range (0 or negative would freeze or
+/// reverse the animation).
+fn clamped(value: f32) -> f32 {
+    if value.is_finite() { value.clamp(0.1, 10.0) } else { 1.0 }
 }
 
 fn set_animation_speed(chr: &mut ChrIns, value: f32) {
@@ -133,18 +136,20 @@ fn apply() {
     let Ok(world_chr_man) = (unsafe { WorldChrMan::instance_mut() }) else {
         return;
     };
+    let config = config::get();
+    let speed = &config.speed;
     if let Some(player) = world_chr_man.main_player.as_mut() {
         let chr = &mut player.chr_ins;
-        let master = multiplier("PlayerAll");
+        let master = clamped(speed.player_all);
         let value = if (master - 1.0).abs() > 0.0001 {
             master
         } else {
-            multiplier(group_of(current_anim_id(chr)).key())
+            clamped(group_of(current_anim_id(chr)).speed(speed))
         };
         set_animation_speed(chr, value);
     }
     if let Some(torrent) = torrent(world_chr_man) {
-        set_animation_speed(torrent, multiplier("Torrent"));
+        set_animation_speed(torrent, clamped(speed.torrent));
     }
 }
 
