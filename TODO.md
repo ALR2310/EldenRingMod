@@ -37,10 +37,10 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Là anim cặp (pair anim) - player bị tăng tốc nhưng kẻ địch không. Hướng: giữ 1.0 cho các anim này (cùng ý với nhóm "luôn 1.0" cho anim chết / bị túm đã bàn trước 1.0.0); cần log anim id của critical/sneak attack
 
 - [ ] Hệ số tốc độ theo SpEffect đang có trên người chơi (Nexus, Lwingr - Linear Convergence, 2026-10-02)
-  - Trong `SpeedMultiplier.toml` (đã chuyển sang TOML, commit `00d1321`): danh sách `[[Override]]` - tên chọn 2026-10-02 vì nói đúng việc nó làm (ghi đè `[Speed]` khi khớp), vẫn đúng nếu sau này thêm điều kiện khác SpEffect (vũ khí, % máu...)
-  - Điều kiện tách vào bảng con `When = { ... }` (không lẫn với key tốc độ; thêm loại điều kiện mới = thêm field). Giữa các loại điều kiện là "và"; `When` rỗng = lỗi; điều kiện lạ (mod cũ gặp field mới) = lỗi, không bỏ qua
-  - `SpEffect = 1234` (1 id) hoặc `SpEffect = [1234, 1235]` = có **bất kỳ** id nào trong mảng (người dùng chốt 2026-10-02, sau khi cân nhắc "phải có đủ"). Id là số, nhận cả chuỗi `"1234"`
-  - Thứ tự trong file = ưu tiên (override đầu tiên khớp thắng); chỉ ghi key muốn đổi (`Player*`, `Torrent`), còn lại giữ giá trị `[Speed]`
+  - Trong `SpeedMultiplier.toml` (đã chuyển sang TOML, commit `00d1321`): danh sách `[[Override]]` - tên chọn 2026-10-02 vì nói đúng việc nó làm (ghi đè `[Speed]` khi khớp)
+  - Chỉ 1 loại điều kiện: `SpEffect` nằm thẳng trong `[[Override]]` (bỏ bảng con `When` - mod chỉ đổi tốc độ anim, SpEffect đã gồm buff/debuff/talisman; HP/vũ khí/giờ... là thừa, người dùng chốt 2026-10-02). Cần thêm điều kiện sau này thì thêm key cạnh `SpEffect`
+  - `SpEffect = 1234` hoặc `SpEffect = [1234, 1235]` = có **bất kỳ** id nào. Id là số, nhận cả chuỗi `"1234"`. Override không có `SpEffect` = lỗi (báo dòng)
+  - **Xếp chồng** (người dùng chốt 2026-10-02): mọi override khớp đều áp, từ trên xuống; trùng key thì override viết sau thắng. Mỗi key: bắt đầu từ `[Speed]` → lần lượt các override khớp có ghi key đó → giá trị cuối. `PlayerAll` cũng đi qua quy trình này (khác 1 → đè mọi `Player*` như cũ)
   - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
   - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
