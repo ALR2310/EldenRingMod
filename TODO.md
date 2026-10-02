@@ -7,8 +7,6 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 - [x] GhostColor=false không có tác dụng với ELDEN RING Reforged (Nexus, Quantum240, 2026-09-30) - sửa ở 1.1.2 (tắt vfx màu, không gỡ SpEffect)
 - [ ] Spirit dịch chuyển tới người chơi khi bị bỏ lại (hoãn từ trước 1.0.0; chỉ chỉnh `buddyWarp_*` không có tác dụng)
-- [ ] Quyết định giữ hay bỏ log `stones:` trong SlotProbe (thêm để dò lỗi MultiSpirit/SummonAnywhere)
-- [ ] `EnemyProbe` dễ crash - sửa hoặc bỏ hẳn
 - [x] Reforged: Spirit Fury / Fortune of the Spiritcaller hỏng - "cannot resummon/aggro the spirits", Spiritcaller ring không hoạt động (Nexus, puffintoast, 2026-10-01; chưa rõ bản mod họ dùng)
   - Cơ chế Reforged (CHANGELOG.txt của ERR): bấm lại Ash khi spirit đang ở ngoài = **kích nộ (Spirit Fury)**, không phải cho về; cho về bằng item Spirit-Severing Blade. "Aggro" = Spirit Fury, "un-aggro'ed" = trạng thái bình tĩnh mặc định
   - Nghi MultiSpirit: chiếm đúng thao tác bấm lại Ash (patch `DoSummon`, `DisappearAll`, `GetBuddyState`/`CanUseItem`/UI) - có thể đè lên hook của `reforged.dll` ở cùng hàm. Đã nhờ họ thử `MultiSpirit=false` (F5), chờ phản hồi
@@ -65,5 +63,8 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Dùng lại từ SoulsTeleport: `hudhook` (dx12) + imgui (`ui.rs`), chặn input game khi mở menu (`input_block.rs`). Rủi ro: overlay khác (ReShade, mod imgui khác)
   - Thứ tự: (1) `[[Override]]` SpeedMultiplier trước (để biết metadata cho "danh sách bảng"); (2) `common::menu` chạy với 1 mod (SpeedMultiplier), chưa bầu host; (3) bầu host + thử với mod thứ 2; (4) chuyển dần các mod khác sang TOML + `[Meta]`
 
+- [ ] Thêm key `ReloadBanner` (bật/tắt banner "Config reloaded", banner lỗi luôn hiện) cho mọi mod có phím reload - SpeedMultiplier đã có từ 2026-10-02 (TOML, `reload::run_with`)
+  - Mod dùng `common::reload::run(ini)`: dropmultiplier, infiniteailment, passiverunes, risearcher, sometweaks (bỏ), spiritmultiplier - đổi `reload::run` đọc `config::get_bool("ReloadBanner", true)` (thay `|| true`) rồi thêm key vào ini mẫu của từng mod (`[General]`, cạnh `ReloadKey`)
+  - Mod có watcher reload riêng: autoregen (`regen.rs::run`, tự gọi `show_announcement`), runemultiplier (`hook.rs::run`) - kiểm tra rồi dùng chung key
 - [x] Đồng bộ `version` trong `Cargo.toml` của các mod cũ với version mới nhất trên Nexus - xong 2026-10-02 (autoregen 2.6.3, runemultiplier 1.0.4, weightmultiplier 2.0.1, passiverunes 2.1.1, dropmultiplier 1.1.0, infiniteailment 1.0.1, soulsteleport 1.1.0; risearcher 2.0.0 theo changelog local - trang Nexus ghi 1.17.1, API không có changelog)
 - [ ] Đăng `windowresize` lên Nexus
