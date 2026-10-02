@@ -36,7 +36,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 - [ ] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01)
   - Là anim cặp (pair anim) - player bị tăng tốc nhưng kẻ địch không. Hướng: giữ 1.0 cho các anim này (cùng ý với nhóm "luôn 1.0" cho anim chết / bị túm đã bàn trước 1.0.0); cần log anim id của critical/sneak attack
 
-- [ ] Hệ số tốc độ theo SpEffect đang có trên người chơi (Nexus, Lwingr - Linear Convergence, 2026-10-02)
+- [x] Hệ số tốc độ theo SpEffect đang có trên người chơi (Nexus, Lwingr - Linear Convergence, 2026-10-02)
   - Trong `SpeedMultiplier.toml` (đã chuyển sang TOML, commit `00d1321`): danh sách `[[Override]]` - tên chọn 2026-10-02 vì nói đúng việc nó làm (ghi đè `[Speed]` khi khớp)
   - Chỉ 1 loại điều kiện: `SpEffect` nằm thẳng trong `[[Override]]` (bỏ bảng con `When` - mod chỉ đổi tốc độ anim, SpEffect đã gồm buff/debuff/talisman; HP/vũ khí/giờ... là thừa, người dùng chốt 2026-10-02). Cần thêm điều kiện sau này thì thêm key cạnh `SpEffect`
   - `SpEffect = 1234` hoặc `SpEffect = [1234, 1235]` = có **bất kỳ** id nào. Id là số, nhận cả chuỗi `"1234"`. Override không có `SpEffect` = lỗi (báo dòng)

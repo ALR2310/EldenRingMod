@@ -352,3 +352,45 @@ không có nháy là số nguyên, ini thì nhận cả hai. Thêm
 cho `parse_virtual_key`). Sau đó: F6 (`0x75`) reload được, tốc độ đổi theo;
 gõ sai `PlayerRol` → log lỗi dòng 16 kèm danh sách key hợp lệ, cấu hình cũ
 giữ nguyên.
+
+## `[[Override]]`: tốc độ khác khi người chơi có SpEffect (2026-10-02)
+
+Yêu cầu Nexus (Lwingr, Linear Convergence). Thiết kế chốt với người dùng
+sau vài vòng:
+- Tên `[[Override]]` (không phải `Rule`/`Condition`/`Profile`): nói đúng
+  việc nó làm - ghi đè giá trị `[Speed]` khi khớp. `[[...]]` = danh sách
+  bảng TOML, viết bao nhiêu khối cũng được.
+- **Chỉ 1 điều kiện `SpEffect`**, nằm thẳng trong khối (bỏ bảng con `When`
+  đã đề xuất): mod chỉ đổi tốc độ anim, SpEffect đã gồm buff/debuff/
+  talisman; HP/vũ khí/giờ trong game là thừa.
+- `SpEffect = 1234` hoặc `[1234, 1235]` = có **bất kỳ** id nào (người dùng
+  từng cân nhắc "mảng = phải có đủ" rồi bỏ). Id số hoặc chuỗi; mảng rỗng,
+  id không phải số, thiếu `SpEffect`, key lạ = lỗi kèm dòng.
+- **Xếp chồng**: mọi override khớp đều áp từ trên xuống, trùng key thì khối
+  viết sau thắng (2 buff độc lập - 1 tăng lăn, 1 tăng đánh - có tác dụng
+  cùng lúc, không phải viết thêm khối gộp như kiểu "khối đầu tiên thắng").
+  `PlayerAll` cũng đi qua quy trình này. Torrent theo SpEffect của người chơi.
+
+Code:
+- `config.rs`: struct `Override` (key tốc độ là `Option<f32>`, không
+  `#[serde(default)]` ở struct để thiếu `SpEffect` là lỗi), visitor
+  `sp_effect_ids`, `Config::effective_speed(has_sp_effect)` trả tốc độ cuối
+  + chỉ số các override đang bật. 6 test mới (khớp bất kỳ id, xếp chồng,
+  không override nào, id dạng chuỗi, các lỗi).
+- `speed.rs::apply`: mỗi frame lấy `special_effect.entries()` của người
+  chơi (bỏ qua nếu không có override nào) → `effective_speed`; log 1 dòng
+  `Speed: active overrides: #1, #2` / `none` khi tập override đổi.
+- Probe: `EffectProbe` mới (mặc định false) log SpEffect người chơi khi đổi
+  (`P SpEffect +[thêm] -[mất] now [...]`); lúc đầu nằm trong `SpeedProbe`,
+  người dùng tách ra cùng ngày. Không quảng cáo trong comment - người cần
+  tính năng này tự biết tra id (người dùng).
+- Template: mô tả + ví dụ `[[Override]]` dạng comment giữa `[Speed]` và
+  `[Logging]`; chú giải `PlayerOther` đổi thành "any action not covered by
+  the keys above". File toml đã có của người dùng không nhận comment mới
+  (`toml_config` chỉ thêm key thiếu).
+
+**Test trong game (người dùng): hoạt động hoàn hảo.** Probe cho Golden Vow
+(phép) = SpEffect `1660000`/`1660001`/`1660002`, khoảng 80 giây (Smithbox
+xác nhận; bản kỹ năng vũ khí là `1730`, bản item `20503170`). Log: override
+bật/tắt theo buff (`#1` → `none`), 2 override cùng lúc (`#1, #2`), reload
+giữa chừng vẫn đúng.
