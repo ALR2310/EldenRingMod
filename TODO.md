@@ -46,6 +46,11 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
   - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
+## DropMultiplier
+
+- [ ] Tăng số lượng nhặt được từ cây/hoa hái trên bản đồ (Erdleaf Flower, Trina's Lily...) - không phải đồ quái rơi (Nexus, LordSoulOfNito, 2026-10-02)
+  - Mod hiện chỉ chỉnh `ItemLotParam_enemy` (quái rơi); đồ hái/nhặt trên map nằm ở `ItemLotParam_map` - cần xem nên nhân `lotItemNum` (số lượng mỗi lần hái) hay tỉ lệ, và lọc đúng các dòng là cây/hoa (không đụng rương/đồ đặt sẵn); có thể là 1 key riêng, vd. `GatherMultiplier`
+
 ## RuneMultiplier
 
 - [ ] Nghiên cứu: hệ số riêng cho từng nguồn rune, vd. giết địch x2, bán đồ x0.5 (Nexus, julianpratt, 2026-08-31)
