@@ -37,11 +37,10 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Là anim cặp (pair anim) - player bị tăng tốc nhưng kẻ địch không. Hướng: giữ 1.0 cho các anim này (cùng ý với nhóm "luôn 1.0" cho anim chết / bị túm đã bàn trước 1.0.0); cần log anim id của critical/sneak attack
 
 - [ ] Hệ số tốc độ theo SpEffect đang có trên người chơi (Nexus, Lwingr - Linear Convergence, 2026-10-02)
-  - File tuỳ chọn riêng `SpeedConditions.toml` (không có file = chạy như cũ), `SpeedMultiplier.ini` giữ nguyên làm mặc định
-  - `[[rule]]` theo thứ tự = ưu tiên (rule đầu tiên khớp thắng); `speffect = [..]` khớp bất kỳ id nào; rule chỉ ghi key muốn đổi (`Player*`, `Torrent`), còn lại lấy từ ini
-  - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn key trong `speed.rs::apply`; F5 đọc lại cả 2 file; lỗi parse TOML ghi log kèm số dòng
-  - Không làm "reload khi load khu vực" (rule áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
-  - Vì sao không dùng ini: `common::config` gộp mọi section vào 1 namespace (phải đánh số `PlayerMovement01`...), không có mảng, `migrate` dựa theo tên key
+  - Trong `SpeedMultiplier.toml` (đã chuyển sang TOML, commit `00d1321`): danh sách `[[Override]]` - tên chọn 2026-10-02 vì nói đúng việc nó làm (ghi đè `[Speed]` khi khớp), vẫn đúng nếu sau này thêm điều kiện khác SpEffect (vũ khí, % máu...)
+  - `SpEffect = [..]` khớp bất kỳ id nào; thứ tự trong file = ưu tiên (override đầu tiên khớp thắng); chỉ ghi key muốn đổi (`Player*`, `Torrent`), còn lại giữ giá trị `[Speed]`
+  - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
+  - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
 ## RuneMultiplier
 
@@ -58,7 +57,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - GUI chỉnh → host ghi file bằng `toml_edit` (giữ comment); mod tự reload khi mtime file đổi (poll ~1s) - kèm luôn lợi ích sửa tay không cần F5 (F5 vẫn giữ)
   - Bầu host: chỉ 1 DLL được gắn `hudhook` (2 hudhook trong 1 process xung đột). Mọi mod mang code menu trong `common`; mod có phiên bản menu mới nhất làm host - trao đổi số phiên bản qua vùng nhớ dùng chung có tên (named file mapping)
   - Dùng lại từ SoulsTeleport: `hudhook` (dx12) + imgui (`ui.rs`), chặn input game khi mở menu (`input_block.rs`). Rủi ro: overlay khác (ReShade, mod imgui khác)
-  - Thứ tự: (1) `[[Rule]]` SpeedMultiplier trước (để biết metadata cho "danh sách bảng"); (2) `common::menu` chạy với 1 mod (SpeedMultiplier), chưa bầu host; (3) bầu host + thử với mod thứ 2; (4) chuyển dần các mod khác sang TOML + `[Meta]`
+  - Thứ tự: (1) `[[Override]]` SpeedMultiplier trước (để biết metadata cho "danh sách bảng"); (2) `common::menu` chạy với 1 mod (SpeedMultiplier), chưa bầu host; (3) bầu host + thử với mod thứ 2; (4) chuyển dần các mod khác sang TOML + `[Meta]`
 
 - [ ] Đồng bộ `version` trong `Cargo.toml` của các mod cũ với version mới nhất trên Nexus (vd. `autoregen` vẫn `2.0.0`)
 - [ ] Đăng `windowresize` lên Nexus
