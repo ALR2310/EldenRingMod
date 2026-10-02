@@ -124,22 +124,12 @@ name = "common"
 version = "1.0.0"
 dependencies = [
  "chrono",
- "config_ui_derive",
  "eldenring",
  "fromsoftware-shared",
  "serde",
  "toml",
  "toml_edit 0.22.27",
  "vtable-rs",
-]
-
-[[package]]
-name = "config_ui_derive"
-version = "1.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]

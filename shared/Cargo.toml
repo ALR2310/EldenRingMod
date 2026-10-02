@@ -23,4 +23,3 @@ vtable-rs.workspace = true
 serde.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
-config_ui_derive = { path = "../macros/config_ui_derive" }

@@ -8,8 +8,7 @@ use common::{dll_dir, logger};
 
 // The in-game config menu (`common::menu_schema`): this mod's tab.
 common::export_menu_api! {
-    tab: "Speed Multiplier",
-    config: config::Config,
+    menu: config::MENU,
     path: config::path,
     reload: reload_config,
 }

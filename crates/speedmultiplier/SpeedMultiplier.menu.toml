@@ -1,0 +1,52 @@
+# In-game menu layout for Speed Multiplier - embedded in the DLL, not
+# shipped. Each [table] is the config table of the same name; each key is a
+# config key. File order = menu order; a config key not listed here is not
+# in the menu. Format: common::menu_schema.
+Version = 1
+Tab = "Speed Multiplier"
+
+[General]
+Label = "General"
+ReloadKey    = { Kind = "Key",  Label = "Reload key",    Description = "Key that reloads the config file in-game" }
+ReloadBanner = { Kind = "Bool", Label = "Reload banner", Description = "Show a banner at the top of the screen after a reload" }
+
+[Player]
+Label = "Player"
+Description = "Groups of player actions"
+Slider = { Min = 0.1, Max = 10.0, Step = 0.05 }
+All      = { Kind = "Slider", Label = "All actions", Description = "When not 1, overrides every key below" }
+Walk     = { Kind = "Slider", Label = "Walk" }
+Run      = { Kind = "Slider", Label = "Run" }
+Sneak    = { Kind = "Slider", Label = "Sneak" }
+Jump     = { Kind = "Slider", Label = "Jump",     Description = "Jumping and landing" }
+Roll     = { Kind = "Slider", Label = "Roll",     Description = "Rolling, backstepping" }
+Attack   = { Kind = "Slider", Label = "Attack",   Description = "Normal attacks" }
+Critical = { Kind = "Slider", Label = "Critical", Description = "Backstabs and ripostes - above 1 the player finishes before the enemy does" }
+Skill    = { Kind = "Slider", Label = "Skill",    Description = "Weapon skills" }
+Cast     = { Kind = "Slider", Label = "Cast",     Description = "Casting sorceries and incantations" }
+Item     = { Kind = "Slider", Label = "Item",     Description = "Using items (flasks, consumables, throwables...)" }
+Other    = { Kind = "Slider", Label = "Other",    Description = "Any action not covered by the keys above" }
+
+[Torrent]
+Label = "Torrent"
+Description = "Groups of Torrent's actions"
+Slider = { Min = 0.1, Max = 10.0, Step = 0.05 }
+All   = { Kind = "Slider", Label = "All actions", Description = "When not 1, overrides every key below" }
+Walk  = { Kind = "Slider", Label = "Walk" }
+Run   = { Kind = "Slider", Label = "Run" }
+Jump  = { Kind = "Slider", Label = "Jump",  Description = "Jumping and landing" }
+Other = { Kind = "Slider", Label = "Other", Description = "Any action not covered by the keys above" }
+
+[Override]
+Kind = "List"
+Label = "Overrides"
+Description = "Different speeds while the player has a SpEffect. When two set the same speed, the lower one wins."
+Title = "SpEffect {SpEffect}"
+SpEffect = { Kind = "IdList", Label = "SpEffect ids", Description = "On while the player has any of them" }
+Optional = ["Player", "Torrent"]
+
+[Logging]
+Label = "Logging"
+LogFile     = { Kind = "Bool", Label = "Log file",     Description = "Write a log file next to the DLL, for troubleshooting" }
+SpeedProbe  = { Kind = "Bool", Label = "Speed probe",  Description = "Log every animation the player plays (needs a game restart)" }
+EffectProbe = { Kind = "Bool", Label = "Effect probe", Description = "Log the player's SpEffect ids when they change (needs a game restart)" }
