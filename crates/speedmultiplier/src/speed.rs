@@ -101,7 +101,9 @@ pub fn torrent(world_chr_man: &mut WorldChrMan) -> Option<&mut ChrIns> {
     let chr_set = &world_chr_man.summon_buddy_chr_set;
     for slot in 0..chr_set.capacity {
         let entry = unsafe { chr_set.entries.add(slot as usize).as_ref() };
-        let Some(mut chr) = entry.chr_ins else { continue };
+        let Some(mut chr) = entry.chr_ins else {
+            continue;
+        };
         if !matches!(
             entry.chr_load_status,
             ChrLoadStatus::Active | ChrLoadStatus::ReadyForActivation
@@ -119,7 +121,11 @@ pub fn torrent(world_chr_man: &mut WorldChrMan) -> Option<&mut ChrIns> {
 /// A multiplier clamped to a sane range (0 or negative would freeze or
 /// reverse the animation).
 fn clamped(value: f32) -> f32 {
-    if value.is_finite() { value.clamp(0.1, 10.0) } else { 1.0 }
+    if value.is_finite() {
+        value.clamp(0.1, 10.0)
+    } else {
+        1.0
+    }
 }
 
 fn set_animation_speed(chr: &mut ChrIns, value: f32) {
@@ -129,7 +135,9 @@ fn set_animation_speed(chr: &mut ChrIns, value: f32) {
     }
 }
 
-fn apply() {
+/// One frame. `last_active` is the set of active overrides from the last
+/// frame, so a change is logged once instead of every frame.
+fn apply(last_active: &mut Vec<usize>) {
     if common::player::main_player_chr_ins_ptr().is_none() {
         return;
     }
@@ -137,14 +145,43 @@ fn apply() {
         return;
     };
     let config = config::get();
-    let speed = &config.speed;
+
+    // The player's SpEffects decide which `[[Override]]`s are on - for
+    // Torrent's speed too (a buff on the rider).
+    let sp_effects: Vec<i32> = match world_chr_man.main_player.as_ref() {
+        Some(player) if !config.overrides.is_empty() => player
+            .chr_ins
+            .special_effect
+            .entries()
+            .map(|entry| entry.param_id)
+            .collect(),
+        _ => Vec::new(),
+    };
+    let (speed, active) = config.effective_speed(|id| sp_effects.contains(&id));
+    if active != *last_active {
+        let list = active
+            .iter()
+            .map(|i| format!("#{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        logger::log(&format!(
+            "Speed: active overrides: {}",
+            if list.is_empty() {
+                "none".to_string()
+            } else {
+                list
+            }
+        ));
+        *last_active = active;
+    }
+
     if let Some(player) = world_chr_man.main_player.as_mut() {
         let chr = &mut player.chr_ins;
         let master = clamped(speed.player_all);
         let value = if (master - 1.0).abs() > 0.0001 {
             master
         } else {
-            clamped(group_of(current_anim_id(chr)).speed(speed))
+            clamped(group_of(current_anim_id(chr)).speed(&speed))
         };
         set_animation_speed(chr, value);
     }
@@ -155,12 +192,10 @@ fn apply() {
 
 pub fn run() {
     let cs_task = common::task::wait_for_cs_task();
-    common::task::run_recurring_safe(
-        cs_task,
-        "Speed",
-        CSTaskGroupIndex::ChrIns_PreBehavior,
-        |_data: &eldenring::fd4::FD4TaskData| apply(),
-    );
+    common::task::run_recurring_safe(cs_task, "Speed", CSTaskGroupIndex::ChrIns_PreBehavior, {
+        let mut last_active = Vec::new();
+        move |_data: &eldenring::fd4::FD4TaskData| apply(&mut last_active)
+    });
     logger::log("Speed: per-action multipliers active.");
     loop {
         std::thread::sleep(Duration::from_secs(60));
