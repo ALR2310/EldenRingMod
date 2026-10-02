@@ -18,6 +18,10 @@ PlayerRoll = 1.1
 # normal attacks
 PlayerAttack = 1.2
 
+# backstabs and ripostes - above 1 the player finishes before
+# the enemy does
+PlayerCritical = 1.0
+
 # Ashes of War / weapon skills
 PlayerSkill = 1.2
 
