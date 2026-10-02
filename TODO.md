@@ -58,15 +58,10 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 ## Chung
 
-- [ ] Menu chỉnh cấu hình trong game dùng chung cho mọi mod: mỗi mod cài vào = 1 tab (ý tưởng người dùng, chốt thiết kế 2026-10-02)
-  - **File TOML là giao diện duy nhất giữa các mod** - không đăng ký qua C ABI, không gọi hàm qua lại giữa các DLL
-  - Format: giá trị ở bảng thường (`[Speed]`...), metadata GUI ở `[Meta]`: `Version` (phiên bản format menu), `Tab`; `[Meta.<Bảng>]` mỗi key 1 inline table `{ Label, Description, Min, Max, Step }`, kiểu control suy từ kiểu giá trị (số → thanh trượt, bool → checkbox), `Kind = "Key"` → ô bắt phím. Khai báo `[Meta]` trong template ở repo (`crates/<mod>/<Mod>.toml`)
-  - `toml_config` ghi đè `[Meta]` từ template mỗi lần khởi động (để metadata luôn đúng phiên bản mod), không đụng giá trị người dùng; struct `Config` của mod bỏ qua `[Meta]`
-  - Host tìm mod: duyệt module đã nạp (`common::diag`), tìm `<TênDLL>.toml` cạnh DLL; có `[Meta]` với `Version` host hiểu → 1 tab; không có file / lỗi cú pháp / không có `[Meta]` → bỏ qua
-  - GUI chỉnh → host ghi file bằng `toml_edit` (giữ comment); mod tự reload khi mtime file đổi (poll ~1s) - kèm luôn lợi ích sửa tay không cần F5 (F5 vẫn giữ)
-  - Bầu host: chỉ 1 DLL được gắn `hudhook` (2 hudhook trong 1 process xung đột). Mọi mod mang code menu trong `common`; mod có phiên bản menu mới nhất làm host - trao đổi số phiên bản qua vùng nhớ dùng chung có tên (named file mapping)
-  - Dùng lại từ SoulsTeleport: `hudhook` (dx12) + imgui (`ui.rs`), chặn input game khi mở menu (`input_block.rs`). Rủi ro: overlay khác (ReShade, mod imgui khác)
-  - Thứ tự: (1) `[[Override]]` SpeedMultiplier trước (để biết metadata cho "danh sách bảng"); (2) `common::menu` chạy với 1 mod (SpeedMultiplier), chưa bầu host; (3) bầu host + thử với mod thứ 2; (4) chuyển dần các mod khác sang TOML + `[Meta]`
+- [ ] ~~Menu chỉnh cấu hình trong game dùng chung cho mọi mod~~ - **tạm dừng 2026-10-02** (người dùng chốt: chỉ dùng file cấu hình). Code ở nhánh `feat/modmenu` (không merge): bản v1 chạy được trong game (F10, SpeedMultiplier làm host)
+  - Thiết kế đã chốt (dùng lại nếu quay lại): mỗi mod 1 tab; giao tiếp giữa DLL = file TOML + hàm C export (`alr_menu_schema_v1` / `alr_menu_config_path_v1` / `alr_menu_reload_v1`, host gọi reload sau khi ghi file); định nghĩa menu = file viết tay `<Mod>.menu.toml` nhúng vào DLL (bảng = nhóm, `Kind` Slider/Int/Bool/Key/Text/IdList, `Kind = "List"` + `Title` + `Optional` cho `[[Override]]`); UI chép từ SoulsTeleport (`common::menu`, feature `menu`)
+  - Lý do dừng: SoulsTeleport có hudhook riêng (+ SoulsChat) → 2 hudhook trong game vẫn xảy ra dù bỏ SoulsTeleport ra, chưa test; còn bầu host giữa các phiên bản menu, Override, lưu vị trí, bắt phím; mỗi mod +~1 MB ImGui và phải phát hành lại khi DX12/hudhook đổi; chưa người dùng nào yêu cầu menu - file TOML (comment, reload, lỗi kèm dòng, tự thêm key, migration) đã đủ
+  - Nếu quay lại: làm thành **1 mod menu riêng, tuỳ chọn**, chỉ đọc file cấu hình + `.menu.toml` của các mod (không nhét ImGui vào từng mod); test 2 hudhook (SoulsTeleport/SoulsChat) trước tiên
 
 - [ ] Thêm key `ReloadBanner` (bật/tắt banner "Config reloaded", banner lỗi luôn hiện) cho mọi mod có phím reload - SpeedMultiplier đã có từ 2026-10-02 (TOML, `reload::run_with`)
   - Mod dùng `common::reload::run(ini)`: dropmultiplier, infiniteailment, passiverunes, risearcher, sometweaks (bỏ), spiritmultiplier - đổi `reload::run` đọc `config::get_bool("ReloadBanner", true)` (thay `|| true`) rồi thêm key vào ini mẫu của từng mod (`[General]`, cạnh `ReloadKey`)
