@@ -22,15 +22,22 @@ use std::time::Duration;
 use eldenring::cs::{CSTaskGroupIndex, ChrIns, ChrLoadStatus, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
-use common::{config, logger};
+use common::logger;
+
+use crate::config::{self, Player, Torrent};
 
 const TORRENT_NPC_PARAM_ID: i32 = 80020000;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Group {
-    Movement,
+    Walk,
+    Run,
+    Sneak,
+    Jump,
     Roll,
     Attack,
+    /// Backstabs and ripostes (`PlayerCritical`), see [group_of].
+    Critical,
     Skill,
     Cast,
     Item,
@@ -38,16 +45,56 @@ pub enum Group {
 }
 
 impl Group {
-    fn key(self) -> &'static str {
+    /// This group's multiplier in `[Player]`.
+    fn speed(self, player: &Player) -> f32 {
         match self {
-            Group::Movement => "PlayerMovement",
-            Group::Roll => "PlayerRoll",
-            Group::Attack => "PlayerAttack",
-            Group::Skill => "PlayerSkill",
-            Group::Cast => "PlayerCast",
-            Group::Item => "PlayerItem",
-            Group::Other => "PlayerOther",
+            Group::Walk => player.walk,
+            Group::Run => player.run,
+            Group::Sneak => player.sneak,
+            Group::Jump => player.jump,
+            Group::Roll => player.roll,
+            Group::Attack => player.attack,
+            Group::Critical => player.critical,
+            Group::Skill => player.skill,
+            Group::Cast => player.cast,
+            Group::Item => player.item,
+            Group::Other => player.other,
         }
+    }
+}
+
+/// Torrent's own anims (2026-10-02, `SpeedProbe` while riding): walk
+/// 0021xx (002100 start, 002110), run - the dash key, a second press
+/// included - 0022xx (002220, 002200, 002221, slowing down 002210).
+/// Jump: taking off 0061xx (006110 standing, 006130 walking or running -
+/// the same id for both) and landing 0074xx (007400, 007451). Everything
+/// else - standing 000000, turning 0051xx - is `Other`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TorrentGroup {
+    Walk,
+    Run,
+    Jump,
+    Other,
+}
+
+impl TorrentGroup {
+    /// This group's multiplier in `[Torrent]`.
+    fn speed(self, torrent: &Torrent) -> f32 {
+        match self {
+            TorrentGroup::Walk => torrent.walk,
+            TorrentGroup::Run => torrent.run,
+            TorrentGroup::Jump => torrent.jump,
+            TorrentGroup::Other => torrent.other,
+        }
+    }
+}
+
+pub fn torrent_group_of(anim_id: i32) -> TorrentGroup {
+    match anim_id {
+        2_100..=2_199 => TorrentGroup::Walk,
+        2_200..=2_299 => TorrentGroup::Run,
+        6_100..=6_199 | 7_400..=7_499 => TorrentGroup::Jump,
+        _ => TorrentGroup::Other,
     }
 }
 
@@ -70,8 +117,29 @@ pub fn group_of(anim_id: i32) -> Group {
         return Group::Skill;
     }
     match anim_id % 1_000_000 {
-        0 | 20_000..=26_999 => Group::Movement,
+        // Walk / run / sneak (probe, 2026-10-02 - the 3rd suffix digit is
+        // the gait, the same standing or sneaking): walk 0201xx (stop
+        // 0221xx), run - holding the dash key - 0202xx (stop 0222xx),
+        // sneaking 3xxxxx (idle 300000, sneak walk 3201xx, sneak run
+        // 3202xx, going into the sneak stance 390000). The rest of the old Movement range
+        // (standing 000000, 0200xx = the legs while using an item on the
+        // move, jumps...) is Other since `PlayerMovement` was split.
+        20_100..=20_199 | 22_100..=22_199 => Group::Walk,
+        20_200..=20_299 | 22_200..=22_299 => Group::Run,
+        300_000..=399_999 => Group::Sneak,
+        // Jumps (probe, 2026-10-02): taking off 2020xx (202000 standing,
+        // 202020 walking, 202030/202040 running), landing 2021xx (202100,
+        // 202115, 202126). Only the range seen - other 20xxxx anims were
+        // noted around Torrent before.
+        202_000..=202_199 => Group::Jump,
         27_000..=27_999 => Group::Roll,
+        // Critical hits (riposte 031700, backstab 031719 -> 031710 - probe,
+        // 2026-10-02) are paired with the victim's anim, which this mod
+        // doesn't speed up: a faster player pulled the blade out while the
+        // enemy was still falling (user test). Own key `PlayerCritical`,
+        // default 1 (vanilla) - first fixed at 1, made a key the same day
+        // at the user's request.
+        31_700..=31_799 => Group::Critical,
         30_000..=39_999 => Group::Attack,
         40_000..=49_999 => Group::Skill,
         // Torrent's whistle is an item, but in game it's the first part of
@@ -98,7 +166,9 @@ pub fn torrent(world_chr_man: &mut WorldChrMan) -> Option<&mut ChrIns> {
     let chr_set = &world_chr_man.summon_buddy_chr_set;
     for slot in 0..chr_set.capacity {
         let entry = unsafe { chr_set.entries.add(slot as usize).as_ref() };
-        let Some(mut chr) = entry.chr_ins else { continue };
+        let Some(mut chr) = entry.chr_ins else {
+            continue;
+        };
         if !matches!(
             entry.chr_load_status,
             ChrLoadStatus::Active | ChrLoadStatus::ReadyForActivation
@@ -113,10 +183,14 @@ pub fn torrent(world_chr_man: &mut WorldChrMan) -> Option<&mut ChrIns> {
     None
 }
 
-/// Reads a multiplier key, clamped to a sane range (0 or negative would
-/// freeze or reverse the animation).
-fn multiplier(key: &str) -> f32 {
-    (config::get_double(key, 1.0) as f32).clamp(0.1, 10.0)
+/// A multiplier clamped to a sane range (0 or negative would freeze or
+/// reverse the animation).
+fn clamped(value: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(0.1, 10.0)
+    } else {
+        1.0
+    }
 }
 
 fn set_animation_speed(chr: &mut ChrIns, value: f32) {
@@ -126,38 +200,138 @@ fn set_animation_speed(chr: &mut ChrIns, value: f32) {
     }
 }
 
-fn apply() {
+/// One frame. `last_active` is the set of active overrides from the last
+/// frame, so a change is logged once instead of every frame.
+fn apply(last_active: &mut Vec<usize>) {
     if common::player::main_player_chr_ins_ptr().is_none() {
         return;
     }
     let Ok(world_chr_man) = (unsafe { WorldChrMan::instance_mut() }) else {
         return;
     };
+    let config = config::get();
+
+    // The player's SpEffects decide which `[[Override]]`s are on - for
+    // Torrent's speed too (a buff on the rider).
+    let sp_effects: Vec<i32> = match world_chr_man.main_player.as_ref() {
+        Some(player) if !config.overrides.is_empty() => player
+            .chr_ins
+            .special_effect
+            .entries()
+            .map(|entry| entry.param_id)
+            .collect(),
+        _ => Vec::new(),
+    };
+    let (speeds, active) = config.effective_speed(|id| sp_effects.contains(&id));
+    if active != *last_active {
+        let list = active
+            .iter()
+            .map(|i| format!("#{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+        logger::log(&format!(
+            "Speed: active overrides: {}",
+            if list.is_empty() {
+                "none".to_string()
+            } else {
+                list
+            }
+        ));
+        *last_active = active;
+    }
+
     if let Some(player) = world_chr_man.main_player.as_mut() {
         let chr = &mut player.chr_ins;
-        let master = multiplier("PlayerAll");
+        let group = group_of(current_anim_id(chr));
+        let master = clamped(speeds.player.all);
         let value = if (master - 1.0).abs() > 0.0001 {
             master
         } else {
-            multiplier(group_of(current_anim_id(chr)).key())
+            clamped(group.speed(&speeds.player))
         };
         set_animation_speed(chr, value);
     }
     if let Some(torrent) = torrent(world_chr_man) {
-        set_animation_speed(torrent, multiplier("Torrent"));
+        let master = clamped(speeds.torrent.all);
+        let value = if (master - 1.0).abs() > 0.0001 {
+            master
+        } else {
+            clamped(torrent_group_of(current_anim_id(torrent)).speed(&speeds.torrent))
+        };
+        set_animation_speed(torrent, value);
     }
 }
 
 pub fn run() {
     let cs_task = common::task::wait_for_cs_task();
-    common::task::run_recurring_safe(
-        cs_task,
-        "Speed",
-        CSTaskGroupIndex::ChrIns_PreBehavior,
-        |_data: &eldenring::fd4::FD4TaskData| apply(),
-    );
+    common::task::run_recurring_safe(cs_task, "Speed", CSTaskGroupIndex::ChrIns_PreBehavior, {
+        let mut last_active = Vec::new();
+        move |_data: &eldenring::fd4::FD4TaskData| apply(&mut last_active)
+    });
     logger::log("Speed: per-action multipliers active.");
     loop {
         std::thread::sleep(Duration::from_secs(60));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn torrent_gaits_are_split() {
+        assert_eq!(torrent_group_of(2_100), TorrentGroup::Walk);
+        assert_eq!(torrent_group_of(2_110), TorrentGroup::Walk);
+        assert_eq!(torrent_group_of(2_220), TorrentGroup::Run);
+        assert_eq!(torrent_group_of(2_210), TorrentGroup::Run); // slowing down
+        assert_eq!(torrent_group_of(0), TorrentGroup::Other); // standing
+        assert_eq!(torrent_group_of(5_102), TorrentGroup::Other); // turning
+        assert_eq!(torrent_group_of(6_110), TorrentGroup::Jump); // standing jump
+        assert_eq!(torrent_group_of(6_130), TorrentGroup::Jump); // moving jump
+        assert_eq!(torrent_group_of(7_400), TorrentGroup::Jump); // landing
+        assert_eq!(torrent_group_of(7_451), TorrentGroup::Jump); // moving landing
+    }
+
+    #[test]
+    fn jumps_are_their_own_group() {
+        assert_eq!(group_of(202_000), Group::Jump); // standing jump
+        assert_eq!(group_of(202_020), Group::Jump); // walking jump
+        assert_eq!(group_of(202_040), Group::Jump); // running jump
+        assert_eq!(group_of(202_100), Group::Jump); // landing
+        assert_eq!(group_of(202_126), Group::Jump); // running landing
+        assert_eq!(group_of(202_200), Group::Other);
+    }
+
+    #[test]
+    fn gaits_are_split() {
+        assert_eq!(group_of(20_110), Group::Walk);
+        assert_eq!(group_of(22_100), Group::Walk); // walk stop
+        assert_eq!(group_of(20_210), Group::Run);
+        assert_eq!(group_of(22_200), Group::Run); // run stop
+        assert_eq!(group_of(300_000), Group::Sneak); // sneak idle
+        assert_eq!(group_of(320_110), Group::Sneak); // sneak walk
+        assert_eq!(group_of(320_210), Group::Sneak); // sneak run
+        assert_eq!(group_of(390_000), Group::Sneak); // going into the sneak stance
+        assert_eq!(group_of(0), Group::Other); // standing
+        assert_eq!(group_of(20_010), Group::Other); // legs while using an item
+    }
+
+    #[test]
+    fn critical_hits_are_their_own_group() {
+        assert_eq!(group_of(23_031_700), Group::Critical); // riposte
+        assert_eq!(group_of(23_031_719), Group::Critical); // backstab start
+        assert_eq!(group_of(23_031_710), Group::Critical); // backstab
+        assert_eq!(group_of(23_030_000), Group::Attack);
+        assert_eq!(group_of(23_031_699), Group::Attack);
+        assert_eq!(group_of(23_031_800), Group::Attack);
+    }
+
+    #[test]
+    fn critical_hits_use_their_own_key() {
+        let player = Player { attack: 3.0, ..Player::default() };
+        assert_eq!(Group::Critical.speed(&player), 1.0); // default
+        let player = Player { critical: 1.5, ..Player::default() };
+        assert_eq!(Group::Critical.speed(&player), 1.5);
+        assert_eq!(Group::Attack.speed(&player), 1.2);
     }
 }
