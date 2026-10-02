@@ -9,7 +9,7 @@ name = "SpeedMultiplier"
 crate-type = ["cdylib"]
 
 [dependencies]
-common = { path = "../../shared" }
+common = { path = "../../shared", features = ["menu"] }
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
 serde.workspace = true

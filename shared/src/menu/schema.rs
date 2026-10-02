@@ -296,8 +296,8 @@ pub mod __export {
 #[macro_export]
 macro_rules! export_menu_api {
     (menu: $menu:expr, path: $path:path, reload: $reload:path $(,)?) => {
-        static __ALR_MENU_SCHEMA: $crate::menu_schema::__export::Text = $crate::menu_schema::__export::Text::new();
-        static __ALR_MENU_PATH: $crate::menu_schema::__export::Text = $crate::menu_schema::__export::Text::new();
+        static __ALR_MENU_SCHEMA: $crate::menu::schema::__export::Text = $crate::menu::schema::__export::Text::new();
+        static __ALR_MENU_PATH: $crate::menu::schema::__export::Text = $crate::menu::schema::__export::Text::new();
 
         #[unsafe(no_mangle)]
         pub extern "C" fn alr_menu_schema_v1() -> *const ::std::ffi::c_char {

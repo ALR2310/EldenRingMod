@@ -23,3 +23,9 @@ vtable-rs.workspace = true
 serde.workspace = true
 toml.workspace = true
 toml_edit.workspace = true
+# In-game config menu host (feature `menu`): DX12 overlay + Dear ImGui.
+hudhook = { version = "0.9.3", default-features = false, features = ["dx12"], optional = true }
+
+[features]
+# Hosts the in-game config menu (`common::menu::install`).
+menu = ["dep:hudhook"]

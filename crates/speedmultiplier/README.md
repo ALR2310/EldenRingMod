@@ -539,3 +539,40 @@ Giờ (cấu hình xếp lớp - template là lớp dưới, file người dùng
   - người dùng chốt kích thước vài MB không đáng lo, chỉ quan tâm hiệu năng.
 
 **Test trong game (người dùng): hoạt động.**
+
+## Menu chỉnh cấu hình trong game, bản đầu (2026-10-02, nhánh `feat/modmenu`)
+
+Thiết kế chốt với người dùng qua nhiều vòng (chi tiết ở TODO.md, mục menu):
+- **Mỗi mod mang code menu** (không DLL menu riêng, không kèm `ModMenu.dll`
+  trong zip - người dùng 1 mod không phải cài thêm gì). Bầu host giữa các
+  mod: chưa làm, v1 SpeedMultiplier tự làm host.
+- **Giao diện giữa các DLL:** file cấu hình TOML + hàm C export
+  (`alr_menu_schema_v1`, `alr_menu_config_path_v1`, `alr_menu_reload_v1`,
+  sinh bởi `common::export_menu_api!`). Host tìm mod bằng `GetProcAddress`
+  trên mọi module đã nạp, gọi reload ngay sau khi ghi file (thay cho ý
+  theo dõi mtime ban đầu - người dùng đề xuất).
+- **Định nghĩa menu = file viết tay** `SpeedMultiplier.menu.toml` cạnh
+  template, nhúng vào DLL (`include_str!`), không phát hành. Đã thử
+  `#[derive(ConfigUi)]` (metadata trên struct, ý của GPT) rồi bỏ cùng ngày:
+  người dùng muốn xem/sửa menu trong file thay vì trong code. Định dạng:
+  bảng = nhóm (= bảng cấu hình cùng tên), key = control (`Kind` Slider / Int
+  / Bool / Key / Text / IdList, `Label`, `Description`), `Slider = {...}` mặc
+  định khoảng cho nhóm, `Kind = "List"` + `Title` + `Optional` cho
+  `[[Override]]` (v1 chỉ ghi "sửa trong file"). Thứ tự file = thứ tự menu;
+  key không ghi = không hiện (`ConfigVersion`, cả `[Logging]` - người dùng:
+  dùng nội bộ). Test `check_menu`: key trong menu phải có trong template,
+  `Kind` sửa được giá trị đó, `Optional` trỏ nhóm có thật.
+- **Host (`common::menu`, feature `menu`):** phần UI **chép** từ SoulsTeleport
+  (`style.rs` = theme/font/chuột/hook con trỏ, `input_block.rs` = chặn chuột
+  game) - SoulsTeleport không sửa, đợi 1 bản riêng để chuyển sang (người
+  dùng). `tabs.rs`: mỗi mod 1 tab, mỗi bảng 1 mục thu gọn, ghi file bằng
+  `toml_edit` (giữ comment) khi sửa xong (thả slider / xác nhận ô nhập) rồi
+  gọi reload; đọc lại file mỗi lần mở menu. Phím F10 (cố định trong v1).
+  Không kèm `NotoSans-OFL.txt` trong gói (người dùng: mô tả mod đã ghi
+  credits); bản trong `shared/assets/` chỉ để lưu nguồn.
+- Kích thước: SpeedMultiplier 1.79 MB (ImGui); mod khác không đổi
+  (FasterRevival 306 KB) - LTO bỏ phần menu không dùng.
+
+**Test trong game (người dùng): hoạt động.** Chưa có: lưu vị trí cửa sổ,
+`MenuScale`, ô bắt phím kiểu bấm-để-gán, sửa `[[Override]]`, bầu host, test
+chạy chung với SoulsTeleport.

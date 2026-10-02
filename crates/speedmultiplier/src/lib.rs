@@ -6,7 +6,7 @@ mod speed;
 
 use common::{dll_dir, logger};
 
-// The in-game config menu (`common::menu_schema`): this mod's tab.
+// The in-game config menu (`common::menu`): this mod's tab.
 common::export_menu_api! {
     menu: config::MENU,
     path: config::path,
@@ -77,6 +77,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
             )
         });
         std::thread::spawn(speed::run);
+        // In-game config menu (F10). v1: this mod hosts it; no election yet.
+        std::thread::spawn(|| common::menu::install(|| "F10".to_string()));
 
         common::diag::log_environment_when_game_ready();
         probe::run();

@@ -126,6 +126,7 @@ dependencies = [
  "chrono",
  "eldenring",
  "fromsoftware-shared",
+ "hudhook",
  "serde",
  "toml",
  "toml_edit 0.22.27",

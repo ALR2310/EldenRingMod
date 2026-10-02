@@ -29,7 +29,7 @@ use common::toml_config::{LoadReport, Migration, Step, TomlConfig};
 /// default file.
 pub const TEMPLATE: &str = include_str!("../SpeedMultiplier.toml");
 
-/// The in-game menu's layout (`common::menu_schema`), next to the
+/// The in-game menu's layout (`common::menu::schema`), next to the
 /// template in the crate; embedded, not shipped.
 pub const MENU: &str = include_str!("../SpeedMultiplier.menu.toml");
 
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn menu_file_matches_template() {
-        let problems = common::menu_schema::check_menu(MENU, TEMPLATE);
+        let problems = common::menu::schema::check_menu(MENU, TEMPLATE);
         assert!(problems.is_empty(), "{problems:#?}");
     }
 
