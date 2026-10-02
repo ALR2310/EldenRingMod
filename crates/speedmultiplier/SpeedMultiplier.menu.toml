@@ -44,9 +44,3 @@ Description = "Different speeds while the player has a SpEffect. When two set th
 Title = "SpEffect {SpEffect}"
 SpEffect = { Kind = "IdList", Label = "SpEffect ids", Description = "On while the player has any of them" }
 Optional = ["Player", "Torrent"]
-
-[Logging]
-Label = "Logging"
-LogFile     = { Kind = "Bool", Label = "Log file",     Description = "Write a log file next to the DLL, for troubleshooting" }
-SpeedProbe  = { Kind = "Bool", Label = "Speed probe",  Description = "Log every animation the player plays (needs a game restart)" }
-EffectProbe = { Kind = "Bool", Label = "Effect probe", Description = "Log the player's SpEffect ids when they change (needs a game restart)" }
