@@ -267,9 +267,9 @@ impl Default for Player {
     fn default() -> Self {
         Self {
             all: 1.0,
-            walk: 1.2,
+            walk: 1.1,
             run: 1.2,
-            sneak: 1.2,
+            sneak: 1.1,
             jump: 1.0,
             roll: 1.1,
             attack: 1.2,
@@ -286,7 +286,7 @@ impl Default for Torrent {
     fn default() -> Self {
         Self {
             all: 1.0,
-            walk: 1.0,
+            walk: 1.1,
             run: 1.3,
             jump: 1.0,
             other: 1.0,
@@ -410,7 +410,7 @@ Torrent.All = 2.5
         assert_eq!(active, vec![0, 1]);
         assert_eq!(speeds.player.roll, 2.0);
         assert_eq!(speeds.player.attack, 1.6);
-        assert_eq!(speeds.player.walk, 1.2);
+        assert_eq!(speeds.player.walk, 1.1);
         assert_eq!(speeds.torrent.all, 2.5);
     }
 

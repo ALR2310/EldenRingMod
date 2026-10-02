@@ -14,9 +14,9 @@ ReloadBanner = true
 [Player]
 # Groups of player actions.
 All = 1.0           # all player actions - when not 1, overrides every key below
-Walk = 1.2          # walking
+Walk = 1.1          # walking
 Run = 1.2           # running
-Sneak = 1.2         # sneaking
+Sneak = 1.1         # sneaking
 Jump = 1.0          # jumping and landing
 Roll = 1.1          # rolling, backstepping
 Attack = 1.2        # normal attacks
@@ -30,7 +30,7 @@ Other = 1.0         # any action not covered by the keys above
 [Torrent]
 # Groups of Torrent's actions.
 All = 1.0           # all of Torrent's actions - when not 1, overrides every key below
-Walk = 1.0          # walking
+Walk = 1.1          # walking
 Run = 1.3           # running
 Jump = 1.0          # jumping and landing
 Other = 1.0         # any action not covered by the keys above
