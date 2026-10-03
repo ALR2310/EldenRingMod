@@ -9,8 +9,8 @@ plumbing lặp lại giữa các mod (đọc/ghi ini, log ra file, AOB pattern s
 ```
 EldenRingMod/
 ├── Cargo.toml       # workspace root - liệt kê member crates + dependency dùng chung
-├── build/           # .dll + .ini của mọi mod, gom phẳng 1 chỗ (git-ignored) - xem `scripts/build-mod.ps1`
-├── scripts/         # build-mod.ps1: build 1 mod rồi copy .dll + .ini vào build/
+├── build/           # build/<crate>/ chứa .dll + .ini (+ .zip) của từng mod (git-ignored) - xem `scripts/build-mod.ps1`
+├── scripts/         # build-mod.ps1: build 1 mod rồi copy .dll + .ini vào build/<crate>/
 ├── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
 └── crates/          # chỉ chứa các mod chính, mỗi thư mục build ra 1 DLL
     ├── autoregen/    # mod AutoRegen: hồi HP/FP/Stamina theo tick + khi đánh trúng/bị đánh trúng
@@ -64,16 +64,17 @@ cargo build --release              # build tất cả mod trong workspace (ra �
 cargo build --release -p autoregen # chỉ build 1 mod
 cargo test --workspace             # chạy unit test (chủ yếu là config::migrate)
 
-pwsh scripts/build-mod.ps1 -Mod AutoRegen   # build + copy AutoRegen.dll/.ini vào build/
+pwsh scripts/build-mod.ps1 -Mod AutoRegen   # build + copy AutoRegen.dll/.ini vào build/autoregen/
 ```
 
 Hoặc dùng task có sẵn trong VS Code (**Ctrl+Shift+B**) - mở danh sách chọn:
 `Cargo: Build AutoRegen/SomeTweaks/PassiveRunes/RuneMultiplier/
 WeightMultiplier/RiseArcher (Release)` build riêng 1 mod, `Cargo: Build All
 (Release)` chạy hết. Mỗi task build xong đều tự copy
-`.dll` + `.ini` của mod đó vào `build/` (thư mục phẳng, không lẫn vào hàng
-trăm file khác trong `target/release/`) - `build/` gom `.dll`/`.ini` của mọi
-mod chung 1 chỗ, dễ tìm và copy sang thư mục mod loader.
+`.dll` + `.ini` của mod đó vào `build/<crate>/` (vd. `build/autoregen/`,
+không lẫn vào hàng trăm file khác trong `target/release/`; file `.zip` khi
+`-Zip` cũng nằm cùng thư mục) - mỗi mod 1 thư mục riêng, dễ tìm và copy sang
+thư mục mod loader.
 
 ## Trạng thái
 
