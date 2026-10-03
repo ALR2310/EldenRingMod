@@ -135,17 +135,15 @@ impl GetterFix {
         let who = match common::diag::module_containing(target as usize) {
             Some(m) => m.name,
             None if seamless_loaded => "Seamless Co-op".to_string(),
-            None => "another mod".to_string(),
+            None => "Another mod".to_string(),
         };
         match codepatch::redirect_rel32(thunk, &stub(target)) {
             Some(stub) => {
                 self.stub = stub as u64;
-                logger::log(&format!(
-                    "Seamless fix: {who} takes over the game's animation speed - the player's and Torrent's speeds are applied past it."
-                ));
+                logger::log(&format!("{who} detected: speeds now bypass its animation speed hook."));
             }
             None => logger::error(&format!(
-                "Seamless fix: {who} takes over the game's animation speed and it couldn't be bypassed - speeds won't apply."
+                "{who} detected: couldn't bypass its animation speed hook - speeds won't apply."
             )),
         }
     }
