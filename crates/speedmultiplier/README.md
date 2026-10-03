@@ -539,3 +539,32 @@ Giờ (cấu hình xếp lớp - template là lớp dưới, file người dùng
   - người dùng chốt kích thước vài MB không đáng lo, chỉ quan tâm hiệu năng.
 
 **Test trong game (người dùng): hoạt động.**
+
+## Seamless Co-op: tốc độ không có tác dụng - Seamless hook getter của `animation_speed` (2026-10-03)
+
+Nexus (DrKSolo): mod không chạy với Seamless Co-op. Người dùng tái hiện trên
+cả 1.0.0 và bản hiện tại (`Walk = 3`): log ghi `speed=3.00` nhưng trong game
+không nhanh hơn.
+
+Nguyên nhân: game chỉ đọc `CSChrBehaviorModule.animation_speed` ở 1 chỗ
+(hardware breakpoint 2026-10-02): update behavior `sub_14041DCA0` gọi thunk
+`sub_140417EA0: jmp <getter>` (getter trả `[rcx+0x18]`, rcx = behavior
++0x17B0). Bản so code trong RAM vs exe khi có Seamless (2026-10-02, lúc dò
+màu ma của SpiritMultiplier; lưu ở `.docs/seamless-diff/`) có đúng
+`0x140417EA1` = rel32 của `jmp` đó → Seamless đổi đích sang code của nó,
+giá trị mod ghi không bao giờ được đọc.
+
+Sửa (`src/seamless.rs`): tìm lệnh gọi thunk bằng AOB (`48 8D 8F B0 17 00 00
+E8 ?? ?? ?? ?? 0F 28 F0 F3 0F 59 B7 C0 15 00 00`, call ở +7); mỗi tick, nếu
+`jmp` của thunk không còn trỏ vào `eldenring.exe` (bị DLL khác hook), đổi
+rel32 sang stub: owner của behavior (`[rcx-0x17A8]`) là người chơi / Torrent
+(`OWN_CHRS`, `speed.rs` cập nhật mỗi frame) → trả `animation_speed`; nhân vật
+khác → nhảy tiếp vào hook cũ. Chỉ đổi rel32 (như SpiritMultiplier 1.1.4) và
+làm sau khi Seamless đã hook → không đụng signature của Seamless. Chỉ tra
+module khi đích thay đổi. Stub đã kiểm bằng Capstone.
+
+**Test trong game (người dùng): hoạt động**, cả khi 2 bản game kết nối co-op
+(Sandboxie). Giới hạn: hình ảnh không đồng bộ giữa 2 máy - bên join đánh
+nhanh (`Attack = 5`), bên host thấy đòn đó chậm hơn: mỗi máy chỉ tăng tốc
+nhân vật của chính nó, nhân vật người khác trên máy mình chạy theo game /
+Seamless.

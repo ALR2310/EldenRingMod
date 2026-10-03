@@ -2,6 +2,7 @@
 
 mod config;
 mod probe;
+mod seamless;
 mod speed;
 
 use common::{dll_dir, logger};
