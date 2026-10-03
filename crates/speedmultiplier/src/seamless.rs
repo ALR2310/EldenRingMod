@@ -126,17 +126,27 @@ impl GetterFix {
         if in_game {
             return;
         }
-        let owner = common::diag::module_containing(target as usize)
-            .map(|m| m.name)
-            .unwrap_or_else(|| "an unknown module".to_string());
+        // A hook's code usually sits in memory the hooking DLL allocated (a
+        // trampoline), not inside that DLL - so name Seamless when it's
+        // loaded rather than an "unknown module".
+        let seamless_loaded = common::diag::loaded_modules()
+            .iter()
+            .any(|m| m.name.eq_ignore_ascii_case("ersc.dll"));
+        let who = match common::diag::module_containing(target as usize) {
+            Some(m) => m.name,
+            None if seamless_loaded => "Seamless Co-op".to_string(),
+            None => "another mod".to_string(),
+        };
         match codepatch::redirect_rel32(thunk, &stub(target)) {
             Some(stub) => {
                 self.stub = stub as u64;
                 logger::log(&format!(
-                    "Seamless fix: the animation speed getter is hooked by {owner} - the player and Torrent now read their speed past it."
+                    "Seamless fix: {who} takes over the game's animation speed - the player's and Torrent's speeds are applied past it."
                 ));
             }
-            None => logger::error("Seamless fix: couldn't redirect the speed getter - speeds won't apply."),
+            None => logger::error(&format!(
+                "Seamless fix: {who} takes over the game's animation speed and it couldn't be bypassed - speeds won't apply."
+            )),
         }
     }
 }
