@@ -202,7 +202,7 @@ fn set_animation_speed(chr: &mut ChrIns, value: f32) {
 
 /// One frame. `last_active` is the set of active overrides from the last
 /// frame, so a change is logged once instead of every frame.
-fn apply(last_active: &mut Vec<usize>) {
+fn apply(last_active: &mut Vec<usize>, seamless_fix: &mut crate::seamless::GetterFix) {
     if common::player::main_player_chr_ins_ptr().is_none() {
         return;
     }
@@ -240,6 +240,13 @@ fn apply(last_active: &mut Vec<usize>) {
         *last_active = active;
     }
 
+    // Seamless Co-op hooks the game's read of animation_speed - see
+    // `seamless.rs`. Tell its stub which characters are ours, then check it.
+    let player_ptr = world_chr_man.main_player.as_ref().map_or(0, |p| &p.chr_ins as *const ChrIns as usize);
+    let torrent_ptr = torrent(world_chr_man).map_or(0, |t| t as *const ChrIns as usize);
+    crate::seamless::set_own(player_ptr, torrent_ptr);
+    seamless_fix.check();
+
     if let Some(player) = world_chr_man.main_player.as_mut() {
         let chr = &mut player.chr_ins;
         let group = group_of(current_anim_id(chr));
@@ -266,7 +273,8 @@ pub fn run() {
     let cs_task = common::task::wait_for_cs_task();
     common::task::run_recurring_safe(cs_task, "Speed", CSTaskGroupIndex::ChrIns_PreBehavior, {
         let mut last_active = Vec::new();
-        move |_data: &eldenring::fd4::FD4TaskData| apply(&mut last_active)
+        let mut seamless_fix = crate::seamless::GetterFix::new();
+        move |_data: &eldenring::fd4::FD4TaskData| apply(&mut last_active, &mut seamless_fix)
     });
     logger::log("Speed: per-action multipliers active.");
     loop {
