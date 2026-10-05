@@ -323,7 +323,7 @@ pub fn run(ini_path: String) {
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
                 init_multiplier();
-                logger::log("Config reloaded (hotkey pressed).");
+                logger::log("Config reloaded");
             }
         },
     );

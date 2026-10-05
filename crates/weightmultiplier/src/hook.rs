@@ -258,7 +258,7 @@ pub fn run(ini_path: String) {
             if is_key_pressed(reload_key) {
                 config::load(&ini_path);
                 reload_weight_value();
-                logger::log("Config reloaded (hotkey pressed).");
+                logger::log("Config reloaded");
             }
         }) {
             logger::error(&format!("ReloadKey poll panicked, skipped: {panic:?}"));

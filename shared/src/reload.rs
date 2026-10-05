@@ -40,12 +40,13 @@ pub static RELOAD_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// rest of the process's life, reloading `ini_path` into the shared config
 /// map and bumping [RELOAD_GENERATION] on every press, plus showing a
 /// generic "Config reloaded" in-game banner (see [`crate::announce`]) so
-/// the reload is visible without checking the log file. Meant to run on its
+/// the reload is visible without checking the log file (`ReloadBanner=false`
+/// turns the banner off). Meant to run on its
 /// own worker thread spawned from `DllMain`; never returns.
 pub fn run(ini_path: String) {
     run_with(
         || config::get_string("ReloadKey", "F5"),
-        || true,
+        || config::get_bool("ReloadBanner", true),
         move || {
             config::load(&ini_path);
             Ok(())
@@ -83,7 +84,7 @@ where
             match reload() {
                 Ok(()) => {
                     RELOAD_GENERATION.fetch_add(1, Ordering::Relaxed);
-                    logger::log("Reload: config reloaded (hotkey pressed).");
+                    logger::log("Config reloaded");
                     if banner() {
                         crate::announce::show_announcement("Config reloaded");
                     }

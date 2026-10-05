@@ -16,8 +16,8 @@
 //! both mods share the same config shape and code, rather than AutoRegen
 //! being stuck with the older design it started from.
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
@@ -151,8 +151,10 @@ fn with_stat_mut<R>(field: HealField, f: impl FnOnce(&mut i32, i32) -> R) -> Opt
 /// (returns 0) if the player isn't currently resolved or is dead - used by
 /// `hit_hook`'s heal-on-hit (`Regen.PerHit`, no cap/`ValueType=2` support).
 pub fn heal_main_player(field: HealField, flat_amount: i32, percent_fraction: f64) -> i32 {
-    with_stat_mut(field, |current, max| apply_heal(current, max, flat_amount, percent_fraction))
-        .unwrap_or(0)
+    with_stat_mut(field, |current, max| {
+        apply_heal(current, max, flat_amount, percent_fraction)
+    })
+    .unwrap_or(0)
 }
 
 /// Applies one `Regen.PerTick` heal to the resolved main player - see
@@ -555,8 +557,10 @@ pub fn run(ini_path: String) {
             let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
             if input::is_key_pressed(reload_key) {
                 config::load(&ini_path);
-                logger::log("Config reloaded (hotkey pressed).");
-                common::announce::show_announcement("AutoRegen: config reloaded");
+                logger::log("Config reloaded");
+                if config::get_bool("ReloadBanner", true) {
+                    common::announce::show_announcement("config reloaded");
+                }
             }
 
             // Regen.PerTick.Trigger picks which player state the tick heal
