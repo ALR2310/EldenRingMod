@@ -25,6 +25,12 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Hướng sửa còn lại: đổi rel32 của lệnh `E9` Seamless đặt ở đầu `sub_1403F0C20` sang stub của mình - spirit (vfx +0x44 >= 0, trong summon_buddy_chr_set) trả id đó, còn lại nhảy tiếp vào hook Seamless; chỉ cài sau khi Seamless đã hook xong (byte đầu = E9)
 - [x] Bug: bấm lại Ash đã nâng cấp (+1..+10) gọi thêm spirit thay vì cho về - MultiSpirit (Nexus bug report "unsummon", MonkeyDLuffy2426, 2026-10-01, Mimic Tear / Lhutel +4, bản 1.1.2) - sửa ở 1.1.3 (làm tròn `100 * (id / 100)` như `DoSummon`)
 
+## AutoRegen
+
+- [ ] Bug: `Regen.PerHit.ExcludeAow=true` vẫn hồi FP khi dùng Unsheathe (Nexus, Brokensword7, 2026-10-04)
+  - Nghi: Unsheathe = bấm `L2` vào tư thế, rồi bấm `R1`/`R2` để chém. Latch `LAST_ATTACK_WAS_SKILL` (`regen.rs::update_last_attack_input`) thấy `R1`/`R2` → chốt "đòn thường" → nhát chém bị tính là đòn thường. Các Ash 2 bước tương tự (Quickstep? Storm Stomp thì không; kiểm tra: Unsheathe, Sacred Blade, Lion's Claw, Bloodhound's Step...) có thể bị cùng lỗi
+  - Cần: xác nhận bằng log (`atkId` + `l2`/`r1` lúc trúng); hướng sửa: nếu đang trong anim/action của Ash (giữ latch tới khi anim chính kết thúc) thay vì đổi ngay khi `R1`/`R2` bấm. Chưa có ini đầy đủ của người dùng (ảnh bị cắt) - đã hỏi lại trong comment
+
 ## SpeedMultiplier
 
 - [x] Tách tốc độ đi bộ / chạy cho player (Nexus, cfzlbj, 2026-10-01) - xong 2026-10-02: `PlayerWalk` / `PlayerRun` / `PlayerSneak`, bỏ `PlayerMovement` (bàn phím chỉ có đi bộ + chạy giữ Shift, không có sprint riêng)
@@ -37,6 +43,15 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Hiện tại (đã sửa Seamless hook getter `animation_speed`, `src/seamless.rs`): mỗi máy chỉ tăng tốc nhân vật của chính nó; nhân vật người khác trên máy mình chạy anim ở tốc độ thường → lệch hình ảnh (test 2 game qua Sandboxie, join `Attack = 5`: host thấy đòn chậm hơn). Sát thương/thời điểm trúng vẫn do máy người ra đòn quyết định - chỉ là hình ảnh
   - Hướng B: mỗi máy gửi `animation_speed` hiện tại của nhân vật mình (khi đổi) cho người khác qua Steam P2P (như `soulsteleport/src/steam.rs`, kênh riêng); máy nhận áp đúng giá trị đó cho ChrIns của người gửi (ghép Steam ID ↔ ChrIns như `soulsteleport/src/party.rs`; stub trả giá trị nhận được cho các ChrIns đó). Đúng cả khi 2 bên cấu hình khác nhau; trễ ~1 ping ở đầu mỗi đòn. Cần cả 2 bên cài mod
   - Đã cân nhắc hướng A (áp cấu hình của mình cho người khác, không cần mạng - chỉ đúng khi 2 bên cùng cấu hình) - người dùng chọn B
+- [ ] Nghiên cứu: chỉnh tốc độ cho kẻ địch (Nexus, user hỏi 2026-10-05; chưa rõ muốn tăng hay làm chậm, mọi kẻ địch hay chỉ boss)
+  - Khả thi về kỹ thuật: giống Torrent (`speed.rs`) - ghi `chr.modules.behavior.animation_speed`; danh sách nhân vật lấy từ `WorldChrMan.chr_sets` / `ChrSet::characters()` (`world_chr_man.rs:365`)
+  - Khó: anim id kẻ địch khác người chơi (mỗi con 1 bộ) nên `group_of()` không dùng được → bản đơn giản = `[Enemy]` chỉ có `All`; cần lọc kẻ địch thật (team / chr type, bỏ NPC, spirit, người chơi khác); Seamless: thêm vào danh sách `set_own` của stub, máy khách không ghi (host điều khiển kẻ địch); anim bắt cặp (critical, bị túm), boss đổi phase/cutscene dễ lỗi
+- [ ] Nghiên cứu: gắn tốc độ với equip load (Nexus, Sannh, 2026-10-05; comment chỉ ghi "Possible to tie this to equip load?", chưa rõ ý - đã hỏi lại)
+  - Đọc được: `ChrCtrl.weight_type` (u32, `chr_ins.rs:601` - nghi là mức tải light/medium/heavy/overweight, chưa biết số nào ứng mức nào → log khi đổi trang bị) và `PlayerGameData.max_equip_load` (f32). Tải hiện tại thì không có field - phải tự cộng cân nặng trang bị hoặc đọc từ hook của `weightmultiplier`
+  - Hướng rẻ nhất: dùng `weight_type` làm điều kiện mới (cạnh `SpEffect` trong `[[Override]]`, hoặc key `Light`/`Medium`/`Heavy`); theo % tải liên tục thì tốn công hơn
+- [ ] Bug: Placidusax's Ruin bị lệch tia laser khi chỉnh tốc độ niệm phép (Nexus, bloodaxis, 2026-10-04)
+  - Nghi: mod chỉ tăng tốc anim người chơi, tia laser (hiệu ứng/đạn game tạo ra) chạy theo thời gian riêng nên lệch nhịp - giống lỗi critical/backstab đã xử lý bằng `Player.Critical`
+  - Cần: log anim id khi niệm phép này; hướng sửa có thể là giữ 1.0 cho anim đó (hoặc nhóm phép tương tự), cần xem có phép nào khác bị không
 - [ ] Hệ số tốc độ đánh riêng cho từng loại vũ khí (Nexus, InvertedButt, 2026-10-01)
   - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `.docs/Elden Ring tae list updated for SOTE.txt`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
 - [x] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01) - xong 2026-10-02: `Player.Critical` (đuôi `031700`-`031799`, mặc định 1.0); đâm lén từ tư thế ngồi cũng là `0317xx`
