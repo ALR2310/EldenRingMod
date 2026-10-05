@@ -16,3 +16,13 @@ serde.workspace = true
 
 [dev-dependencies]
 toml.workspace = true
+
+[build-dependencies]
+winresource = "0.1"
+
+# Windows version resource (DLL Properties), see build.rs
+[package.metadata.winresource]
+ProductName = "Speed Multiplier"
+FileDescription = "Speed Multiplier - Elden Ring mod"
+InternalName = "SpeedMultiplier"
+OriginalFilename = "SpeedMultiplier.dll"

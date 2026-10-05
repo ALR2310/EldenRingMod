@@ -568,3 +568,16 @@ module khi đích thay đổi. Stub đã kiểm bằng Capstone.
 nhanh (`Attack = 5`), bên host thấy đòn đó chậm hơn: mỗi máy chỉ tăng tốc
 nhân vật của chính nó, nhân vật người khác trên máy mình chạy theo game /
 Seamless.
+
+## Version thật trong thuộc tính file DLL (2026-10-05)
+
+Trước đây DLL không có version resource nên Properties → Details trống và
+dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
+trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
+`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
+File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
+`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
+`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
+`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
+là version hiện trong Properties và trong log.
+

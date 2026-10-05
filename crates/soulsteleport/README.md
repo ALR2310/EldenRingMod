@@ -815,3 +815,16 @@ Lúc deploy phát hiện `modFileId` trong `manifest.json` thật ra là id củ
 **version** 1.0.0 (`18610093344994`), không phải id mod file -
 `GET /v3/mod-files/18610093344994/versions` trả 404. Id mod file đúng là
 `8024916` (lấy từ `GET /v3/mods/<internalId>/files`), đã sửa trong manifest.
+
+## Version thật trong thuộc tính file DLL (2026-10-05)
+
+Trước đây DLL không có version resource nên Properties → Details trống và
+dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
+trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
+`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
+File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
+`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
+`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
+`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
+là version hiện trong Properties và trong log.
+

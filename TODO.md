@@ -82,10 +82,10 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Lý do dừng: SoulsTeleport có hudhook riêng (+ SoulsChat) → 2 hudhook trong game vẫn xảy ra dù bỏ SoulsTeleport ra, chưa test; còn bầu host giữa các phiên bản menu, Override, lưu vị trí, bắt phím; mỗi mod +~1 MB ImGui và phải phát hành lại khi DX12/hudhook đổi; chưa người dùng nào yêu cầu menu - file TOML (comment, reload, lỗi kèm dòng, tự thêm key, migration) đã đủ
   - Nếu quay lại: làm thành **1 mod menu riêng, tuỳ chọn**, chỉ đọc file cấu hình + `.menu.toml` của các mod (không nhét ImGui vào từng mod); test 2 hudhook (SoulsTeleport/SoulsChat) trước tiên
 
-- [ ] Thêm key `ReloadBanner` (bật/tắt banner "Config reloaded", banner lỗi luôn hiện) cho mọi mod có phím reload - SpeedMultiplier đã có từ 2026-10-02 (TOML, `reload::run_with`)
+- [x] Thêm key `ReloadBanner` (bật/tắt banner "Config reloaded", banner lỗi luôn hiện) cho mọi mod có phím reload - SpeedMultiplier đã có từ 2026-10-02 (TOML, `reload::run_with`)
   - Mod dùng `common::reload::run(ini)`: dropmultiplier, infiniteailment, passiverunes, risearcher, sometweaks (bỏ), spiritmultiplier - đổi `reload::run` đọc `config::get_bool("ReloadBanner", true)` (thay `|| true`) rồi thêm key vào ini mẫu của từng mod (`[General]`, cạnh `ReloadKey`)
-  - Mod có watcher reload riêng: autoregen (`regen.rs::run`, tự gọi `show_announcement`), runemultiplier (`hook.rs::run`) - kiểm tra rồi dùng chung key
-- [ ] Phiên bản mod trong log - hiện mọi DLL mod hiện `v0.0.0.0` ở "Loaded modules" (2026-10-03)
+  - Xong 2026-10-05: autoregen + 5 mod dùng `common::reload::run`. runemultiplier / weightmultiplier có watcher riêng nhưng chưa từng hiện banner nên chưa thêm key (thêm banner mới là đổi hành vi, chưa làm)
+- [x] Phiên bản mod trong log - hiện mọi DLL mod hiện `v0.0.0.0` ở "Loaded modules" (2026-10-03)
   - `v0.0.0.0` = DLL không có version resource (Windows "File version", `common::diag` đọc bằng `GetFileVersionInfoW`); `cdylib` của Rust không tự nhúng, `version` trong `Cargo.toml` không vào DLL
   - (1) Dòng khởi động ghi phiên bản: `Activating <Mod> <ver>...` từ `env!("CARGO_PKG_VERSION")` - mỗi mod 1 dòng (Cargo.toml đã khớp Nexus)
   - (2) Nhúng version resource bằng `build.rs` (crate `winresource`) điền từ `CARGO_PKG_VERSION` → "Loaded modules" và Properties của file hiện đúng, các mod thấy phiên bản của nhau trong log; cần `rc.exe` (Visual Studio Build Tools); làm helper chung để mỗi mod chỉ thêm `build.rs` ngắn

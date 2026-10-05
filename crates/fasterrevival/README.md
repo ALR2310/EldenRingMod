@@ -251,3 +251,16 @@ thừa (`FastDeath`/`ToggleKey` chỉ phục vụ việc so sánh bật/tắt l�
 Ini chỉ còn `[Debug] DeathProbe` và `[Logging] LogFile`. Ini cũ của người
 dùng còn các key đã bỏ thì vô hại (không ai đọc). Description Nexus bỏ 2
 dòng tính năng hotkey.
+
+## Version thật trong thuộc tính file DLL (2026-10-05)
+
+Trước đây DLL không có version resource nên Properties → Details trống và
+dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
+trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
+`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
+File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
+`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
+`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
+`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
+là version hiện trong Properties và trong log.
+

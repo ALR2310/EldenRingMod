@@ -10,3 +10,13 @@ crate-type = ["cdylib"]
 
 [dependencies]
 common = { path = "../../shared" }
+
+[build-dependencies]
+winresource = "0.1"
+
+# Windows version resource (DLL Properties), see build.rs
+[package.metadata.winresource]
+ProductName = "Window Resize"
+FileDescription = "Window Resize - Elden Ring mod"
+InternalName = "WindowResize"
+OriginalFilename = "WindowResize.dll"

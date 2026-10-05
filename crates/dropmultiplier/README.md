@@ -253,3 +253,22 @@ unit test): key cũ có mà key mới chưa có → chuyển giá trị sang key
 key cũ. `lib.rs` truyền `("ChancePercent", "Percentage")`.
 
 Test in-game do người dùng xác nhận ổn (2026-09-28).
+
+## Version thật trong thuộc tính file DLL (2026-10-05)
+
+Trước đây DLL không có version resource nên Properties → Details trống và
+dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
+trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
+`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
+File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
+`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
+`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
+`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
+là version hiện trong Properties và trong log.
+
+## Key `ReloadBanner` (2026-10-05)
+
+Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
+"Config reloaded" hiện giữa màn hình sau khi nhấn `ReloadKey`. Dòng log
+`Config reloaded` vẫn ghi. Dùng chung `common::reload::run` (đọc key mỗi lần reload).
+

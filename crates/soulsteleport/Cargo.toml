@@ -14,3 +14,13 @@ eldenring.workspace = true
 fromsoftware-shared.workspace = true
 # DX12 overlay + Dear ImGui (same stack as SoulsChat); only the DX12 backend.
 hudhook = { version = "0.9.3", default-features = false, features = ["dx12"] }
+
+[build-dependencies]
+winresource = "0.1"
+
+# Windows version resource (DLL Properties), see build.rs
+[package.metadata.winresource]
+ProductName = "Souls Teleport"
+FileDescription = "Souls Teleport - Elden Ring mod"
+InternalName = "SoulsTeleport"
+OriginalFilename = "SoulsTeleport.dll"

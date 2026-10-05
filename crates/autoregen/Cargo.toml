@@ -13,3 +13,13 @@ common = { path = "../../shared" }
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
 chrono.workspace = true
+
+[build-dependencies]
+winresource = "0.1"
+
+# Windows version resource (DLL Properties), see build.rs
+[package.metadata.winresource]
+ProductName = "Auto Regen"
+FileDescription = "Auto Regen - Elden Ring mod"
+InternalName = "AutoRegen"
+OriginalFilename = "AutoRegen.dll"
