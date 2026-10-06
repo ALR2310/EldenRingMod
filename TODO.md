@@ -99,4 +99,3 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - (1) Dòng khởi động ghi phiên bản: `Activating <Mod> <ver>...` từ `env!("CARGO_PKG_VERSION")` - mỗi mod 1 dòng (Cargo.toml đã khớp Nexus)
   - (2) Nhúng version resource bằng `build.rs` (crate `winresource`) điền từ `CARGO_PKG_VERSION` → "Loaded modules" và Properties của file hiện đúng, các mod thấy phiên bản của nhau trong log; cần `rc.exe` (Visual Studio Build Tools); làm helper chung để mỗi mod chỉ thêm `build.rs` ngắn
 - [x] Đồng bộ `version` trong `Cargo.toml` của các mod cũ với version mới nhất trên Nexus - xong 2026-10-02 (autoregen 2.6.3, runemultiplier 1.0.4, weightmultiplier 2.0.1, passiverunes 2.1.1, dropmultiplier 1.1.0, infiniteailment 1.0.1, soulsteleport 1.1.0; risearcher 2.0.0 theo changelog local - trang Nexus ghi 1.17.1, API không có changelog)
-- [ ] Đăng `windowresize` lên Nexus
