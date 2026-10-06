@@ -12,3 +12,13 @@ crate-type = ["cdylib"]
 common = { path = "../../shared" }
 eldenring.workspace = true
 fromsoftware-shared.workspace = true
+
+[build-dependencies]
+winresource = "0.1"
+
+# Windows version resource (DLL Properties), see build.rs
+[package.metadata.winresource]
+ProductName = "Infinite Ailment"
+FileDescription = "Infinite Ailment - Elden Ring mod"
+InternalName = "InfiniteAilment"
+OriginalFilename = "InfiniteAilment.dll"

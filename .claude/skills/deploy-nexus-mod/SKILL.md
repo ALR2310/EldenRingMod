@@ -171,7 +171,7 @@ Rồi tự chạy (không cần hỏi lại):
 pwsh -File scripts/build-mod.ps1 -Mod <Mod> -Zip -Version <version đã chốt>
 ```
 
-Kết quả mong đợi: `build/<Mod>-<version>.zip`. Nếu script báo lỗi (build
+Kết quả mong đợi: `build/<crate>/<Mod>-<version>.zip` (`<crate>` = tên crate lowercase, vd `build/autoregen/AutoRegen-2.6.0.zip`). Nếu script báo lỗi (build
 fail, thiếu ini...) - dừng lại, báo nguyên văn lỗi cho người dùng, không tự
 sửa code để "cho qua".
 
@@ -204,8 +204,8 @@ sửa code để "cho qua".
    - Mod + game_scoped_id + Nexus internal id.
    - Mod file (update group) sẽ được thêm version vào (tên + id).
    - Version + toàn bộ changelog (đã chốt ở bước 2, nhắc lại cho chắc) -
-     dùng ở cả 2 nơi: `description` của file (bước 12) và endpoint
-     changelog riêng (bước 13).
+     chỉ dùng cho endpoint changelog riêng (bước 13). `description` của
+     file (bước 12) là đoạn văn bản cố định, không lặp lại changelog.
    - Tên file zip vừa build, kích thước, md5.
 
    Sau đó **BẮT BUỘC gọi tool `AskUserQuestion`** (không phải chỉ hỏi bằng
@@ -263,9 +263,13 @@ sửa code để "cho qua".
 12. Gắn upload thành version mới của đúng mod file đã chọn ở bước 6 (dùng
     `createModFileVersion`, **không** dùng `POST /mod-files` - endpoint đó
     tạo file hoàn toàn mới, sai mục đích):
-    Đưa luôn nội dung changelog (đã chốt ở bước 2) vào `description` - để
-    người xem "Files" tab thấy ngay đổi gì mà không cần lật sang mục
-    Changelog riêng. `name` là **tên hiển thị** trên trang Nexus, không
+    `description` của file **không** lặp lại changelog (quyết định
+    2026-10-03) - luôn dùng đúng 2 dòng cố định sau (phân cách bằng `\n`):
+    ```
+    See the changelog for details.
+    Mod files may be detected as false positives by antivirus software.
+    ```
+    `name` là **tên hiển thị** trên trang Nexus, không
     phải tên file thật (upload ở bước 9-10 đã tự mang tên file zip rồi) -
     lỗi thật đã gặp (2026-09-12): dùng `"<Mod>.zip"` khiến Nexus hiển thị
     đuôi `.zip` thừa trong tên file trên trang mod, chỉ nên dùng `"<Mod>"`.
@@ -277,7 +281,7 @@ sửa code để "cho qua".
     version, không cần vào tay trang Nexus chỉnh lại sau khi publish:
     ```bash
     curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
-      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"<changelog text, mỗi dòng 1 bullet trần (KHÔNG tự thêm dấu \\\"- \\\" ở đầu) - giống hệt nội dung gửi ở bước 13>\"}" \
+      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"See the changelog for details.\nMod files may be detected as false positives by antivirus software.\"}" \
       "https://api.nexusmods.com/v3/mod-files/<mod_file_id>/versions"
     ```
 
@@ -292,7 +296,7 @@ sửa code để "cho qua".
     - lỗi thật đã gặp (2026-09-11): Nexus tự hiển thị mỗi dòng thành 1 mục
     danh sách riêng trên trang mod rồi, tự thêm `- ` vào text khiến hiện ra
     2 dấu gạch đầu dòng chồng lên nhau (`- - Added ...`). Mỗi dòng trong
-    `changelog`/`description` chỉ nên là đúng nguyên văn bullet gốc (VD
+    `changelog` chỉ nên là đúng nguyên văn bullet gốc (VD
     lấy thẳng nội dung bên trong `[*]...[/*]` của `DESCRIPTION.bbcode`,
     không thêm gì phía trước).
 

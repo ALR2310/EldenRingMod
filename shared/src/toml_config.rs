@@ -4,16 +4,24 @@
 //! has no arrays, so that shape would need numbered keys (`Speed01`...).
 //!
 //! Each mod declares its settings as a serde struct `T`:
-//! `#[serde(default, deny_unknown_fields)]` on every struct, with a
-//! `Default` impl holding the same values as the mod's embedded template
-//! (a unit test in the mod should assert `template == T::default()`).
-//! - Missing keys fall back to `T::default()`, so an old file still loads.
+//! `#[derive(Default)]` + `#[serde(default, deny_unknown_fields)]` on every
+//! struct. **The defaults live only in the mod's embedded template**
+//! (2026-10-02 - before, every value was written twice, in the template
+//! and in a hand-written `Default`, kept equal by a test). A file is read
+//! in two passes ([parse]): the user's text alone, for errors with their
+//! line (missing keys get the derived zero values there); then the
+//! user's values laid over the template's, for the real config - so a
+//! missing key gets its template value. `T::default()` (zeros) is never
+//! a config in use; [defaults] is the template's. A mod test should
+//! assert [template_missing_keys] is empty, or a field the template lacks
+//! would silently be zero.
+//! - Missing keys fall back to the template, so an old file still loads.
 //! - Unknown/misspelled keys and wrong types are an error *with the line*
 //!   (toml's own message), not silently ignored - on reload, while the user
 //!   is editing. At start-up they are moved out first (below).
 //! - A file that fails to parse never replaces the config in use: at
-//!   start-up the mod runs on `T::default()`, on reload it keeps the last
-//!   good config.
+//!   start-up the mod runs on the template's values, on reload it keeps
+//!   the last good config.
 //!
 //! Versioned migrations (2026-10-02, replacing a flat rename list - it
 //! depended on its own order, couldn't split or convert a key, and a
@@ -51,12 +59,13 @@
 use std::fs;
 use std::sync::{Arc, RwLock};
 
-use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item, Table};
 
 pub struct TomlConfig<T> {
     path: String,
+    template: String,
     current: RwLock<Arc<T>>,
 }
 
@@ -93,13 +102,13 @@ pub struct LoadReport {
     /// Keys the template doesn't have, moved to the comment block at the end
     /// of the file (`"Speed.PlayerMovement = 1.2"`).
     pub unknown: Vec<String>,
-    /// Parse error - the mod is running on `T::default()`.
+    /// Parse error - the mod is running on the template's values.
     pub error: Option<String>,
 }
 
 impl<T> TomlConfig<T>
 where
-    T: DeserializeOwned + Default + Send + Sync,
+    T: DeserializeOwned + Send + Sync,
 {
     pub fn load_or_create(path: &str, template: &str, migration: Migration) -> (Self, LoadReport) {
         let mut report = LoadReport::default();
@@ -120,16 +129,17 @@ where
             }
         }
 
-        let config = match read(path) {
+        let config = match read(path, template) {
             Ok(config) => config,
             Err(err) => {
                 report.error = Some(err);
-                T::default()
+                defaults(template)
             }
         };
         (
             Self {
                 path: path.to_string(),
+                template: template.to_string(),
                 current: RwLock::new(Arc::new(config)),
             },
             report,
@@ -143,7 +153,7 @@ where
 
     /// Re-reads the file. On error the previous config stays in use.
     pub fn reload(&self) -> Result<(), String> {
-        let config = read(&self.path)?;
+        let config = read(&self.path, &self.template)?;
         *self.current.write().unwrap() = Arc::new(config);
         Ok(())
     }
@@ -171,9 +181,68 @@ pub fn key_name<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Str
     })
 }
 
-fn read<T: DeserializeOwned>(path: &str) -> Result<T, String> {
+fn read<T: DeserializeOwned>(path: &str, template: &str) -> Result<T, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("can't read the file: {e}"))?;
-    toml::from_str(&text).map_err(|e| e.to_string().trim_end().to_string())
+    parse(&text, template)
+}
+
+fn toml_error(e: impl std::fmt::Display) -> String {
+    e.to_string().trim_end().to_string()
+}
+
+/// `text` read as a `T` the way a config file is: errors (unknown keys,
+/// wrong types, syntax) reported with their line from `text` alone, then
+/// the values taken with every key `text` lacks filled from `template`.
+pub fn parse<T: DeserializeOwned>(text: &str, template: &str) -> Result<T, String> {
+    toml::from_str::<T>(text).map_err(toml_error)?;
+    let mut merged: toml::Table = toml::from_str(template).map_err(|e| format!("template: {}", toml_error(e)))?;
+    let user: toml::Table = toml::from_str(text).map_err(toml_error)?;
+    lay_over(&mut merged, user);
+    T::deserialize(toml::Value::Table(merged)).map_err(toml_error)
+}
+
+/// `user`'s values over `base`: tables merge key by key, anything else
+/// (values, arrays, `[[lists]]`) is replaced whole.
+fn lay_over(base: &mut toml::Table, user: toml::Table) {
+    for (key, value) in user {
+        match (base.get_mut(&key), value) {
+            (Some(toml::Value::Table(base_table)), toml::Value::Table(user_table)) => lay_over(base_table, user_table),
+            (_, value) => {
+                base.insert(key, value);
+            }
+        }
+    }
+}
+
+/// The template's values - the defaults. Panics if the template doesn't
+/// parse (a mod test parses it, so that's a build-time mistake).
+pub fn defaults<T: DeserializeOwned>(template: &str) -> T {
+    toml::from_str(template).expect("the embedded template parses")
+}
+
+/// Dotted paths of every field `T` has but `template` doesn't set -
+/// which [parse] would leave at the derived zero value. Names in `keep`
+/// (lists like `[[Override]]`) are skipped. For a mod's unit test.
+pub fn template_missing_keys<T: DeserializeOwned + Serialize>(template: &str, keep: &[&str]) -> Vec<String> {
+    let fields = toml::Table::try_from(defaults::<T>(template)).expect("config serializes");
+    let present: toml::Table = toml::from_str(template).expect("the embedded template parses");
+    let mut missing = Vec::new();
+    missing_keys(&fields, &present, "", keep, &mut missing);
+    missing
+}
+
+fn missing_keys(fields: &toml::Table, present: &toml::Table, prefix: &str, keep: &[&str], out: &mut Vec<String>) {
+    for (key, value) in fields {
+        if prefix.is_empty() && keep.contains(&key.as_str()) {
+            continue;
+        }
+        let path = if prefix.is_empty() { key.clone() } else { format!("{prefix}.{key}") };
+        match (value, present.get(key)) {
+            (_, None) => out.push(path),
+            (toml::Value::Table(f), Some(toml::Value::Table(p))) => missing_keys(f, p, &path, keep, out),
+            _ => {}
+        }
+    }
 }
 
 const UNKNOWN_HEADER: &str = "\n# ---- Keys this version doesn't use (renamed or removed) - kept here as\n# comments so nothing you set is lost. Safe to delete. ----\n";
@@ -584,6 +653,56 @@ LogFile = false
         let mut d = doc("[Player]\nAll = 5.0\n[Speed]\nPlayerAll = 2.0\n");
         assert!(!rename_key(&mut d, &template, "Speed.PlayerAll", "Player.All"));
         assert_eq!(d["Player"]["All"].as_float(), Some(5.0));
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize, Default, Debug, PartialEq)]
+    #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
+    struct Cfg {
+        player: PlayerCfg,
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize, Default, Debug, PartialEq)]
+    #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
+    struct PlayerCfg {
+        walk: f32,
+        run: f32,
+    }
+
+    const CFG_TEMPLATE: &str = "[Player]
+Walk = 1.1
+Run = 1.2
+";
+
+    #[test]
+    fn missing_keys_take_the_template_value() {
+        let cfg: Cfg = parse("[Player]
+Run = 3.0
+", CFG_TEMPLATE).unwrap();
+        assert_eq!(cfg.player.walk, 1.1);
+        assert_eq!(cfg.player.run, 3.0);
+        let cfg: Cfg = parse("", CFG_TEMPLATE).unwrap();
+        assert_eq!(cfg, defaults::<Cfg>(CFG_TEMPLATE));
+    }
+
+    #[test]
+    fn errors_keep_the_users_line() {
+        let err = parse::<Cfg>("[Player]
+Run = 1.0
+Rn = 2.0
+", CFG_TEMPLATE).unwrap_err();
+        assert!(err.contains("Rn") && err.contains("line 3"), "{err}");
+        let err = parse::<Cfg>("[Player]
+Run = \"fast\"
+", CFG_TEMPLATE).unwrap_err();
+        assert!(err.contains("line 2"), "{err}");
+    }
+
+    #[test]
+    fn template_missing_keys_finds_unset_fields() {
+        assert!(template_missing_keys::<Cfg>(CFG_TEMPLATE, &[]).is_empty());
+        assert_eq!(template_missing_keys::<Cfg>("[Player]
+Walk = 1.1
+", &[]), vec!["Player.Run"]);
     }
 
     #[test]

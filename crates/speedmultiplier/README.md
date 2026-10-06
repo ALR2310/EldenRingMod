@@ -511,3 +511,73 @@ reloaded"; banner lỗi luôn hiện (tắt luôn thì reload hỏng sẽ im l�
 mod ini (`reload::run`) luôn hiện như cũ.
 
 **Test trong game (người dùng): mọi thứ hoạt động.**
+
+## Giá trị mặc định chỉ nằm trong template (2026-10-02, nhánh `feat/modmenu`)
+
+Trước: mỗi giá trị mặc định viết 2 lần - template `SpeedMultiplier.toml` và
+`impl Default` trong `config.rs` - giữ khớp bằng test (người dùng đổi
+`Walk`/`Sneak` 1.1 phải sửa cả code + test). Bước đầu của việc làm menu
+(menu sẽ lấy metadata từ struct, mặc định từ template).
+
+Giờ (cấu hình xếp lớp - template là lớp dưới, file người dùng là lớp trên):
+- `common::toml_config::parse` đọc 2 lượt: (1) chỉ file người dùng → lỗi
+  kèm số dòng như cũ (key thiếu nhận giá trị rỗng của `#[derive(Default)]`);
+  (2) giá trị người dùng đặt lên template (bảng trộn từng key, giá trị /
+  mảng / `[[...]]` thay nguyên) → cấu hình thật. File lỗi → chạy bằng
+  `defaults(template)`, không còn `T::default()`.
+- SpeedMultiplier: bỏ ~60 dòng `impl Default`; struct
+  `#[derive(Default, Serialize)]` (Default = rỗng, không bao giờ là cấu hình
+  đang chạy); `config::template()` = mặc định. Test
+  `template_sets_every_field` (`common::toml_config::template_missing_keys`)
+  báo field nào template chưa khai báo; các test so với `template()` thay vì
+  ghi cứng số.
+- Kiểm chứng: đổi `Torrent.Run` trong template 1.3 → 1.7 thì mặc định trong
+  code đổi theo, 17 test vẫn qua; bỏ `EffectProbe` khỏi template → test báo
+  `template lacks ["Logging.EffectProbe"]`.
+- Hiệu năng: đọc 2 lượt chỉ chạy lúc khởi động / reload (cỡ trăm µs), mỗi
+  frame vẫn chỉ lấy snapshot `Arc`. DLL 864 KB → ~1.04 MB (merge + `Serialize`)
+  - người dùng chốt kích thước vài MB không đáng lo, chỉ quan tâm hiệu năng.
+
+**Test trong game (người dùng): hoạt động.**
+
+## Seamless Co-op: tốc độ không có tác dụng - Seamless hook getter của `animation_speed` (2026-10-03)
+
+Nexus (DrKSolo): mod không chạy với Seamless Co-op. Người dùng tái hiện trên
+cả 1.0.0 và bản hiện tại (`Walk = 3`): log ghi `speed=3.00` nhưng trong game
+không nhanh hơn.
+
+Nguyên nhân: game chỉ đọc `CSChrBehaviorModule.animation_speed` ở 1 chỗ
+(hardware breakpoint 2026-10-02): update behavior `sub_14041DCA0` gọi thunk
+`sub_140417EA0: jmp <getter>` (getter trả `[rcx+0x18]`, rcx = behavior
++0x17B0). Bản so code trong RAM vs exe khi có Seamless (2026-10-02, lúc dò
+màu ma của SpiritMultiplier; lưu ở `.docs/seamless-diff/`) có đúng
+`0x140417EA1` = rel32 của `jmp` đó → Seamless đổi đích sang code của nó,
+giá trị mod ghi không bao giờ được đọc.
+
+Sửa (`src/seamless.rs`): tìm lệnh gọi thunk bằng AOB (`48 8D 8F B0 17 00 00
+E8 ?? ?? ?? ?? 0F 28 F0 F3 0F 59 B7 C0 15 00 00`, call ở +7); mỗi tick, nếu
+`jmp` của thunk không còn trỏ vào `eldenring.exe` (bị DLL khác hook), đổi
+rel32 sang stub: owner của behavior (`[rcx-0x17A8]`) là người chơi / Torrent
+(`OWN_CHRS`, `speed.rs` cập nhật mỗi frame) → trả `animation_speed`; nhân vật
+khác → nhảy tiếp vào hook cũ. Chỉ đổi rel32 (như SpiritMultiplier 1.1.4) và
+làm sau khi Seamless đã hook → không đụng signature của Seamless. Chỉ tra
+module khi đích thay đổi. Stub đã kiểm bằng Capstone.
+
+**Test trong game (người dùng): hoạt động**, cả khi 2 bản game kết nối co-op
+(Sandboxie). Giới hạn: hình ảnh không đồng bộ giữa 2 máy - bên join đánh
+nhanh (`Attack = 5`), bên host thấy đòn đó chậm hơn: mỗi máy chỉ tăng tốc
+nhân vật của chính nó, nhân vật người khác trên máy mình chạy theo game /
+Seamless.
+
+## Version thật trong thuộc tính file DLL (2026-10-05)
+
+Trước đây DLL không có version resource nên Properties → Details trống và
+dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
+trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
+`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
+File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
+`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
+`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
+`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
+là version hiện trong Properties và trong log.
+

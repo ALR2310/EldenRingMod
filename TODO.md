@@ -25,6 +25,12 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Hướng sửa còn lại: đổi rel32 của lệnh `E9` Seamless đặt ở đầu `sub_1403F0C20` sang stub của mình - spirit (vfx +0x44 >= 0, trong summon_buddy_chr_set) trả id đó, còn lại nhảy tiếp vào hook Seamless; chỉ cài sau khi Seamless đã hook xong (byte đầu = E9)
 - [x] Bug: bấm lại Ash đã nâng cấp (+1..+10) gọi thêm spirit thay vì cho về - MultiSpirit (Nexus bug report "unsummon", MonkeyDLuffy2426, 2026-10-01, Mimic Tear / Lhutel +4, bản 1.1.2) - sửa ở 1.1.3 (làm tròn `100 * (id / 100)` như `DoSummon`)
 
+## AutoRegen
+
+- [ ] Bug: `Regen.PerHit.ExcludeAow=true` vẫn hồi FP khi dùng Unsheathe (Nexus, Brokensword7, 2026-10-04)
+  - Nghi: Unsheathe = bấm `L2` vào tư thế, rồi bấm `R1`/`R2` để chém. Latch `LAST_ATTACK_WAS_SKILL` (`regen.rs::update_last_attack_input`) thấy `R1`/`R2` → chốt "đòn thường" → nhát chém bị tính là đòn thường. Các Ash 2 bước tương tự (Quickstep? Storm Stomp thì không; kiểm tra: Unsheathe, Sacred Blade, Lion's Claw, Bloodhound's Step...) có thể bị cùng lỗi
+  - Cần: xác nhận bằng log (`atkId` + `l2`/`r1` lúc trúng); hướng sửa: nếu đang trong anim/action của Ash (giữ latch tới khi anim chính kết thúc) thay vì đổi ngay khi `R1`/`R2` bấm. Chưa có ini đầy đủ của người dùng (ảnh bị cắt) - đã hỏi lại trong comment
+
 ## SpeedMultiplier
 
 - [x] Tách tốc độ đi bộ / chạy cho player (Nexus, cfzlbj, 2026-10-01) - xong 2026-10-02: `PlayerWalk` / `PlayerRun` / `PlayerSneak`, bỏ `PlayerMovement` (bàn phím chỉ có đi bộ + chạy giữ Shift, không có sprint riêng)
@@ -33,8 +39,25 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Uống khi chạy: `anim_queue` giữ anim chạy (`0201xx`), anim uống chỉ ở lớp nửa thân trên → mod áp `PlayerMovement`, không phải `PlayerItem` (người dùng xác nhận: tăng `PlayerMovement` thì uống khi chạy nhanh lên). Game chỉ có 1 `animation_speed` cho cả nhân vật
   - Đã thử: `time_act +0xD0` = anim nửa thân trên (050110→050111→050112) nhưng **không bị xoá khi uống xong** (giữ tới khi anim chính đổi) → dùng nó thì tốc độ Item kéo dài tới lúc ngừng chạy. `+0xC8`=-1, `+0xCC`=thời gian blend 0.2/0.233, `+0xD4`=0 - không có field "đang chạy"
   - Hardware breakpoint (DR0) trên `animation_speed`: game chỉ đọc ở 1 chỗ - getter `sub_14036834A` (`[rcx+18h]`, rcx = behavior+0x17B0, Arxan) gọi từ `sub_14041DCA0` (update behavior: dt × animation_speed × behavior+0x15C0 → hkbCharacter)
+- [ ] Seamless Co-op: đồng bộ hình ảnh tốc độ giữa các máy - hướng B, gửi tốc độ qua mạng (người dùng chọn 2026-10-03)
+  - Hiện tại (đã sửa Seamless hook getter `animation_speed`, `src/seamless.rs`): mỗi máy chỉ tăng tốc nhân vật của chính nó; nhân vật người khác trên máy mình chạy anim ở tốc độ thường → lệch hình ảnh (test 2 game qua Sandboxie, join `Attack = 5`: host thấy đòn chậm hơn). Sát thương/thời điểm trúng vẫn do máy người ra đòn quyết định - chỉ là hình ảnh
+  - Hướng B: mỗi máy gửi `animation_speed` hiện tại của nhân vật mình (khi đổi) cho người khác qua Steam P2P (như `soulsteleport/src/steam.rs`, kênh riêng); máy nhận áp đúng giá trị đó cho ChrIns của người gửi (ghép Steam ID ↔ ChrIns như `soulsteleport/src/party.rs`; stub trả giá trị nhận được cho các ChrIns đó). Đúng cả khi 2 bên cấu hình khác nhau; trễ ~1 ping ở đầu mỗi đòn. Cần cả 2 bên cài mod
+  - Đã cân nhắc hướng A (áp cấu hình của mình cho người khác, không cần mạng - chỉ đúng khi 2 bên cùng cấu hình) - người dùng chọn B
+- [ ] Nghiên cứu: chỉnh tốc độ cho kẻ địch (Nexus, bloodaxis hỏi 2026-10-05: "an enemy only value"; đã trả lời "chưa chắc khả thi"; chưa rõ muốn tăng hay làm chậm, mọi kẻ địch hay chỉ boss)
+  - bloodaxis kể đã thử làm kiểu tương tự qua HKS script của game (giống chế độ slow/turbo của Reforged) nhưng bỏ ý tưởng đó - hướng ghi `animation_speed` bên dưới là hướng khác
+  - Khả thi về kỹ thuật: giống Torrent (`speed.rs`) - ghi `chr.modules.behavior.animation_speed`; danh sách nhân vật lấy từ `WorldChrMan.chr_sets` / `ChrSet::characters()` (`world_chr_man.rs:365`)
+  - Khó: anim id kẻ địch khác người chơi (mỗi con 1 bộ) nên `group_of()` không dùng được → bản đơn giản = `[Enemy]` chỉ có `All`; cần lọc kẻ địch thật (team / chr type, bỏ NPC, spirit, người chơi khác); Seamless: thêm vào danh sách `set_own` của stub, máy khách không ghi (host điều khiển kẻ địch); anim bắt cặp (critical, bị túm), boss đổi phase/cutscene dễ lỗi
+- [ ] Nghiên cứu: gắn tốc độ với equip load (Nexus, Sannh, 2026-10-05; comment chỉ ghi "Possible to tie this to equip load?", chưa rõ ý - đã hỏi lại)
+  - Đọc được: `ChrCtrl.weight_type` (u32, `chr_ins.rs:601` - nghi là mức tải light/medium/heavy/overweight, chưa biết số nào ứng mức nào → log khi đổi trang bị) và `PlayerGameData.max_equip_load` (f32). Tải hiện tại thì không có field - phải tự cộng cân nặng trang bị hoặc đọc từ hook của `weightmultiplier`
+  - Hướng rẻ nhất: dùng `weight_type` làm điều kiện mới (cạnh `SpEffect` trong `[[Override]]`, hoặc key `Light`/`Medium`/`Heavy`); theo % tải liên tục thì tốn công hơn
+- [ ] Bug: Placidusax's Ruin bị lệch tia laser khi chỉnh tốc độ niệm phép (Nexus, bloodaxis, 2026-10-04)
+  - Nghi: mod chỉ tăng tốc anim người chơi, tia laser (hiệu ứng/đạn game tạo ra) chạy theo thời gian riêng nên lệch nhịp - giống lỗi critical/backstab đã xử lý bằng `Player.Critical`
+  - Cần: log anim id khi niệm phép này; hướng sửa có thể là giữ 1.0 cho anim đó (hoặc nhóm phép tương tự), cần xem có phép nào khác bị không
 - [ ] Hệ số tốc độ đánh riêng cho từng loại vũ khí (Nexus, InvertedButt, 2026-10-01)
   - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `.docs/Elden Ring tae list updated for SOTE.txt`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
+- [ ] Tốc độ giương cung / nạp nỏ (Nexus, TechnoMonkeyDJ, 2026-10-04: "bow draw speed and crossbows reload rate"; đã trả lời "sẽ xem")
+  - Hiện chưa có nhóm riêng: các anim cung/nỏ rơi vào `Attack`/`Other` tuỳ đuôi anim id. Cần log anim id khi giương cung (giữ R1/R2), bắn, nạp nỏ để biết đuôi nào, rồi thêm key (vd. `Player.Bow`/`Player.Crossbow`) - có thể gộp chung với mục "theo loại vũ khí" ở trên
+  - Lưu ý: nếu chỉ tăng tốc anim giương mà thời gian tụ lực/bắn tính theo timer riêng thì có thể lệch (giống lỗi Placidusax's Ruin) - cần test
 - [x] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01) - xong 2026-10-02: `Player.Critical` (đuôi `031700`-`031799`, mặc định 1.0); đâm lén từ tư thế ngồi cũng là `0317xx`
   - Là anim cặp (pair anim) - player bị tăng tốc nhưng kẻ địch không. Hướng: giữ 1.0 cho các anim này (cùng ý với nhóm "luôn 1.0" cho anim chết / bị túm đã bàn trước 1.0.0); cần log anim id của critical/sneak attack
 
@@ -46,6 +69,11 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
   - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
+## DropMultiplier
+
+- [ ] Tăng số lượng nhặt được từ cây/hoa hái trên bản đồ (Erdleaf Flower, Trina's Lily...) - không phải đồ quái rơi (Nexus, LordSoulOfNito, 2026-10-02)
+  - Mod hiện chỉ chỉnh `ItemLotParam_enemy` (quái rơi); đồ hái/nhặt trên map nằm ở `ItemLotParam_map` - cần xem nên nhân `lotItemNum` (số lượng mỗi lần hái) hay tỉ lệ, và lọc đúng các dòng là cây/hoa (không đụng rương/đồ đặt sẵn); có thể là 1 key riêng, vd. `GatherMultiplier`
+
 ## RuneMultiplier
 
 - [ ] Nghiên cứu: hệ số riêng cho từng nguồn rune, vd. giết địch x2, bán đồ x0.5 (Nexus, julianpratt, 2026-08-31)
@@ -53,18 +81,17 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 ## Chung
 
-- [ ] Menu chỉnh cấu hình trong game dùng chung cho mọi mod: mỗi mod cài vào = 1 tab (ý tưởng người dùng, chốt thiết kế 2026-10-02)
-  - **File TOML là giao diện duy nhất giữa các mod** - không đăng ký qua C ABI, không gọi hàm qua lại giữa các DLL
-  - Format: giá trị ở bảng thường (`[Speed]`...), metadata GUI ở `[Meta]`: `Version` (phiên bản format menu), `Tab`; `[Meta.<Bảng>]` mỗi key 1 inline table `{ Label, Description, Min, Max, Step }`, kiểu control suy từ kiểu giá trị (số → thanh trượt, bool → checkbox), `Kind = "Key"` → ô bắt phím. Khai báo `[Meta]` trong template ở repo (`crates/<mod>/<Mod>.toml`)
-  - `toml_config` ghi đè `[Meta]` từ template mỗi lần khởi động (để metadata luôn đúng phiên bản mod), không đụng giá trị người dùng; struct `Config` của mod bỏ qua `[Meta]`
-  - Host tìm mod: duyệt module đã nạp (`common::diag`), tìm `<TênDLL>.toml` cạnh DLL; có `[Meta]` với `Version` host hiểu → 1 tab; không có file / lỗi cú pháp / không có `[Meta]` → bỏ qua
-  - GUI chỉnh → host ghi file bằng `toml_edit` (giữ comment); mod tự reload khi mtime file đổi (poll ~1s) - kèm luôn lợi ích sửa tay không cần F5 (F5 vẫn giữ)
-  - Bầu host: chỉ 1 DLL được gắn `hudhook` (2 hudhook trong 1 process xung đột). Mọi mod mang code menu trong `common`; mod có phiên bản menu mới nhất làm host - trao đổi số phiên bản qua vùng nhớ dùng chung có tên (named file mapping)
-  - Dùng lại từ SoulsTeleport: `hudhook` (dx12) + imgui (`ui.rs`), chặn input game khi mở menu (`input_block.rs`). Rủi ro: overlay khác (ReShade, mod imgui khác)
-  - Thứ tự: (1) `[[Override]]` SpeedMultiplier trước (để biết metadata cho "danh sách bảng"); (2) `common::menu` chạy với 1 mod (SpeedMultiplier), chưa bầu host; (3) bầu host + thử với mod thứ 2; (4) chuyển dần các mod khác sang TOML + `[Meta]`
+- [ ] ~~Menu chỉnh cấu hình trong game dùng chung cho mọi mod~~ - **tạm dừng 2026-10-02** (người dùng chốt: chỉ dùng file cấu hình). Code ở nhánh `feat/modmenu` (không merge): bản v1 chạy được trong game (F10, SpeedMultiplier làm host)
+  - Thiết kế đã chốt (dùng lại nếu quay lại): mỗi mod 1 tab; giao tiếp giữa DLL = file TOML + hàm C export (`alr_menu_schema_v1` / `alr_menu_config_path_v1` / `alr_menu_reload_v1`, host gọi reload sau khi ghi file); định nghĩa menu = file viết tay `<Mod>.menu.toml` nhúng vào DLL (bảng = nhóm, `Kind` Slider/Int/Bool/Key/Text/IdList, `Kind = "List"` + `Title` + `Optional` cho `[[Override]]`); UI chép từ SoulsTeleport (`common::menu`, feature `menu`)
+  - Lý do dừng: SoulsTeleport có hudhook riêng (+ SoulsChat) → 2 hudhook trong game vẫn xảy ra dù bỏ SoulsTeleport ra, chưa test; còn bầu host giữa các phiên bản menu, Override, lưu vị trí, bắt phím; mỗi mod +~1 MB ImGui và phải phát hành lại khi DX12/hudhook đổi; chưa người dùng nào yêu cầu menu - file TOML (comment, reload, lỗi kèm dòng, tự thêm key, migration) đã đủ
+  - Nếu quay lại: làm thành **1 mod menu riêng, tuỳ chọn**, chỉ đọc file cấu hình + `.menu.toml` của các mod (không nhét ImGui vào từng mod); test 2 hudhook (SoulsTeleport/SoulsChat) trước tiên
 
-- [ ] Thêm key `ReloadBanner` (bật/tắt banner "Config reloaded", banner lỗi luôn hiện) cho mọi mod có phím reload - SpeedMultiplier đã có từ 2026-10-02 (TOML, `reload::run_with`)
+- [x] Thêm key `ReloadBanner` (bật/tắt banner "Config reloaded", banner lỗi luôn hiện) cho mọi mod có phím reload - SpeedMultiplier đã có từ 2026-10-02 (TOML, `reload::run_with`)
   - Mod dùng `common::reload::run(ini)`: dropmultiplier, infiniteailment, passiverunes, risearcher, sometweaks (bỏ), spiritmultiplier - đổi `reload::run` đọc `config::get_bool("ReloadBanner", true)` (thay `|| true`) rồi thêm key vào ini mẫu của từng mod (`[General]`, cạnh `ReloadKey`)
-  - Mod có watcher reload riêng: autoregen (`regen.rs::run`, tự gọi `show_announcement`), runemultiplier (`hook.rs::run`) - kiểm tra rồi dùng chung key
+  - Xong 2026-10-05: autoregen + 5 mod dùng `common::reload::run`. runemultiplier / weightmultiplier có watcher riêng nhưng chưa từng hiện banner nên chưa thêm key (thêm banner mới là đổi hành vi, chưa làm)
+- [x] Phiên bản mod trong log - hiện mọi DLL mod hiện `v0.0.0.0` ở "Loaded modules" (2026-10-03)
+  - `v0.0.0.0` = DLL không có version resource (Windows "File version", `common::diag` đọc bằng `GetFileVersionInfoW`); `cdylib` của Rust không tự nhúng, `version` trong `Cargo.toml` không vào DLL
+  - (1) Dòng khởi động ghi phiên bản: `Activating <Mod> <ver>...` từ `env!("CARGO_PKG_VERSION")` - mỗi mod 1 dòng (Cargo.toml đã khớp Nexus)
+  - (2) Nhúng version resource bằng `build.rs` (crate `winresource`) điền từ `CARGO_PKG_VERSION` → "Loaded modules" và Properties của file hiện đúng, các mod thấy phiên bản của nhau trong log; cần `rc.exe` (Visual Studio Build Tools); làm helper chung để mỗi mod chỉ thêm `build.rs` ngắn
 - [x] Đồng bộ `version` trong `Cargo.toml` của các mod cũ với version mới nhất trên Nexus - xong 2026-10-02 (autoregen 2.6.3, runemultiplier 1.0.4, weightmultiplier 2.0.1, passiverunes 2.1.1, dropmultiplier 1.1.0, infiniteailment 1.0.1, soulsteleport 1.1.0; risearcher 2.0.0 theo changelog local - trang Nexus ghi 1.17.1, API không có changelog)
 - [ ] Đăng `windowresize` lên Nexus
