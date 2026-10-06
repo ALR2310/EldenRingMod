@@ -204,8 +204,9 @@ sửa code để "cho qua".
    - Mod + game_scoped_id + Nexus internal id.
    - Mod file (update group) sẽ được thêm version vào (tên + id).
    - Version + toàn bộ changelog (đã chốt ở bước 2, nhắc lại cho chắc) -
-     chỉ dùng cho endpoint changelog riêng (bước 13). `description` của
-     file (bước 12) là đoạn văn bản cố định, không lặp lại changelog.
+     dùng cho endpoint changelog riêng (bước 13). `description` của file
+     (bước 12): changelog > 3 dòng → 2 dòng cố định; <= 3 dòng → các dòng
+     changelog + dòng antivirus. Ghi rõ `description` sẽ gửi trong tóm tắt.
    - Tên file zip vừa build, kích thước, md5.
 
    Sau đó **BẮT BUỘC gọi tool `AskUserQuestion`** (không phải chỉ hỏi bằng
@@ -263,12 +264,19 @@ sửa code để "cho qua".
 12. Gắn upload thành version mới của đúng mod file đã chọn ở bước 6 (dùng
     `createModFileVersion`, **không** dùng `POST /mod-files` - endpoint đó
     tạo file hoàn toàn mới, sai mục đích):
-    `description` của file **không** lặp lại changelog (quyết định
-    2026-10-03) - luôn dùng đúng 2 dòng cố định sau (phân cách bằng `\n`):
-    ```
-    See the changelog for details.
-    Mod files may be detected as false positives by antivirus software.
-    ```
+    `description` của file phụ thuộc số dòng changelog của version này
+    (quy tắc 2026-10-06, bổ sung cho quyết định 2026-10-03; phân cách các
+    dòng bằng `\n`):
+    - Changelog **nhiều hơn 3 dòng** → **không** lặp lại changelog, dùng
+      đúng 2 dòng cố định:
+      ```
+      See the changelog for details.
+      Mod files may be detected as false positives by antivirus software.
+      ```
+    - Changelog **từ 3 dòng trở xuống** → thay dòng `See the changelog for
+      details.` bằng chính các dòng changelog (nguyên văn từng bullet, mỗi
+      dòng 1 dòng, không thêm dấu `-`), giữ nguyên dòng cuối `Mod files may
+      be detected as false positives by antivirus software.`
     `name` là **tên hiển thị** trên trang Nexus, không
     phải tên file thật (upload ở bước 9-10 đã tự mang tên file zip rồi) -
     lỗi thật đã gặp (2026-09-12): dùng `"<Mod>.zip"` khiến Nexus hiển thị
@@ -281,7 +289,7 @@ sửa code để "cho qua".
     version, không cần vào tay trang Nexus chỉnh lại sau khi publish:
     ```bash
     curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
-      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"See the changelog for details.\nMod files may be detected as false positives by antivirus software.\"}" \
+      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"<theo quy tắc số dòng changelog ở trên; vd > 3 dòng: See the changelog for details.\nMod files may be detected as false positives by antivirus software.>\"}" \
       "https://api.nexusmods.com/v3/mod-files/<mod_file_id>/versions"
     ```
 
