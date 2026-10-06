@@ -650,3 +650,13 @@ Lưu ý: `weightmultiplier` đổi tổng tải nên lớp tải cũng đổi th
 Anim đi bộ khi **quá tải** là `020020` (không nằm trong `Walk`
 `020100`-`020199`) nên `Walk` không áp lúc đó - xem `Other`. Tải liên tục
 theo % chưa làm. **Test trong game (người dùng, 2026-10-06): hoạt động.**
+
+## Changelog 1.2.0 + bump version (2026-10-06)
+
+Đối chiếu Nexus (mod 11173, API): có 1.0.0 và 1.1.0, khớp bản local. Thêm
+mục `1.2.0` vào `[Changelog]` của `DESCRIPTION.bbcode` (nhóm thang, điều
+kiện equip load, sửa tia Placidusax's Ruin) và 2 dòng ở Features (thang,
+equip load); `version` trong `Cargo.toml` = `1.2.0`, build lại cập nhật
+`Cargo.lock`. Chưa deploy lên Nexus.
+
+Cập nhật cùng ngày: mặc định `Ladder` trong file mẫu là **1.2** (như `Attack`/`Skill`/`Cast`) theo người dùng; Features trong `DESCRIPTION.bbcode` ghi "Faster ladder climbing and sliding (20% by default)". Chỉ áp cho file cấu hình mới - file có sẵn giữ giá trị đang ghi (key đã tồn tại không bị đè).
