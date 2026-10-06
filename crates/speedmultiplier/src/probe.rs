@@ -6,6 +6,10 @@
 //! - `EffectProbe` (2026-10-02, split out of `SpeedProbe` the same day):
 //!   logs the player's SpEffect ids (added/removed) when they change - for
 //!   testing `[[Override]]`.
+//! - `SpeedProbe` also logs `ChrCtrl.weight_type` and the player's
+//!   `max_equip_load` when either changes (2026-10-06) - to find which
+//!   `weight_type` value is which equip load class, for a `Load`
+//!   condition in `[[Override]]` (see TODO).
 //!
 //! Until 2026-09-29 this also force-wrote 4 candidate speed fields at 3
 //! points in the frame (`ProbeForceKey`/`ProbeForceValue`/
@@ -44,6 +48,7 @@ pub fn run() {
     let mut last_player = i32::MIN;
     let mut last_torrent = i32::MIN;
     let mut last_sp_effects: Vec<i32> = Vec::new();
+    let mut last_weight: (u32, f32) = (u32::MAX, f32::NAN);
     // PostPhysics: after `speed.rs` (PreBehavior) has set this frame's value.
     common::task::run_recurring_safe(
         cs_task,
@@ -79,6 +84,17 @@ pub fn run() {
                             "P SpEffect +{added:?} -{removed:?} now {sp_effects:?}"
                         ));
                         last_sp_effects = sp_effects;
+                    }
+                }
+
+                if speed_probe {
+                    let weight_type = chr.chr_ctrl.weight_type;
+                    let max_load = unsafe { player.player_game_data.as_ref() }.max_equip_load;
+                    if weight_type != last_weight.0 || max_load != last_weight.1 {
+                        last_weight = (weight_type, max_load);
+                        logger::log(&format!(
+                            "P weight_type={weight_type} max_equip_load={max_load:.1}"
+                        ));
                     }
                 }
 

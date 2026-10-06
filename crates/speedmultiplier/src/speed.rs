@@ -35,6 +35,8 @@ pub enum Group {
     Sneak,
     Jump,
     Roll,
+    /// Everything on a ladder (`PlayerLadder`), see [group_of].
+    Ladder,
     Attack,
     /// Backstabs and ripostes (`PlayerCritical`), see [group_of].
     Critical,
@@ -53,6 +55,7 @@ impl Group {
             Group::Sneak => player.sneak,
             Group::Jump => player.jump,
             Group::Roll => player.roll,
+            Group::Ladder => player.ladder,
             Group::Attack => player.attack,
             Group::Critical => player.critical,
             Group::Skill => player.skill,
@@ -110,6 +113,14 @@ pub fn group_of(anim_id: i32) -> Group {
         return Group::Other;
     }
     let prefix = anim_id / 1_000_000;
+    // Placidusax's Ruin (a451, only that spell - TAE list): the beam phase
+    // 045110 spawns a laser on the game's own clock, so a sped-up anim
+    // desyncs from it (Nexus, bloodaxis, 2026-10-04; probe 2026-10-06:
+    // 045100 -> 045110, ~6 s). Out of Cast, into Other (1 by default); the
+    // wind-up 045100 stays Cast. Not tested in game yet.
+    if prefix == 451 && (45_110..=45_119).contains(&(anim_id % 1_000_000)) {
+        return Group::Other;
+    }
     if (400..600).contains(&prefix) {
         return Group::Cast;
     }
@@ -133,6 +144,11 @@ pub fn group_of(anim_id: i32) -> Group {
         // noted around Torrent before.
         202_000..=202_199 => Group::Jump,
         27_000..=27_999 => Group::Roll,
+        // Ladders (probe, 2026-10-06), one range for all of it: grabbing
+        // 028999, idle on the ladder 028030, climbing up 0280 1x (+ 028100
+        // from the bottom), down 0280 2x, sliding down 028000-028002, attack
+        // / kick 028040, 028045, 028036 (transition).
+        28_000..=28_999 => Group::Ladder,
         // Critical hits (riposte 031700, backstab 031719 -> 031710 - probe,
         // 2026-10-02) are paired with the victim's anim, which this mod
         // doesn't speed up: a faster player pulled the blade out while the
@@ -222,7 +238,11 @@ fn apply(last_active: &mut Vec<usize>, seamless_fix: &mut crate::seamless::Gette
             .collect(),
         _ => Vec::new(),
     };
-    let (speeds, active) = config.effective_speed(|id| sp_effects.contains(&id));
+    let load = world_chr_man
+        .main_player
+        .as_ref()
+        .and_then(|player| config::LoadClass::from_weight_type(player.chr_ins.chr_ctrl.weight_type));
+    let (speeds, active) = config.effective_speed(|id| sp_effects.contains(&id), load);
     if active != *last_active {
         let list = active
             .iter()
@@ -322,6 +342,24 @@ mod tests {
         assert_eq!(group_of(390_000), Group::Sneak); // going into the sneak stance
         assert_eq!(group_of(0), Group::Other); // standing
         assert_eq!(group_of(20_010), Group::Other); // legs while using an item
+    }
+
+    #[test]
+    fn placidusax_ruin_beam_is_not_cast() {
+        assert_eq!(group_of(451_045_100), Group::Cast); // wind-up
+        assert_eq!(group_of(451_045_110), Group::Other); // beam
+        assert_eq!(group_of(435_045_110), Group::Cast); // other incantations
+    }
+
+    #[test]
+    fn ladder_anims_are_their_own_group() {
+        for tail in [28_999, 28_100, 28_030, 28_011, 28_012, 28_013, 28_020, 28_023, 28_000, 28_002, 28_036, 28_040, 28_045] {
+            assert_eq!(group_of(tail), Group::Ladder, "{tail}");
+        }
+        assert_eq!(group_of(27_999), Group::Roll);
+        assert_eq!(group_of(29_000), Group::Other);
+        let player = Player { ladder: 1.5, ..crate::config::template().player };
+        assert_eq!(Group::Ladder.speed(&player), 1.5);
     }
 
     #[test]

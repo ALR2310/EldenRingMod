@@ -19,6 +19,7 @@ Run = 1.2           # running
 Sneak = 1.1         # sneaking
 Jump = 1.0          # jumping and landing
 Roll = 1.1          # rolling, backstepping
+Ladder = 1.0        # climbing, sliding
 Attack = 1.2        # normal attacks
 Critical = 1.0      # critical hits
 Skill = 1.2         # weapon skills
@@ -36,11 +37,15 @@ Jump = 1.0          # jumping and landing
 Other = 1.0         # any action not covered by the keys above
 
 
-# Override: different speeds while the player has a SpEffect.
+# Override: different speeds while the player has a SpEffect and/or is at
+# a given equip load.
 # Remove the "# " in front of the lines below to use it, and add as
 # many [[Override]] blocks as you like.
 #
 # SpEffect: one id, or a list - on while the player has ANY of them.
+# EquipLoad: Light, Medium, Heavy or Overweight (the equip load class in
+# the equipment screen), or a list - on while the class is ANY of them.
+# Use SpEffect, EquipLoad, or both (then both must hold).
 # Then any [Player] / [Torrent] key above, written as Player.<key> or
 # Torrent.<key>; the ones left out keep their value above.
 # When several overrides are on and set the same key, the lowest one
@@ -51,6 +56,16 @@ Other = 1.0         # any action not covered by the keys above
 # Player.Roll = 1.5
 # Player.Run = 1.4
 # Torrent.Run = 1.4
+#
+# [[Override]]
+# EquipLoad = "Heavy"             # heavy load: slower
+# Player.Walk = 0.9
+# Player.Run = 0.9
+
+# [[Override]]
+# SpEffect = 1660000              # Golden Vow, but only with a light or
+# EquipLoad = ["Light", "Medium"] # medium load (both must hold)
+# Player.Run = 1.5
 
 
 [Logging]

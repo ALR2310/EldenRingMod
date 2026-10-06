@@ -47,17 +47,22 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - bloodaxis kể đã thử làm kiểu tương tự qua HKS script của game (giống chế độ slow/turbo của Reforged) nhưng bỏ ý tưởng đó - hướng ghi `animation_speed` bên dưới là hướng khác
   - Khả thi về kỹ thuật: giống Torrent (`speed.rs`) - ghi `chr.modules.behavior.animation_speed`; danh sách nhân vật lấy từ `WorldChrMan.chr_sets` / `ChrSet::characters()` (`world_chr_man.rs:365`)
   - Khó: anim id kẻ địch khác người chơi (mỗi con 1 bộ) nên `group_of()` không dùng được → bản đơn giản = `[Enemy]` chỉ có `All`; cần lọc kẻ địch thật (team / chr type, bỏ NPC, spirit, người chơi khác); Seamless: thêm vào danh sách `set_own` của stub, máy khách không ghi (host điều khiển kẻ địch); anim bắt cặp (critical, bị túm), boss đổi phase/cutscene dễ lỗi
-- [ ] Nghiên cứu: gắn tốc độ với equip load (Nexus, Sannh, 2026-10-05; comment chỉ ghi "Possible to tie this to equip load?", chưa rõ ý - đã hỏi lại)
+- [x] Gắn tốc độ với equip load (Nexus, Sannh, 2026-10-05; comment chỉ ghi "Possible to tie this to equip load?", chưa rõ ý - đã hỏi lại)
+  - Xong 2026-10-06 (đã test trong game, hoạt động): điều kiện `EquipLoad = "Light"/"Medium"/"Heavy"/"Overweight"` (hoặc danh sách) trong `[[Override]]`, `weight_type` 1-4 đã xác nhận bằng log; chưa làm tải liên tục theo %. Anim đi bộ khi quá tải (`020020`) không thuộc `Walk`
   - Đọc được: `ChrCtrl.weight_type` (u32, `chr_ins.rs:601` - nghi là mức tải light/medium/heavy/overweight, chưa biết số nào ứng mức nào → log khi đổi trang bị) và `PlayerGameData.max_equip_load` (f32). Tải hiện tại thì không có field - phải tự cộng cân nặng trang bị hoặc đọc từ hook của `weightmultiplier`
   - Hướng rẻ nhất: dùng `weight_type` làm điều kiện mới (cạnh `SpEffect` trong `[[Override]]`, hoặc key `Light`/`Medium`/`Heavy`); theo % tải liên tục thì tốn công hơn
-- [ ] Bug: Placidusax's Ruin bị lệch tia laser khi chỉnh tốc độ niệm phép (Nexus, bloodaxis, 2026-10-04)
+- [x] Bug: Placidusax's Ruin bị lệch tia laser khi chỉnh tốc độ niệm phép (Nexus, bloodaxis, 2026-10-04)
   - Nghi: mod chỉ tăng tốc anim người chơi, tia laser (hiệu ứng/đạn game tạo ra) chạy theo thời gian riêng nên lệch nhịp - giống lỗi critical/backstab đã xử lý bằng `Player.Critical`
+  - Xong 2026-10-06 (đã test trong game, hết lệch): phần phóng tia `a451_045110` ra khỏi `Cast` (về `Other`), phần niệm đầu vẫn `Cast`; phần tia luôn ~8-9 giây bất kể `Cast`
+  - Log 2026-10-06 (`Cast = 1.2`, niệm 2 lần): `a451_045100` → `a451_045110` (nhóm `Cast`, ~6 giây) → `a000_004050` (`Other`, FP trừ ở đây) → `a000_000000`. Prefix `a451` chỉ của Placidusax's Ruin (xem TAE list) nên có thể loại riêng khỏi `Cast` mà không ảnh hưởng thần chú khác
   - Cần: log anim id khi niệm phép này; hướng sửa có thể là giữ 1.0 cho anim đó (hoặc nhóm phép tương tự), cần xem có phép nào khác bị không
+- [x] Thang: nhóm `Player.Ladder` (đuôi `028000`-`028999`: leo lên/xuống, trượt, đánh/đá trên thang) - xong 2026-10-06, mặc định 1.0; đã test trong game, hoạt động
 - [ ] Hệ số tốc độ đánh riêng cho từng loại vũ khí (Nexus, InvertedButt, 2026-10-01)
   - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `.docs/Elden Ring tae list updated for SOTE.txt`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
 - [ ] Tốc độ giương cung / nạp nỏ (Nexus, TechnoMonkeyDJ, 2026-10-04: "bow draw speed and crossbows reload rate"; đã trả lời "sẽ xem")
-  - Hiện chưa có nhóm riêng: các anim cung/nỏ rơi vào `Attack`/`Other` tuỳ đuôi anim id. Cần log anim id khi giương cung (giữ R1/R2), bắn, nạp nỏ để biết đuôi nào, rồi thêm key (vd. `Player.Bow`/`Player.Crossbow`) - có thể gộp chung với mục "theo loại vũ khí" ở trên
-  - Lưu ý: nếu chỉ tăng tốc anim giương mà thời gian tụ lực/bắn tính theo timer riêng thì có thể lệch (giống lỗi Placidusax's Ruin) - cần test
+  - **Đã được hỗ trợ qua `Attack`** (người dùng test 2026-10-06, `Attack = 5`): cung `a044_036000`/`036010` và nỏ `a046_037101`/`037110`/`037120`/`037131` đều ra nhóm `Attack` và tăng tốc đúng (dòng log đầu mỗi anim còn ghi tốc độ cũ 1.00 vì log trước khi áp - bình thường). Anim rút/đổi vũ khí (`a014_029090`, `a016_029090`, `029030`) là `Other`, không phải giương cung
+  - Người dùng chốt 2026-10-06: **tạm không làm** - tách cung/nỏ khỏi `Attack` thực chất là bắt đầu tách `Attack` theo từng loại vũ khí (cùng việc với mục "theo loại vũ khí" ở trên), quá lớn so với yêu cầu chỉ có cung/nỏ; cung/nỏ đã chạy qua `Attack`
+  - Còn lại (tuỳ chọn): key riêng `Bow`/`Crossbow` nếu muốn tăng cung/nỏ mà không tăng cận chiến (hiện dùng chung `Attack`, tách được theo prefix TAE `a014`/`a044`/`a045`/`a051`/`a052` cung, `a015`/`a046` nỏ; gộp với mục "theo loại vũ khí" ở trên). Cần hỏi lại TechnoMonkeyDJ: đang dùng key nào, và cung/nỏ có thật sự chưa nhanh hơn không
 - [x] Bug: critical (backstab / riposte) và sneak attack lệch nhịp với anim của kẻ địch (Nexus, InvertedButt, 2026-10-01) - xong 2026-10-02: `Player.Critical` (đuôi `031700`-`031799`, mặc định 1.0); đâm lén từ tư thế ngồi cũng là `0317xx`
   - Là anim cặp (pair anim) - player bị tăng tốc nhưng kẻ địch không. Hướng: giữ 1.0 cho các anim này (cùng ý với nhóm "luôn 1.0" cho anim chết / bị túm đã bàn trước 1.0.0); cần log anim id của critical/sneak attack
 

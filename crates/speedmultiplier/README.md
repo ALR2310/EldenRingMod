@@ -581,3 +581,72 @@ File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
 `Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
 là version hiện trong Properties và trong log.
 
+## Thang: nhóm riêng `PlayerLadder` (2026-10-06)
+
+Người dùng lấy log `SpeedProbe` (anim `a000_028xxx`, trước đó rơi vào `Other`):
+- Vào thang: `028999` (chung cho mọi lần); đứng yên trên thang: `028030`.
+- Leo lên: `028100` (vào từ đầu dưới) → `028011` ↔ `028012` (vòng lặp) → `028013`.
+- Leo xuống từng bậc: `028020` → `028021` ↔ `028022` → `028023`.
+- Trượt xuống: `028020` → `028030` → `028000` → `028001` → `028002`.
+- Đòn đánh / đá khi đang bám thang: `028040`, `028045` (chưa phân biệt được
+  cái nào là đòn nào, người dùng chốt không cần); `028036` = chuyển tiếp.
+
+Thêm nhóm `Ladder` = đuôi `028000`-`028999` (`speed.rs::group_of`, đặt sau
+Roll `027xxx`, không đụng dải nào khác) và key `Ladder` trong `[Player]`
+(`SpeedMultiplier.toml`, `config.rs::Player` / `PlayerOverride`). Mặc định
+1.0 (đúng hành vi cũ: trước đây cả dải này là `Other` = 1.0), nên người dùng
+cũ không thấy khác gì; `All` khác 1 vẫn đè và `[[Override]]` đặt được như
+mọi key `Player*`. File cũ tự được thêm key mới khi khởi động (không cần
+migration). Lý do tách riêng: tăng tốc leo/trượt có thể lệch nếu game tính
+quãng đường theo root motion hay timer riêng - cho người dùng tự chọn.
+Test `ladder_anims_are_their_own_group` (13 đuôi đã thấy trong log + 2 biên
+`027999` = Roll, `029000` = Other). **Test trong game (người dùng, 2026-10-06): hoạt động** với `Ladder` ≠ 1.
+
+## Placidusax's Ruin: phần phóng tia không theo `Cast` (2026-10-06)
+
+Nexus (bloodaxis, 2026-10-04): tia laser của Placidusax's Ruin lệch nhịp khi
+chỉnh tốc độ niệm phép. `SpeedProbe` (`Cast = 1.2`, niệm 2 lần):
+`a451_045100` → `a451_045110` (~6 giây) → `a000_004050` (`Other`, FP trừ ở
+đây) → `a000_000000`. Prefix `a451` chỉ của thần chú này (TAE list). Nghi:
+tia là hiệu ứng game tạo ra, chạy theo thời gian riêng, nên anim bị tăng
+tốc thì lệch - cùng cơ chế với đòn chí mạng (`PlayerCritical`).
+
+Sửa (`speed.rs::group_of`): prefix `451` + đuôi `045110`-`045119` →
+`Other` (mặc định 1.0), đặt trước nhánh Cast; phần niệm đầu `045100` vẫn
+`Cast`. Hệ quả: tốc độ phần tia theo key `Other` (và `All` nếu khác 1),
+không có key riêng. Test `placidusax_ruin_beam_is_not_cast`. **Test trong
+game (người dùng, 2026-10-06): hết lệch** với `Cast` = 0.7 / 1.0 / 1.2 / 1.5 / 5.0.
+Log: `045110` luôn ~8-9 giây bất kể `Cast` (trước đó ở `Cast = 1.2` chỉ ~6
+giây), nghĩa là phần tia chạy 1.0 như ý định. Lưu ý khi đọc log: dòng
+`a451_045110 ... Other speed=X` ghi `X` = giá trị `Cast` của anim trước (log
+in trước khi áp), không phải tốc độ thật của anim đó.
+
+## Tốc độ theo equip load: điều kiện `EquipLoad` trong `[[Override]]` (2026-10-06)
+
+Nexus (Sannh, 2026-10-05: "Possible to tie this to equip load?"). Làm tầng
+rẻ nhất: thêm điều kiện cạnh `SpEffect`, không thêm bảng mới. Tên key: lúc đầu là
+`Load`, đổi ngay thành `EquipLoad` (cùng ngày, chưa phát hành) vì `Load` đơn
+lẻ dễ nhầm với "load game"/"load config"; "Equip Load" là đúng thuật ngữ
+trong game.
+
+Điều tra: `SpeedProbe` ghi thêm dòng `P weight_type=N max_equip_load=X` khi
+1 trong 2 đổi (`probe.rs`). Người dùng đổi trang bị từ nhẹ tới quá tải:
+`ChrCtrl.weight_type` = 1, 2, 3, 4 theo đúng thứ tự (0 = chưa nạp dữ liệu,
+lúc mới vào game); anim lăn đổi theo (`027110` ở 2, `027120` ở 3,
+`027130` ở 4). `max_equip_load` đổi độc lập (59.8 → 56.1 khi đổi talisman).
+Chốt: 1 `Light`, 2 `Medium`, 3 `Heavy`, 4 `Overweight`.
+
+Cách dùng: `EquipLoad = "Heavy"` hoặc `EquipLoad = ["Light", "Medium"]` (không phân
+biệt hoa thường) trong `[[Override]]`. Override có `SpEffect`, `EquipLoad`, hoặc
+cả hai (cả hai phải khớp); không có điều kiện nào = lỗi (báo dòng). Mọi
+override khớp vẫn xếp chồng như cũ. Lớp tải chưa rõ (`weight_type` = 0 hay
+ngoài 1-4) thì override có `EquipLoad` không khớp. Code: `config.rs`
+(`LoadClass`, `Override` đọc qua `RawOverride` + `TryFrom` để kiểm tra có
+điều kiện), `speed.rs::apply` đọc `main_player.chr_ins.chr_ctrl.weight_type`
+mỗi frame. Test `override_load_*`, `weight_type_maps_to_a_class`, lỗi
+`needs a condition` / `not a class`.
+
+Lưu ý: `weightmultiplier` đổi tổng tải nên lớp tải cũng đổi theo (hợp lý).
+Anim đi bộ khi **quá tải** là `020020` (không nằm trong `Walk`
+`020100`-`020199`) nên `Walk` không áp lúc đó - xem `Other`. Tải liên tục
+theo % chưa làm. **Test trong game (người dùng, 2026-10-06): hoạt động.**
