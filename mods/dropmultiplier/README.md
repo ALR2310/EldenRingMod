@@ -65,5 +65,5 @@ khi nạp (giữ giá trị người dùng đã chỉnh).
 - [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
 - [docs/materials.md](docs/materials.md): thiết kế và phân loại nguyên liệu.
 - [docs/convergence_panic.md](docs/convergence_panic.md): panic với Convergence và cách sửa.
-- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng (gửi lên tab Changelog của Nexus).
-- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus (không chứa changelog).
+- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng.
+- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus.

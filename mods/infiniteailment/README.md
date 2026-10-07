@@ -59,7 +59,7 @@ trang trí.
 
 ## Tài liệu liên quan
 
-- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng (gửi lên tab Changelog của Nexus).
+- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng.
 - [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
 - [docs/row_discovery.md](docs/row_discovery.md): tìm đúng các dòng `SpEffectParam`.
-- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus (không chứa changelog).
+- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus.
