@@ -61,14 +61,6 @@ fn log_throw(last: &mut HashMap<usize, u32>, who: &str, chr: &ChrIns) {
 }
 
 pub fn run() {
-    let (speed_probe, effect_probe) = {
-        let logging = &config::get().logging;
-        (logging.speed_probe, logging.effect_probe)
-    };
-    if !speed_probe && !effect_probe {
-        return;
-    }
-
     let cs_task = common::task::wait_for_cs_task();
 
     let mut last_player = i32::MIN;
@@ -76,12 +68,21 @@ pub fn run() {
     let mut last_sp_effects: Vec<i32> = Vec::new();
     let mut last_weight: (u32, f32) = (u32::MAX, f32::NAN);
     let mut last_throw: HashMap<usize, u32> = HashMap::new();
+    let mut last_lock = 0usize;
     // PostPhysics: after `speed.rs` (PreBehavior) has set this frame's value.
     common::task::run_recurring_safe(
         cs_task,
         "Probe",
         CSTaskGroupIndex::ChrIns_PostPhysics,
         move |_data: &eldenring::fd4::FD4TaskData| {
+            // Read every frame so a hot reload turns a probe on or off.
+            let (speed_probe, effect_probe, enemy_probe) = {
+                let logging = &config::get().logging;
+                (logging.speed_probe, logging.effect_probe, logging.enemy_probe)
+            };
+            if !speed_probe && !effect_probe && !enemy_probe {
+                return;
+            }
             if common::player::main_player_chr_ins_ptr().is_none() {
                 return;
             }
@@ -136,6 +137,56 @@ pub fn run() {
                         chr.modules.data.fp,
                         chr.modules.data.max_fp,
                     ));
+                }
+            }
+            if enemy_probe {
+                // Ground truth for telling enemies from bosses / NPCs: the
+                // user locks on to one. The target isn't flagged itself (only
+                // the player has `is_locked_on`), so it's the character whose
+                // position is nearest the player's `lock_on_target_position`.
+                let target = world_chr_man.main_player.as_ref().and_then(|player| {
+                    let chr = &player.chr_ins;
+                    chr.is_locked_on
+                        .then_some((chr as *const ChrIns as usize, chr.lock_on_target_position))
+                });
+                let mut best: Option<(f32, usize, usize)> = None;
+                if let Some((player_ptr, tp)) = target {
+                    for (index, set) in world_chr_man.chr_sets.iter().enumerate() {
+                        let Some(set) = set else { continue };
+                        for chr in set.characters() {
+                            let key = chr as *const ChrIns as usize;
+                            if key == player_ptr || index == 111 {
+                                continue;
+                            }
+                            let p = &chr.chunk_position;
+                            let d = (p.0 - tp.0).powi(2) + (p.1 - tp.1).powi(2) + (p.2 - tp.2).powi(2);
+                            if best.is_none_or(|(bd, _, _)| d < bd) {
+                                best = Some((d, key, index));
+                            }
+                        }
+                    }
+                }
+                match best {
+                    Some((d, key, index)) if last_lock != key => {
+                        last_lock = key;
+                        let chr = unsafe { &*(key as *const ChrIns) };
+                        let tp = target.map(|t| t.1).unwrap();
+                        logger::log(&format!(
+                            "LOCKON set={index} dist={:.2} npc_param={} npc_id={} chr_type={:?} team={} hp={}/{} anim={} chr_pos=({:.1},{:.1},{:.1}) target_pos=({:.1},{:.1},{:.1})",
+                            d.sqrt(),
+                            chr.npc_param_id,
+                            chr.npc_id,
+                            chr.chr_type,
+                            chr.team_type,
+                            chr.modules.data.hp,
+                            chr.modules.data.max_hp,
+                            fmt_anim(current_anim_id(chr)),
+                            chr.chunk_position.0, chr.chunk_position.1, chr.chunk_position.2,
+                            tp.0, tp.1, tp.2,
+                        ));
+                    }
+                    None => last_lock = 0,
+                    _ => {}
                 }
             }
             if speed_probe {

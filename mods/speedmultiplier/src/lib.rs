@@ -1,6 +1,7 @@
 #![allow(non_snake_case)] // crate name is "SpeedMultiplier" to control the output DLL's filename
 
 mod config;
+mod enemy;
 mod probe;
 mod seamless;
 mod speed;

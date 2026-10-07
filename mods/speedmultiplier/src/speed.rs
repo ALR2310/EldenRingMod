@@ -223,6 +223,11 @@ fn is_throw_victim(state: u32) -> bool {
     matches!(state, 2 | 4 | 6)
 }
 
+/// Whether `chr` is in a throw as the victim right now.
+pub fn is_throw_victim_now(chr: &ChrIns) -> bool {
+    throw_state(chr).is_some_and(is_throw_victim)
+}
+
 /// The victim of a critical hit is paired with the player's anim, so it
 /// runs at the player's speed (else a sped-up player is done while the
 /// enemy is still doubling over). Only while the player is still in the
@@ -238,20 +243,18 @@ fn sync_victims(world_chr_man: &WorldChrMan, sped: &mut Vec<usize>) {
             .map(|_| clamped(player.chr_ins.modules.behavior.animation_speed))
     });
     let mut seen = Vec::new();
-    for set in world_chr_man.chr_sets.iter().flatten() {
-        for chr in set.characters() {
-            let key = chr as *const ChrIns as usize;
-            let victim = throw_state(chr).is_some_and(is_throw_victim);
-            match speed {
-                Some(speed) if victim => {
-                    set_animation_speed(chr, speed);
-                    seen.push(key);
-                }
-                _ if sped.contains(&key) => set_animation_speed(chr, 1.0),
-                _ => {}
+    crate::enemy::for_each_active(world_chr_man, |chr| {
+        let key = chr as *const ChrIns as usize;
+        let victim = is_throw_victim_now(chr);
+        match speed {
+            Some(speed) if victim => {
+                set_animation_speed(chr, speed);
+                seen.push(key);
             }
+            _ if sped.contains(&key) => set_animation_speed(chr, 1.0),
+            _ => {}
         }
-    }
+    });
     *sped = seen;
 }
 
@@ -288,7 +291,7 @@ fn clamped(value: f32) -> f32 {
     }
 }
 
-fn set_animation_speed(chr: &mut ChrIns, value: f32) {
+pub fn set_animation_speed(chr: &mut ChrIns, value: f32) {
     let behavior = &mut chr.modules.behavior;
     if (behavior.animation_speed - value).abs() > 0.0001 {
         behavior.animation_speed = value;
@@ -301,6 +304,7 @@ fn apply(
     last_active: &mut Vec<usize>,
     seamless_fix: &mut crate::seamless::GetterFix,
     sped_victims: &mut Vec<usize>,
+    sped_enemies: &mut Vec<usize>,
 ) {
     if common::player::main_player_chr_ins_ptr().is_none() {
         return;
@@ -364,6 +368,7 @@ fn apply(
     // Not under Seamless: the getter stub only passes the player's and
     // Torrent's speed through (see `seamless.rs`), others read 1.
     sync_victims(world_chr_man, sped_victims);
+    crate::enemy::apply(world_chr_man, clamped(config.enemy.all), sped_enemies);
     // Not under Seamless, like the victims: the getter stub only passes the
     // player's and Torrent's speed through, so spirits read 1 there.
     let spirit_speed = clamped(config.spirit.all);
@@ -385,8 +390,9 @@ pub fn run() {
         let mut last_active = Vec::new();
         let mut seamless_fix = crate::seamless::GetterFix::new();
         let mut sped_victims = Vec::new();
+        let mut sped_enemies = Vec::new();
         move |_data: &eldenring::fd4::FD4TaskData| {
-            apply(&mut last_active, &mut seamless_fix, &mut sped_victims)
+            apply(&mut last_active, &mut seamless_fix, &mut sped_victims, &mut sped_enemies)
         }
     });
     logger::log("Speed: per-action multipliers active.");

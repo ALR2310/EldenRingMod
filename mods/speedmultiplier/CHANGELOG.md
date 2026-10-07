@@ -7,6 +7,7 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 ## [Unreleased]
 
 - Added a speed for summoned spirits.
+- Added a speed for enemies and bosses (solo play only).
 - Enemies now follow the speed of your backstabs and ripostes, so they no longer lag behind the animation.
 
 ## [1.2.0] - 2026-10-06

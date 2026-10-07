@@ -42,6 +42,11 @@ Other = 1.0         # any action not covered by the keys above
 All = 1.0           # all of their actions
 
 
+[Enemy]
+# Hostile enemies and bosses
+All = 1.0           # all of their actions
+
+
 # Override: different speeds while the player has a SpEffect and/or is at
 # a given equip load.
 # Remove the "# " in front of the lines below to use it, and add as
@@ -82,3 +87,6 @@ SpeedProbe = false
 
 # Logs the player's SpEffect ids when they change
 EffectProbe = false
+
+# Logs the character you lock on to (NPC id, type, team, HP)
+EnemyProbe = false

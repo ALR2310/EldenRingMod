@@ -2,7 +2,7 @@
 
 > Nexus mod 11173 · **đã phát hành** · đã test trong game
 
-Mod DLL cho Elden Ring: **tăng (hoặc giảm) tốc độ của người chơi, của Torrent và của spirit** theo từng
+Mod DLL cho Elden Ring: **tăng (hoặc giảm) tốc độ của người chơi, của Torrent, của spirit và của kẻ địch** theo từng
 nhóm hành động: di chuyển (đi bộ, chạy, đi lén, nhảy, lăn, leo thang), tốc độ tấn công
 (đòn thường, đòn chí mạng, kỹ năng vũ khí), tốc độ niệm phép, và dùng item. Có thể đặt tốc
 độ khác nhau tuỳ theo hiệu ứng đang có trên người hoặc lớp tải trọng.
@@ -16,6 +16,7 @@ chỉnh; key không còn dùng được chuyển thành comment ở cuối file.
 - hệ số tốc độ cho từng nhóm hành động của người chơi, và một hệ số tổng cho tất cả;
 - hệ số tốc độ cho các nhóm hành động của Torrent;
 - một hệ số tốc độ chung cho spirit đã gọi (chưa hỗ trợ Seamless Co-op);
+- một hệ số tốc độ chung cho kẻ địch và boss (không gồm động vật hiền, NPC, thương nhân; chưa hỗ trợ Seamless Co-op);
 - các khối ghi đè tốc độ theo điều kiện: người chơi đang có hiệu ứng (SpEffect) nào đó,
   và/hoặc đang ở một lớp tải trọng nào đó; nhiều khối khớp cùng lúc thì xếp chồng;
 - phím nạp lại cấu hình (áp dụng không cần khởi động lại game) và việc hiện banner sau khi
@@ -71,6 +72,7 @@ Code: [src/speed.rs](src/speed.rs) (phân nhóm và ghi tốc độ), [src/confi
 - [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
 - [docs/animation_speed_research.md](docs/animation_speed_research.md): các "núm" tốc độ, SpeedProbe, giới hạn của game.
 - [docs/action_groups.md](docs/action_groups.md): phân nhóm hành động.
+- [docs/enemy_speed.md](docs/enemy_speed.md): tốc độ kẻ địch và boss, cách lọc.
 - [docs/critical_victim.md](docs/critical_victim.md): kẻ địch bị backstab/riposte chạy theo tốc độ của người chơi.
 - [docs/config_toml.md](docs/config_toml.md): cấu hình TOML, ghi đè theo điều kiện, migration.
 - [docs/seamless.md](docs/seamless.md): sự cố và cách sửa với Seamless Co-op.

@@ -21,3 +21,4 @@ sử git của `README.md`.
 | 2026-10-07 | Đổi thư mục `crates/` thành `mods/`; tách README thành README + HISTORY + docs/; bảng TAE chuyển vào `docs/`; kiểm tra bằng IDA: mẫu AOB của phần Seamless duy nhất trên 2.6.2.0, 2.7.0.0, 2.7.1.0 | [docs](docs/seamless.md) |
 | 2026-10-07 | Nạn nhân của backstab/riposte chạy theo tốc độ `Critical` của người chơi (trước đây chỉ người chơi nhanh nên kẻ địch lệch nhịp, Nexus Pietrasante); nhận diện bằng `throw_state` | [docs](docs/critical_victim.md) |
 | 2026-10-07 | Bảng `[Spirit]` với `All`: tốc độ chung cho spirit đã gọi (mọi entry của `summon_buddy_chr_set` trừ Torrent); chưa hỗ trợ Seamless, chưa vào `[[Override]]` | |
+| 2026-10-07 | Bảng `[Enemy]` với `All`: tốc độ chung cho kẻ địch và boss; lọc bằng `chr_type` (Npc / Unk7 = boss), `team_type` và `NpcParam.threatLv`; thêm `EnemyProbe` (log mục tiêu đang khoá); chưa hỗ trợ Seamless | [docs](docs/enemy_speed.md) |

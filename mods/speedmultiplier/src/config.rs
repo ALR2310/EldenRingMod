@@ -42,6 +42,7 @@ pub struct Config {
     pub player: Player,
     pub torrent: Torrent,
     pub spirit: Spirit,
+    pub enemy: Enemy,
     pub logging: Logging,
     #[serde(rename = "Override")]
     pub overrides: Vec<Override>,
@@ -93,12 +94,20 @@ pub struct Spirit {
     pub all: f32,
 }
 
+/// `[Enemy]` (2026-10-07): hostile enemies and bosses, one speed for all.
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
+pub struct Enemy {
+    pub all: f32,
+}
+
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
 #[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
 pub struct Logging {
     pub log_file: bool,
     pub speed_probe: bool,
     pub effect_probe: bool,
+    pub enemy_probe: bool,
 }
 
 /// `[Player]` + `[Torrent]` after overrides - what `speed.rs` applies.
