@@ -255,6 +255,29 @@ fn sync_victims(world_chr_man: &WorldChrMan, sped: &mut Vec<usize>) {
     *sped = seen;
 }
 
+/// Runs `f` on every live spirit (every `summon_buddy_chr_set` entry that
+/// isn't Torrent). Only `Active` / `ReadyForActivation` entries are
+/// dereferenced, same rule as `torrent()`.
+fn for_each_spirit(world_chr_man: &mut WorldChrMan, mut f: impl FnMut(&mut ChrIns)) {
+    let chr_set = &world_chr_man.summon_buddy_chr_set;
+    for slot in 0..chr_set.capacity {
+        let entry = unsafe { chr_set.entries.add(slot as usize).as_ref() };
+        let Some(mut chr) = entry.chr_ins else {
+            continue;
+        };
+        if !matches!(
+            entry.chr_load_status,
+            ChrLoadStatus::Active | ChrLoadStatus::ReadyForActivation
+        ) {
+            continue;
+        }
+        let chr = unsafe { chr.as_mut() };
+        if chr.npc_param_id != TORRENT_NPC_PARAM_ID {
+            f(chr);
+        }
+    }
+}
+
 /// A multiplier clamped to a sane range (0 or negative would freeze or
 /// reverse the animation).
 fn clamped(value: f32) -> f32 {
@@ -341,6 +364,10 @@ fn apply(
     // Not under Seamless: the getter stub only passes the player's and
     // Torrent's speed through (see `seamless.rs`), others read 1.
     sync_victims(world_chr_man, sped_victims);
+    // Not under Seamless, like the victims: the getter stub only passes the
+    // player's and Torrent's speed through, so spirits read 1 there.
+    let spirit_speed = clamped(config.spirit.all);
+    for_each_spirit(world_chr_man, |chr| set_animation_speed(chr, spirit_speed));
     if let Some(torrent) = torrent(world_chr_man) {
         let master = clamped(speeds.torrent.all);
         let value = if (master - 1.0).abs() > 0.0001 {

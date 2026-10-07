@@ -41,6 +41,7 @@ pub struct Config {
     pub general: General,
     pub player: Player,
     pub torrent: Torrent,
+    pub spirit: Spirit,
     pub logging: Logging,
     #[serde(rename = "Override")]
     pub overrides: Vec<Override>,
@@ -82,6 +83,14 @@ pub struct Torrent {
     pub run: f32,
     pub jump: f32,
     pub other: f32,
+}
+
+/// `[Spirit]` (2026-10-07): the summoned spirit ashes - one speed for all
+/// their actions (not part of `[[Override]]`).
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
+#[serde(default, deny_unknown_fields, rename_all = "PascalCase")]
+pub struct Spirit {
+    pub all: f32,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq)]
@@ -404,6 +413,15 @@ mod tests {
     /// Parsed the way the loader does (two passes over the template).
     fn parse_cfg(text: &str) -> Result<Config, String> {
         common::toml_config::parse(text, TEMPLATE)
+    }
+
+    #[test]
+    fn spirit_all_is_read() {
+        let parsed: Config = parse_cfg("[Spirit]
+All = 1.5
+").unwrap();
+        assert_eq!(parsed.spirit.all, 1.5);
+        assert_eq!(parse_cfg("").unwrap().spirit.all, template().spirit.all);
     }
 
     #[test]

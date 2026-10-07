@@ -37,6 +37,11 @@ Jump = 1.0          # jumping and landing
 Other = 1.0         # any action not covered by the keys above
 
 
+[Spirit]
+# Summoned spirit ashes
+All = 1.0           # all of their actions
+
+
 # Override: different speeds while the player has a SpEffect and/or is at
 # a given equip load.
 # Remove the "# " in front of the lines below to use it, and add as

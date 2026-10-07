@@ -2,7 +2,7 @@
 
 > Nexus mod 11173 · **đã phát hành** · đã test trong game
 
-Mod DLL cho Elden Ring: **tăng (hoặc giảm) tốc độ của người chơi và của Torrent** theo từng
+Mod DLL cho Elden Ring: **tăng (hoặc giảm) tốc độ của người chơi, của Torrent và của spirit** theo từng
 nhóm hành động: di chuyển (đi bộ, chạy, đi lén, nhảy, lăn, leo thang), tốc độ tấn công
 (đòn thường, đòn chí mạng, kỹ năng vũ khí), tốc độ niệm phép, và dùng item. Có thể đặt tốc
 độ khác nhau tuỳ theo hiệu ứng đang có trên người hoặc lớp tải trọng.
@@ -15,6 +15,7 @@ chỉnh; key không còn dùng được chuyển thành comment ở cuối file.
 
 - hệ số tốc độ cho từng nhóm hành động của người chơi, và một hệ số tổng cho tất cả;
 - hệ số tốc độ cho các nhóm hành động của Torrent;
+- một hệ số tốc độ chung cho spirit đã gọi (chưa hỗ trợ Seamless Co-op);
 - các khối ghi đè tốc độ theo điều kiện: người chơi đang có hiệu ứng (SpEffect) nào đó,
   và/hoặc đang ở một lớp tải trọng nào đó; nhiều khối khớp cùng lúc thì xếp chồng;
 - phím nạp lại cấu hình (áp dụng không cần khởi động lại game) và việc hiện banner sau khi
