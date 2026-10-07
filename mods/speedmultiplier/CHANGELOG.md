@@ -8,7 +8,7 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 - Added a speed for summoned spirits.
 - Added a speed for enemies and bosses.
-- Added enemy animation sync with backstabs and ripostes.
+- Fixed enemies going out of sync with your backstabs and ripostes.
 
 ## [1.2.0] - 2026-10-06
 
