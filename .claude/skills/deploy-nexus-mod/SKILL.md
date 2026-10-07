@@ -1,6 +1,6 @@
 ---
 name: deploy-nexus-mod
-description: Build, package, and publish a new mod file version + changelog to Nexus Mods for one of this workspace's mods. Reconciles the changelog draft in DESCRIPTION.bbcode against the real changelog on Nexus, confirms version + changelog with the user, builds and zips the release, then confirms once more before actually uploading. Use when asked to publish/deploy/release a mod to Nexus, or push a new version.
+description: Build, package, and publish a new mod file version + changelog to Nexus Mods for one of this workspace's mods. Reconciles the mod's CHANGELOG.md against the real changelog on Nexus, cuts [Unreleased] into a version, confirms version + changelog with the user, builds and zips the release, then confirms once more before actually uploading. Use when asked to publish/deploy/release a mod to Nexus, or push a new version.
 ---
 
 # Publish a mod to Nexus Mods
@@ -72,18 +72,22 @@ không suy đoán từ `name`.
 
 ## Bước 2 - Đối chiếu changelog local ↔ Nexus, chốt version + changelog
 
-1. Đọc `mods/<crate>/DESCRIPTION.bbcode`, tìm phần sau
-   `[size=4][b]Changelog[/b][/size]`. Parse **mọi** block theo mẫu:
+1. Đọc `mods/<crate>/CHANGELOG.md` (`nexus_page.bbcode` không còn chứa
+   changelog - trang mod chỉ có mô tả, người dùng xem changelog ở tab
+   Changelog của Nexus). Parse **mọi** mục theo mẫu:
    ```
-   [b]<version>[/b]
-   [list]
-   [*]<dòng 1>[/*]
-   [*]<dòng 2>[/*]
-   ...
-   [/list]
+   ## [Unreleased]
+   - <bullet chưa phát hành>
+
+   ## [<version>] - <ngày, có thể không có>
+   - <bullet 1>
+   - <bullet 2>
    ```
-   Block **đầu tiên** (trên cùng) = ứng viên version + changelog sắp
-   publish.
+   Ứng viên publish là 1 trong 2:
+   - mục `## [Unreleased]` **có bullet** → đây là nội dung changelog sắp
+     publish nhưng **chưa có số version**; số version được chốt ở mục 4;
+   - mục version **trên cùng** nếu nó mới hơn lần deploy gần nhất (người
+     dùng đã tự cắt version sẵn).
 
 2. Gọi API v1 lấy changelog THẬT (luôn gọi mới, không tin dữ liệu cũ trong
    context từ trước đó trong hội thoại):
@@ -93,21 +97,22 @@ không suy đoán từ `name`.
      "https://api.nexusmods.com/v1/games/eldenring/mods/<game_scoped_id>/changelogs.json"
    ```
    **Cố tình dùng v1, không phải v3** cho bước đọc này - đã kiểm tra
-   `.docs/nexus-openapi.yaml` (spec v3), **không có endpoint đọc changelog
+   `docs/nexus-openapi.yaml` (spec v3), **không có endpoint đọc changelog
    nào trong v3 cả** (chỉ có `POST /mods/{id}/changelogs` để ghi, xem bước
    13). Đừng tự ý đổi sang v3 chỉ vì nó "mới hơn" - v3 mới chưa đầy đủ
    tính năng cho việc này.
 
 3. Đối chiếu 2 phía, phát hiện gap:
-   - Nexus có version nào mà local (`DESCRIPTION.bbcode`) đang thiếu → đây
+   - Nexus có version nào mà local (`CHANGELOG.md`) đang thiếu → đây
      là gap (từng gặp thật, VD thiếu `2.4.0`). **Không tự sửa file** - báo
      rõ ràng cho người dùng thấy gap này (version nào, nội dung Nexus ghi
-     gì) để họ quyết định sửa `DESCRIPTION.bbcode` thế nào.
+     gì) để họ quyết định sửa `CHANGELOG.md` thế nào.
    - Nếu API trả về thiếu vài version cũ hơn nữa so với thực tế trang web
      (đã từng xảy ra, xem `reference_nexus_api` trong memory) - không phải
      lỗi của bạn, chỉ cần nêu ra nếu thấy nghi vấn, không tự xoá gì.
-   - **Version ứng viên (bước 1) trùng với version mới nhất đã publish
-     thật** (nghĩa là local chưa có bản nháp changelog nào mới hơn) →
+   - **Không có ứng viên** (`[Unreleased]` trống và mục version trên cùng
+     trùng với version mới nhất đã publish thật, nghĩa là local chưa có bản
+     nháp changelog nào mới hơn) →
      **KHÔNG được tự kết luận "không có gì mới" rồi dừng câm lặng** - đây
      là dấu hiệu người dùng có thể đã code xong tính năng nhưng quên viết
      changelog. Đọc `commit` của phần tử **cuối cùng** trong mảng
@@ -126,20 +131,23 @@ không suy đoán từ `name`.
      Nếu có commit nào đổi hành vi thật (không phải chỉ sửa README/HISTORY/docs/comment)
      xuất hiện sau mốc trên → nêu rõ danh sách commit đó cho người dùng,
      hỏi thẳng: "Không thấy bản nháp changelog mới, nhưng các commit này có
-     vẻ chưa được ghi vào changelog - có đúng không, và nếu đúng thì version
-     mới + nội dung changelog nên là gì?" Chờ người dùng cung cấp version +
-     nội dung, rồi **tự thêm block mới** đó vào đầu phần `[Changelog]` trong
-     `DESCRIPTION.bbcode` (dùng Edit tool, theo đúng văn phong 1 dòng/tính
-     năng - xem `feedback_changelog_style` trong memory) trước khi coi đó
-     là ứng viên version ở bước 4.
+     vẻ chưa được ghi vào changelog - có đúng không, và nếu đúng thì nội
+     dung changelog nên là gì?" Chờ người dùng cung cấp nội dung, rồi **tự
+     thêm các bullet** đó vào mục `## [Unreleased]` trong `CHANGELOG.md`
+     (dùng Edit tool, theo đúng văn phong 1 dòng/tính năng - xem
+     `feedback_changelog_style` trong memory) trước khi coi đó là ứng viên
+     ở bước 4 (số version chốt ở đó).
 
      Chỉ khi không có commit code nào đáng kể sau mốc trên, hoặc người dùng
      xác nhận rõ ràng "đúng là chưa có gì mới" - mới được kết luận không có
      gì để publish và dừng skill tại đây.
 
-4. **Không có gap** (hoặc gap đã được người dùng xử lý xong): trình bày rõ
-   ràng version + toàn bộ nội dung changelog (nguyên văn từng dòng) sắp
-   dùng để publish, rồi **BẮT BUỘC gọi tool `AskUserQuestion`** (không phải
+4. **Không có gap** (hoặc gap đã được người dùng xử lý xong): nếu ứng viên
+   là `[Unreleased]` chưa có version, hỏi trước số version bằng
+   `AskUserQuestion` (đề xuất 2-3 lựa chọn patch/minor/major hợp với nội
+   dung bullet, người dùng có thể nhập số khác). Rồi trình bày rõ ràng
+   version + toàn bộ nội dung changelog (nguyên văn từng dòng) sắp dùng để
+   publish, rồi **BẮT BUỘC gọi tool `AskUserQuestion`** (không phải
    chỉ hỏi bằng văn bản thường trong câu trả lời) với câu hỏi dạng "Version
    và changelog này đã đúng chưa?" + 2 lựa chọn (VD "Đúng, tiếp tục" /
    "Chưa đúng, dừng lại"). Đây là 1 trong 2 điểm dừng bắt buộc của cả skill
@@ -149,6 +157,12 @@ không suy đoán từ `name`.
    tin nhắn không phải là xác nhận rõ ràng (từng xảy ra thật). Chỉ đi tiếp
    sang bước 3 khi `AskUserQuestion` trả lại lựa chọn xác nhận.
 
+   Sau khi được xác nhận, nếu ứng viên là `[Unreleased]`, **cắt mục** trong
+   `CHANGELOG.md`: đổi tiêu đề thành `## [<version>] - <YYYY-MM-DD hôm
+   nay>`, thêm lại 1 mục `## [Unreleased]` trống ngay phía trên, và đổi
+   `version` trong `mods/<crate>/Cargo.toml` thành `<version>` (rule trong
+   `CLAUDE.md`, build ở bước 3 sẽ cập nhật `Cargo.lock`).
+
 ## Bước 3 - Tự build + đóng gói
 
 `build-mod.ps1` cần tên PascalCase (`-Mod AutoRegen`), khác với `crate`
@@ -157,7 +171,11 @@ không suy đoán từ `name`.
 cái đầu crate slug (không phải lúc nào cũng khớp, VD tên thư mục và tên
 `[lib]` có thể khác nhau về cách viết hoa/cách ly từ).
 
-Sau khi version đã chốt ở bước 2, ghi lại commit HEAD hiện tại **trước khi
+Sau khi version đã chốt ở bước 2: nếu `git status` còn thay đổi chưa commit
+ở `mods/<crate>/` hoặc `Cargo.lock` (gồm chính `CHANGELOG.md` và
+`Cargo.toml` vừa sửa), báo người dùng và hỏi có commit trước không (không
+tự commit) - `build_commit` ghi vào `manifest.json` phải là commit chứa đúng
+mã nguồn đã đóng gói. Rồi ghi lại commit HEAD hiện tại **trước khi
 build** - đây sẽ là giá trị ghi vào `manifest.json` ở cuối Bước 4, để
 tránh lệch nếu có commit khác lọt vào giữa lúc skill đang chạy:
 
@@ -305,8 +323,8 @@ sửa code để "cho qua".
     danh sách riêng trên trang mod rồi, tự thêm `- ` vào text khiến hiện ra
     2 dấu gạch đầu dòng chồng lên nhau (`- - Added ...`). Mỗi dòng trong
     `changelog` chỉ nên là đúng nguyên văn bullet gốc (VD
-    lấy thẳng nội dung bên trong `[*]...[/*]` của `DESCRIPTION.bbcode`,
-    không thêm gì phía trước).
+    lấy thẳng phần chữ sau `- ` của từng bullet trong `CHANGELOG.md`, bỏ
+    đúng ký tự `- ` của markdown, không thêm gì phía trước).
 
 14. Sau khi bước 12-13 thành công (không lỗi), **append** 1 phần tử mới
     vào cuối mảng `deploys` của đúng mod này trong `manifest.json`:
@@ -330,7 +348,7 @@ sửa code để "cho qua".
 - Không bao giờ chạy bước 9 trở đi nếu chưa hoàn thành đúng bước 8 (xác
   nhận tường minh trong lượt chạy hiện tại).
 - Không tự bịa version hay nội dung changelog - luôn lấy nguyên văn từ
-  `DESCRIPTION.bbcode`, không suy đoán. **Không** lấy version từ
+  `CHANGELOG.md`, không suy đoán. **Không** lấy version từ
   `Cargo.toml` của crate làm nguồn - nhiều crate cũ chưa đồng bộ (VD
   `autoregen` Cargo.toml đang `2.0.0` trong khi Nexus đã lên 2.6.x). Từ
   2026-09-29, rule trong `CLAUDE.md` yêu cầu bump `Cargo.toml` cùng lúc với

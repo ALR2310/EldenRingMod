@@ -1,13 +1,20 @@
 # Project Rules
 
-## Tài liệu của mỗi mod: README, HISTORY, research
+## Tài liệu của mỗi mod: README, CHANGELOG, HISTORY, docs
 
-Mỗi mod có 3 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn:
+Mỗi mod có 4 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn:
 
 - `mods/<mod>/README.md` = **trạng thái hiện tại** (không phải nhật ký):
   version, Nexus ID, trạng thái test; bảng key cấu hình; cách hoạt động;
-  giới hạn; link tới HISTORY và research. Khuôn mẫu:
+  giới hạn; link tới CHANGELOG, HISTORY và docs. Khuôn mẫu:
   `mods/dropmultiplier/README.md`.
+- `mods/<mod>/CHANGELOG.md` = ghi chú phát hành cho **người dùng cuối**, theo
+  từng version (mới nhất ở trên); mục `## [Unreleased]` gom các thay đổi chưa
+  phát hành. Mỗi bullet 1 dòng ngắn, văn bản thuần không định dạng, nói điều
+  người dùng thấy, không ghi tên key ini hay chi tiết nội bộ (văn phong: xem
+  memory `feedback_changelog_style`). Skill `deploy-nexus-mod` gửi nội dung này
+  lên tab Changelog của Nexus; `nexus_page.bbcode` (trang mod) **không** chứa
+  changelog.
 - `mods/<mod>/HISTORY.md` = dòng thời gian, bảng `Ngày | Thay đổi | Chi
   tiết`, mỗi thay đổi **1 dòng**, mới nhất ở dưới cùng; chuyện nào có phân
   tích dài thì cột "Chi tiết" link sang file trong `docs/` của mod.
@@ -16,8 +23,8 @@ Mỗi mod có 3 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn
   tại** (không viết kiểu nhật ký theo ngày): mở đầu bằng `**Status <ngày>:
   ...**`, rồi kết luận, bằng chứng, hướng đã thử/bỏ (kèm lý do), tham chiếu
   code. Chủ đề liên mod và tư liệu dùng chung (trang Nexus, prompt
-  logo/thumbnail, spec Nexus API) nằm ở `docs/` gốc repo. Công cụ dịch ngược nằm ở `scripts/` (IDA:
-  `scripts/ida/`); dữ liệu sinh ra từ dịch ngược nằm ở `dumps/` (git-ignored,
+  logo/thumbnail, spec Nexus API) nằm ở `docs/` gốc repo. Công cụ dịch ngược
+  nằm ở `scripts/` (IDA: `scripts/ida/`); dữ liệu sinh ra từ dịch ngược nằm ở `dumps/` (git-ignored,
   ngoại lệ `dumps/seamless-diff/`).
 
 Sau khi hoàn thành một thay đổi đáng kể ở 1 mod (thêm tính năng, đổi ini
@@ -25,16 +32,18 @@ key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
 
 1. **Luôn thêm 1 dòng** vào bảng `HISTORY.md`, ghi ngày hôm nay: đã đổi gì và
    vì sao (1-2 câu, đặc biệt nếu sửa 1 hiểu lầm/bug trong thiết kế trước đó).
-2. **Sửa `README.md` tại chỗ** nếu trạng thái, bảng key, cách hoạt động hay
+2. **Nếu người dùng nhìn thấy thay đổi đó** (tính năng, sửa lỗi, đổi hành vi):
+   thêm 1 bullet vào `## [Unreleased]` trong `CHANGELOG.md`.
+3. **Sửa `README.md` tại chỗ** nếu trạng thái, bảng key, cách hoạt động hay
    giới hạn thay đổi (không thêm mục có ngày vào README); sửa mọi đường dẫn
    file/tên key lỗi thời được nhắc tới.
-3. **Viết mới hoặc bổ sung `mods/<mod>/docs/<chủ đề>.md`** chỉ khi có phát hiện
+4. **Viết mới hoặc bổ sung `mods/<mod>/docs/<chủ đề>.md`** chỉ khi có phát hiện
    đáng giữ: nguyên nhân gốc, hướng đã thử/bỏ, số liệu, RVA/AOB. Cập nhật dòng
    `Status`, rồi link từ dòng HISTORY và từ README.
 
 Mod chưa được tách (README vẫn là nhật ký dài theo ngày) thì giữ kiểu cũ
-cho tới khi tách: thêm 1 mục có ngày vào README của mod đó. Đã tách xong:
-`dropmultiplier`.
+cho tới khi tách: thêm 1 mục có ngày vào README của mod đó. Đã tách xong: `dropmultiplier`.
+`CHANGELOG.md` đã có cho mọi mod (trừ `sometweaks`) và áp dụng cho cả mod chưa tách.
 
 Không cần hỏi lại người dùng trước khi làm việc này - tự làm ngay sau khi
 code đã ổn định, coi đây là 1 bước không thể thiếu của việc "xong việc",
@@ -58,11 +67,11 @@ bằng đúng số thư mục trong `mods/`. Không cần hỏi lại người d
 Người dùng yêu cầu (2026-09-30) sau khi phát hiện thiếu task của
 FasterRevival, SpeedMultiplier, SpiritMultiplier, WindowResize.
 
-## Đối chiếu changelog thật trên Nexus Mods trước khi viết `[Changelog]` trong DESCRIPTION.bbcode
+## Đối chiếu changelog thật trên Nexus Mods trước khi chốt version trong `CHANGELOG.md`
 
-Trước khi thêm/sửa mục changelog trong `mods/<mod>/DESCRIPTION.bbcode`,
-**luôn gọi Nexus Mods API để lấy changelog thật hiện có trên trang mod**
-trước, rồi mới viết mục mới nối tiếp đúng theo đó - không tự đặt số phiên
+Trước khi cắt `[Unreleased]` thành 1 mục version (hoặc sửa mục version cũ)
+trong `mods/<mod>/CHANGELOG.md`, **luôn gọi Nexus Mods API để lấy changelog
+thật hiện có trên trang mod** trước, rồi mới chốt version nối tiếp đúng theo đó - không tự đặt số phiên
 bản/nội dung dựa trên suy đoán hay dựa vào lịch sử trong README/HISTORY (lịch sử
 này ghi theo ngày phát triển nội bộ, không phải số phiên bản đã publish
 trên Nexus, 2 thứ có thể lệch nhau).
@@ -97,15 +106,16 @@ tế trên trang web (đã xảy ra 1 lần, 2026-09-03) - đó là do giới h�
 API, không phải version đó không tồn tại - hỏi lại người dùng xác nhận
 qua trang web thật trước khi tự xoá bất kỳ mục changelog cũ nào.
 
-## Bump `version` trong `Cargo.toml` cùng lúc với changelog mới
+## Bump `version` trong `Cargo.toml` cùng lúc với version mới trong `CHANGELOG.md`
 
-Khi thêm 1 mục version mới vào `[Changelog]` của
-`mods/<mod>/DESCRIPTION.bbcode`, **luôn đổi luôn `version` trong
+Khi cắt `[Unreleased]` thành 1 mục version mới trong
+`mods/<mod>/CHANGELOG.md` (thường do skill `deploy-nexus-mod` làm lúc phát
+hành), **luôn đổi luôn `version` trong
 `mods/<mod>/Cargo.toml` thành đúng số version đó** (vd. changelog
 `1.1.0` → `version = "1.1.0"`), rồi build lại để `Cargo.lock` cập nhật
 theo. Version crate phải luôn khớp với version mới nhất trên Nexus.
 
-Không cần hỏi lại người dùng - coi đây là 1 phần của việc viết changelog.
+Không cần hỏi lại người dùng - coi đây là 1 phần của việc chốt version.
 Người dùng yêu cầu (2026-09-29, SpiritMultiplier 1.1.0) vì trước đó version
 crate không được bump (vd. `autoregen` vẫn `2.0.0` trong khi Nexus đã lên
 2.6.x).

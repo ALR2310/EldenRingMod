@@ -48,7 +48,8 @@ Mỗi mod Rust (`mods/autoregen`, `mods/dropmultiplier`, ...) có:
   (dòng thời gian, mỗi thay đổi 1 dòng) + các phân tích chi tiết ở
   `mods/<mod>/docs/<chủ đề>.md` - quy ước đầy đủ trong `CLAUDE.md`, khuôn mẫu là
   `mods/dropmultiplier/`. Mod chưa được tách vẫn còn README kiểu nhật ký dài.
-- `DESCRIPTION.bbcode` (mô tả đăng Nexus) khi mod đã publish.
+- `CHANGELOG.md` (ghi chú phát hành cho người dùng, có mục `[Unreleased]`) và
+  `nexus_page.bbcode` (mô tả trang Nexus, không chứa changelog) khi mod đã publish.
 
 ## Vì sao tách `common` thay vì copy-paste
 
