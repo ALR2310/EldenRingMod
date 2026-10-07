@@ -46,7 +46,7 @@ key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
    `Status`, rồi link từ dòng HISTORY và từ README.
 
 Mod chưa được tách (README vẫn là nhật ký dài theo ngày) thì giữ kiểu cũ
-cho tới khi tách: thêm 1 mục có ngày vào README của mod đó. Đã tách xong: `dropmultiplier`, `windowresize`, `infiniteailment`, `fasterrevival`, `runemultiplier`, `weightmultiplier`.
+cho tới khi tách: thêm 1 mục có ngày vào README của mod đó. Đã tách xong: `dropmultiplier`, `windowresize`, `infiniteailment`, `fasterrevival`, `runemultiplier`, `weightmultiplier`, `risearcher`.
 `CHANGELOG.md` có cho mọi mod đăng Nexus (không có ở `sometweaks` và
 `windowresize`: không đăng) và áp dụng cho cả mod chưa tách.
 

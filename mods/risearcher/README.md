@@ -1,362 +1,77 @@
 # RiseArcher
 
-Mod cho Elden Ring: buff toàn diện Bow/Crossbow/Ballista/Arrow/Bolt (sát
-thương, scaling, trọng lượng, số lượng mang tối đa, tốc độ/tầm/số lượng
-mũi tên của Ash of War loại Rain of Arrows...).
+> Nexus mod 5807 · **đã phát hành** · đã test trong game
 
-## 2 cách dùng song song trong project này
+Mod cho Elden Ring: **buff toàn diện Bow / Crossbow / Ballista / Arrow / Bolt**:
+sát thương, scaling, mở khoá Ash of War cho Bow, trọng lượng, giá bán, số lượng mang
+tối đa của mũi tên và tên nỏ, cùng tốc độ, tầm và số lượng mũi tên của Ash of War
+Rain of Arrows.
 
-Từ 2026-08-18, project này **giữ cả 2 cách triển khai** thay vì thay thế
-hẳn cách cũ:
+## Hai cách dùng, cùng tồn tại
 
-- **DLL (`src/`, khuyến nghị)** — patch sống qua `SoloParamRepository`,
-  cấu hình qua `RiseArcher.ini`, không đụng `regulation.bin` trên đĩa. Xem
-  mục "Bản DLL Rust" bên dưới.
-- **Static `regulation.bin` qua Smithbox (`csv/`, `.smithbox/`)** — cách
-  làm gốc, vẫn giữ nguyên: `csv/RiseArcher.MASSEDIT` + `csv/*.csv` để dán
-  vào Smithbox Mass Edit/CSV import, `.smithbox/` là cache project
-  (machine-specific, git-ignored). Hữu ích khi cần merge tay với 1 mod
-  `regulation.bin` khác cụ thể, hoặc khi không muốn cài thêm DLL nào.
+- **DLL (`src/`, khuyến nghị):** patch sống param trong bộ nhớ lúc chạy qua
+  `SoloParamRepository`, cấu hình bằng `RiseArcher.ini`, không đụng
+  `regulation.bin` trên đĩa nên không xung đột với mod `regulation.bin` khác.
+- **Sửa tĩnh `regulation.bin` qua Smithbox (`csv/`, `project.json`):** cách làm
+  gốc, giữ nguyên. `csv/RiseArcher.MASSEDIT` và các file CSV để dán vào Smithbox
+  Mass Edit. Hữu ích khi cần merge tay với một mod `regulation.bin` cụ thể hoặc
+  không muốn cài DLL. `.smithbox/` là cache project (machine-specific, bị
+  git-ignore).
 
-**Lưu ý quan trọng: 2 cách này độc lập, không tự đồng bộ.** Hệ số trong
-`RiseArcher.ini` và trong `csv/RiseArcher.MASSEDIT` hiện đang khớp nhau
-(cùng giá trị mặc định `1.5`/`2`/`3`/`4`/`0.5`/`255`/`3.5`/`2`/`6`...) vì
-bản DLL được port trực tiếp từ giá trị hardcode trong MASSEDIT — nhưng sửa
-1 bên (ví dụ đổi `RiseArcher.ini`) sẽ **không** tự cập nhật bên kia. Nếu
-sau này đổi hệ số mặc định, nhớ sửa cả 2 chỗ nếu muốn giữ chúng khớp nhau.
+**Hai cách này độc lập, không tự đồng bộ:** hệ số mặc định của DLL được port từ
+giá trị trong `.MASSEDIT` nên hiện khớp nhau, nhưng sửa một bên không cập nhật bên
+kia. Đổi hệ số mặc định thì sửa cả hai nếu muốn chúng khớp.
 
-## Bản DLL Rust hiện tại (2026-08-18)
+## Cấu hình
 
-Thêm **DLL đọc/ghi param sống**, bổ sung bên cạnh cách sửa tĩnh
-`regulation.bin` gốc (`.MASSEDIT`/CSV qua Smithbox) — đúng hướng đi đã chốt
-trong README cũ (mục "Quyết định: sẽ chuyển sang DLL + `libER`"), nhưng
-dùng [`fromsoftware-rs`](https://github.com/vswarte/fromsoftware-rs) (Rust)
-thay vì `libER` (C++) như dự tính ban đầu — không cần nữa vì
-`fromsoftware-rs` đã có sẵn `SoloParamRepository::get_mut::<EquipParamWeapon>`/
-`rows_mut::<Bullet>` với struct `EQUIP_PARAM_WEAPON_ST`/`BULLET_PARAM_ST`
-map đủ mọi field đang dùng, không cần tự dò offset struct nào.
+Cấu hình của DLL trong `RiseArcher.ini` cạnh DLL (tự tạo nếu thiếu; khi nâng cấp,
+key mới được thêm vào file có sẵn mà không ghi đè giá trị đã chỉnh). Có thể chỉnh,
+riêng cho từng loại vũ khí khi hợp lý:
 
-**2 lý do làm bản DLL (đúng như đã ghi trong README cũ, giờ đã làm):**
-1. **Người dùng tự chỉnh theo ý thích** — mọi hệ số nhân/gán (trước đây
-   hardcode trong `.MASSEDIT`: `* 1.5`, `* 2`, `= 255`...) giờ đọc từ
-   `RiseArcher.ini`.
-2. **Không còn xung đột `regulation.bin` với mod khác** — DLL patch trực
-   tiếp vào bộ nhớ process game lúc chạy, không đụng tới file
-   `regulation.bin` trên đĩa nữa. Không cần Smithbox Mass Edit để merge
-   với mod khác như hướng dẫn cũ trong `nexus_page.bbcode`.
+- hệ số sát thương và scaling;
+- mở khoá Ash of War cho Bow;
+- hệ số trọng lượng và giá bán;
+- số lượng mang tối đa của mũi tên và tên nỏ;
+- tốc độ, tầm và độ loe của đạn, và số mũi tên của Rain of Arrows;
+- phím nạp lại cấu hình (áp dụng không cần khởi động lại game), việc hiện banner sau
+  khi nạp, và ghi log.
 
-Sống ở `mods/risearcher` trong workspace [`EldenRingMod`](../../README.md).
+Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong
+[`RiseArcher.ini`](RiseArcher.ini); file mẫu này được nhúng vào DLL nên là nguồn sự
+thật duy nhất, README không lặp lại để khỏi lệch.
 
-### Kiến trúc
+## Cách hoạt động
 
-- **`src/weapon.rs`** — phần `EquipParamWeapon` (Bow/Crossbow/Ballista/
-  Arrow/Bolt), y hệt bộ lọc gốc trong `.MASSEDIT` (`weaponCategory`/
-  `wepType`/loại trừ `sortId == 9999999`), lặp qua `rows_mut::<EquipParamWeapon>()`
-  1 lần thay vì hàng chục dòng Mass Edit riêng cho từng field.
-- **`src/bullet.rs`** — phần `Bullet` (Arrow/Great Arrow/Radahn's Spear/
-  Bolt). Đây là phần *không* thể lọc theo field chung (đã xác nhận trong
-  RE gốc — xem `csv/RiseArcher.MASSEDIT` cũ), nên vẫn phải liệt kê ID —
-  nhưng thay vì ~1000 dòng Mass Edit tay, giờ chỉ còn danh sách base ID
-  (63 ID: 32 Arrow + 6 Great Arrow + 1 Radahn's Spear + 24 Bolt) ghép với
-  4 bảng offset cố định (`ARROW_OFFSETS`/`GREAT_ARROW_OFFSETS`/
-  `RADAHNS_SPEAR_OFFSETS`/`BOLT_OFFSETS`) — đúng cấu trúc đã RE ra trong
-  README cũ, chỉ viết lại thành data + vòng lặp thay vì liệt kê tay.
-- **`src/lib.rs`** — chờ `player::wait_for_solo_param_repository` sẵn sàng
-  (poll mỗi 200ms, timeout 300s) rồi patch lần đầu (bọc `apply_with_retry`,
-  tự thử lại nếu panic); sau đó đăng ký 1 task `CSTaskImp::FrameBegin` (qua
-  `src/task.rs`) chỉ để theo dõi `reload::RELOAD_GENERATION` và patch lại
-  mỗi khi người dùng nhấn `General.ReloadKey` — xem mục "Hot reload" bên
-  dưới.
-- **`src/player.rs`** — port từ `sometweaks::player`: chờ player thực sự vào
-  world (`WorldChrMan::main_player`) trước khi đụng `SoloParamRepository` -
-  xem mục "Bug: crash lặng lúc khởi động" bên dưới.
-- **`src/reload.rs`** / **`src/task.rs`** — port nguyên khối từ
-  `sometweaks::reload`/`sometweaks::task` (xem mục "Hot reload" bên dưới).
+- **Khởi động:** `DllMain` tạo một thread, nạp/tạo ini, mở log, chạy watcher
+  `ReloadKey` (`common::reload`), rồi chờ người chơi thật sự vào world
+  (`WorldChrMan::main_player`, **không giới hạn thời gian**) trước khi đụng param.
+  Sớm hơn thế, param của từng bảng chưa load xong và đọc sẽ panic.
+- **Vũ khí (`src/weapon.rs`):** lọc `EquipParamWeapon` theo `weaponCategory` /
+  `wepType` (loại trừ dòng chỉ dành cho NPC) rồi nhân hoặc gán các field tương ứng.
+- **Đạn (`src/bullet.rs`):** `Bullet` không có field để lọc nên mod dùng danh sách ID
+  gốc ghép với bảng offset cố định cho các biến thể Ash of War.
+- **Hot reload không cộng dồn:** giá trị gốc của mỗi dòng được lưu lại ngay lần áp
+  đầu, mỗi lần reload tính lại từ đó.
+- **Log:** ghi phiên bản game và danh sách DLL đã nạp (`common::diag`, không in đường
+  dẫn đầy đủ).
+- Chi tiết thiết kế: [docs/param_patching.md](docs/param_patching.md). Các sự cố đã
+  gặp khi khởi động và đọc ini: [docs/startup_and_ini_bugs.md](docs/startup_and_ini_bugs.md).
 
-### Ánh xạ field (MASSEDIT → Rust, không đổi ý nghĩa)
+## Giới hạn
 
-| MASSEDIT (`weaponCategory`/field) | Rust (`EQUIP_PARAM_WEAPON_ST`) |
-|---|---|
-| `weaponCategory` | `weapon_category()` |
-| `wepType` | `wep_type()` |
-| `sortId` | `sort_id()` |
-| `attackBasePhysics/Magic/Fire/Thunder/Dark` | `attack_base_physics/magic/fire/thunder/dark()` (u16) |
-| `correctStrength/Agility/Magic/Faith/Luck` | `correct_strength/agility/magic/faith/luck()` (f32) |
-| `gemMountType` | `gem_mount_type()` |
-| `weight` | `weight()` (f32) |
-| `sellValue` | `sell_value()` (i32) |
-| `maxArrowQuantity` | `max_arrow_quantity()` (u8) |
+- Mod đọc param bằng cách duyệt lookup table của fromsoftware-rs; với regulation bị
+  lệch header (như Convergence) cách này có thể panic. Mod chưa chuyển sang
+  `common::params` và chưa có ghi nhận chạy trên regulation như vậy.
+- Danh sách ID đạn gắn với regulation vanilla; game cập nhật hoặc overhaul đổi bố cục
+  ID thì mod ghi cảnh báo "không tìm thấy ID" (không crash) và cần dò lại danh sách.
+- Phép scale số nguyên (sát thương, số lượng tối đa) làm tròn khác Smithbox Mass Edit
+  có thể lệch ±1.
+- Chỉ dùng ở chế độ offline, tắt EAC.
 
-| MASSEDIT (`Bullet` field) | Rust (`BULLET_PARAM_ST`) |
-|---|---|
-| `initVellocity`/`maxVellocity` | `init_vellocity/max_vellocity()` (f32) |
-| `dist` | `dist()` (f32) |
-| `numShoot` | `num_shoot()` (u16) — **gán tuyệt đối** (`RainOfArrowsCount`), không nhân, vì giá trị gốc luôn = 1 |
-| `shootAngleYMaxRandom`/`shootAngleXMaxRandom` | `shoot_angle_y/x_max_random()` (f32) |
+## Tài liệu liên quan
 
-## Hot reload (2026-09-08)
-
-Trước bản này, `RiseArcher.ini` chỉ đọc **đúng 1 lần** lúc DLL attach —
-lý do ghi trong code cũ: "regulation param rows chỉ load 1 lần lúc khởi
-động và không bao giờ reload giữa phiên chơi, nên 1 lần patch là đủ". Đúng
-với params tự nó, nhưng bỏ sót 1 điều: `SoloParamRepository` vẫn là bộ nhớ
-sống suốt phiên chơi, patch lại (ghi đè) hoàn toàn khả thi — chỉ là chưa có
-cơ chế trigger. Giờ thêm hot reload giống `sometweaks` (mặc định phím
-**F5**, đổi qua `General.ReloadKey`):
-
-- `src/reload.rs`/`src/task.rs` port gần như nguyên khối từ
-  `sometweaks::reload`/`sometweaks::task` — theo dõi `ReloadKey` trên task
-  `CSTaskImp::FrameBegin`, `config::load()` lại ini rồi tăng biến đếm
-  `RELOAD_GENERATION`.
-- `weapon::apply`/`bullet::apply` từng scale **trực tiếp trên giá trị đang
-  đọc từ row** (`row.attack_base_physics() * factor`) — gọi lại lần 2 sẽ
-  compound (`* 1.5` hai lần thành `* 2.25`, không phải vẫn `* 1.5`), y hệt
-  vấn đề `drop_rate` trong `sometweaks` đã gặp. Sửa bằng cách cache toàn bộ
-  giá trị gốc của từng row (`weapon::Baseline`/`bullet::Baseline`, khoá theo
-  row ID) ngay lần `apply` đầu tiên, và mọi lần sau — kể cả reload — luôn
-  scale từ baseline đó, không bao giờ từ giá trị đang có trên row.
-- Field không bị compound thì giữ nguyên cách gán tuyệt đối, không cần
-  baseline: `max_arrow_quantity` (Arrow/Bolt `MaxQuantity`), `num_shoot`
-  (`Bullet.RainOfArrowsCount`), `gem_mount_type` (luôn gán `2`).
-
-Đổi tên key debug log: `[Debug] DebugLog=true` → `[Logging] LogFile=true`
-(chỉ đổi tên, không đổi hành vi — vẫn gate việc tạo file `RiseArcher.log`).
-
-## Bug: crash lặng lúc khởi động, `SoloParamRepository` ready quá sớm (2026-09-08)
-
-Test in-game đầu tiên (sau khi thêm hot reload ở trên) lộ ra: RiseArcher hoàn
-toàn không hoạt động — Black Bow không mở khoá được Ash of War, số lượng mũi
-tên vẫn 99 vanilla. `RiseArcher.log` dừng đột ngột ngay sau dòng
-`"SoloParamRepository ready, applying weapon buffs..."`, không có dòng
-`"Applied to..."` lẫn dòng lỗi nào - dấu hiệu đặc trưng của 1 thread Rust
-panic không ai bắt (dưới profile `panic = "unwind"` của workspace, panic ở
-1 thread `std::thread::spawn` tự chết trong im lặng, không crash game, không
-log gì - xem comment gốc trong `Cargo.toml`).
-
-Đọc thẳng source `fromsoftware-rs` xác nhận: `SoloParamRepository::
-instance_mut()` trả `Ok` ngay khi object tồn tại (đúng như code cũ giả định
-"regulation.bin chỉ load 1 lần lúc khởi động") - nhưng **sớm hơn** lúc các
-file resource của từng param cụ thể (`EquipParamWeapon`, `Bullet`...) load
-xong. Gọi `rows_mut::<EquipParamWeapon>()` lúc đó rơi vào
-`SoloParamRepository::get_param_file_mut`'s
-`.expect("Expected param holder to have exactly one res cap")` → panic,
-không phải trả `Err` để retry được.
-
-Y hệt bug đã gặp (và đã fix) trong `sometweaks::drop_rate`
-(2026-08-24/25, xem `sometweaks/src/player.rs`'s doc comment) -
-`unlock_ashes_of_war` (chính là tính năng tương đương `Bow.UnlockAOW` ở
-đây) chạy được trong `sometweaks` chính vì nó chờ qua
-`player::wait_for_solo_param_repository` (gate thêm điều kiện
-`WorldChrMan::main_player` đã tồn tại), không chỉ chờ
-`instance_mut().is_ok()` suông như RiseArcher đang làm.
-
-Sửa bằng cách port nguyên `sometweaks::player`'s 2 hàm
-(`main_player_chr_ins_ptr`/`wait_for_solo_param_repository`) sang
-`src/player.rs` của RiseArcher, dùng nó thay `wait_for_repository` cũ (bỏ
-hẳn hàm này). Thêm lớp phòng hờ thứ 2 (`apply_with_retry` trong `lib.rs`):
-bọc lần `apply` đầu bằng `catch_unwind`, tự thử lại tối đa 30s nếu vẫn
-panic - đi kèm sửa `weapon::ORIGINALS`/`bullet::ORIGINALS`'s
-`.lock().unwrap()` → phục hồi mutex bị "poison" sau 1 lần panic, để lần
-retry sau không panic dây chuyền ngay tại bước lock.
-
-## Bug: `RiseArcher.ini` không hề có tác dụng trước bản này (2026-09-08)
-
-Phát hiện khi tổ chức lại section cho ini (theo yêu cầu người dùng, xem
-ngay dưới): `weapon.rs`/`bullet.rs` đọc key có tiền tố (`Bow.DamageMultiplier`,
-`Crossbow.DamageMultiplier`, `Arrow.MaxQuantity`, `Bullet.SpeedMultiplier`...)
-nhưng `RiseArcher.ini` (từ commit đầu tiên của bản DLL, 2026-08-18) lại ghi
-key **trần, không tiền tố** (`DamageMultiplier`, `MaxQuantity`...). Vì
-`common::config` là map phẳng, bỏ qua section header hoàn toàn (xem
-`shared/src/config.rs`), nên **không key nào trong số này từng khớp** —
-mọi giá trị nhân/gán luôn chạy bằng default hard-code trong Rust, chỉnh
-`RiseArcher.ini` trước bản này không có tác dụng gì. Chỉ `ReloadKey`/
-`LogFile` (2 key duy nhất code đọc không tiền tố) là hoạt động đúng.
-Đây cũng chính là lý do hợp lý cho mục "Test trong game: Chưa" — chưa ai
-kiểm chứng việc chỉnh ini có ăn không, nên bug tồn tại từ đầu mà không ai
-phát hiện.
-
-Sửa bằng cách viết lại `RiseArcher.ini` với đúng key có tiền tố khớp code
-(xem mục "Tổ chức lại section" ngay dưới). Người dùng nâng cấp từ bản cũ:
-`config::migrate` sẽ tự thêm mọi key tiền tố mới (giá trị mặc định) và dời
-key trần cũ (nếu người dùng từng chỉnh, dù không có tác dụng) vào
-`[Legacy]` — không mất dữ liệu, nhưng giá trị custom cũ (nếu có) cần chỉnh
-lại thủ công theo tên key mới.
-
-## Tổ chức lại section theo tính năng thay vì theo loại vũ khí (2026-09-08)
-
-Section cũ đặt tên theo loại vũ khí (`[Bow]`, `[Crossbow]`, `[Ballista]`...),
-mỗi section lại trộn nhiều loại tuỳ chỉnh khác nhau (damage, scaling, ash of
-war) - khó dò khi muốn sửa "mọi hệ số damage" hay "mọi giới hạn số lượng"
-cùng lúc. Đổi sang đặt tên section theo **loại tuỳ chỉnh**: `[General]`,
-`[Damage Multipliers]`, `[Common]` (scaling/Ash of War/weight/sell value),
-`[Bullet Tuning]` (gồm cả `MaxQuantity` của Arrow/Bolt), `[Logging]`. Mỗi
-dòng key vẫn giữ tiền tố (`Bow.`/`Crossbow.`/`Ballista.`/`Bullet.`) kèm 1
-dòng comment nói rõ áp dụng cho vũ khí nào - section header vẫn chỉ là nhãn
-hiển thị cho người dùng (bị `common::config` bỏ qua hoàn toàn), không ảnh
-hưởng logic đọc key.
-
-Cùng đợt, người dùng tự viết lại bộ key theo hướng chi tiết hơn bản đầu của
-Claude (không còn multiplier `BowCrossbowBallista.*` dùng chung cho cả 3):
-
-- `Bow.AllowAshOfWar` → **`Bow.UnlockAOW`** (đổi tên, không đổi hành vi -
-  vẫn gate `row.set_gem_mount_type(2)`).
-- `BowCrossbowBallista.WeightMultiplier`/`SellValueMultiplier` (1 cặp dùng
-  chung cho cả 3 loại) → tách riêng theo từng loại:
-  `Bow.WeightMultiplier`/`Bow.SellValueMultiplier`,
-  `Crossbow.WeightMultiplier`/`Crossbow.SellValueMultiplier`,
-  `Ballista.WeightMultiplier`/`Ballista.SellValueMultiplier` - cùng giá trị
-  mặc định `0.5`/`2` như cũ, nhưng giờ chỉnh riêng từng loại được.
-- `Arrow.MaxQuantity`/`Bolt.MaxQuantity` → **`Bullet.Arrow.MaxQuantity`**/
-  **`Bullet.Bolt.MaxQuantity`** (đổi tên cho khớp section `[Bullet Tuning]`
-  - field thật vẫn là `max_arrow_quantity` trên `EquipParamWeapon`, do
-    `weapon.rs` áp, không phải `bullet.rs`).
-- `weapon.rs` được viết lại theo `enum WeaponKind` (`Bow`/`Crossbow`/
-  `Ballista`/`Arrow`/`Bolt`) phân loại 1 lần từ `weaponCategory`/`wepType`,
-  dùng chung cho cả việc lọc row liên quan (`is_relevant`) lẫn chọn hệ số
-  áp dụng trong `apply` - tránh lặp lại cùng 1 khối `match` category/wepType
-  2 lần như bản đầu.
-- Người dùng gõ nhầm `ShellValueMultiplier` (thay vì `SellValueMultiplier`)
-  lúc soạn lại ini - đã xác nhận là gõ nhầm và sửa lại đúng chính tả.
-
-## Config
-
-Xem `RiseArcher.ini` cho toàn bộ key + comment. Mọi giá trị dùng đúng quy
-ước "0 tắt tính năng" ở những chỗ hợp lý (`MaxQuantity`, các multiplier
-không có khái niệm "tắt" vì luôn cần 1 hệ số > 0).
-
-## Trạng thái
-
-| Việc | Trạng thái |
-|---|---|
-| RE gốc (AOB/field/ID pattern qua CSV thật) | Xong (bản `.MASSEDIT`) |
-| Port sang Rust DLL (`weapon.rs` + `bullet.rs`) | Xong, build được, không warning |
-| Hot reload (`ReloadKey`, baseline chống compound) | Xong, build được |
-| Test trong game | **Đã test (2026-09-08)** - áp đúng 99 `EquipParamWeapon` + 352 `Bullet` row, xem "Bug: crash lặng lúc khởi động" |
-
-## Rủi ro cần lưu ý khi test
-
-- `bullet::apply` tự đếm số ID không tìm thấy (`missing`) và log warning
-  nếu > 0 — đây là tín hiệu game đã update và danh sách base ID trong
-  `bullet.rs` cần dò lại từ CSV export mới (Smithbox → export
-  `Bullet.csv` → so khớp ID).
-- Chưa xác nhận trong game các phép scale số nguyên (`u16` damage field,
-  `u8 max_arrow_quantity`) có làm tròn đúng ý muốn không — công thức dùng
-  `.round()` trước khi ép kiểu, khác hành vi chính xác của Smithbox Mass
-  Edit (không rõ nó dùng round hay truncate).
-
-## Migrate `task.rs`/`player.rs`/`reload.rs` sang dùng chung `common` (2026-09-17)
-
-Xóa hẳn 3 file `src/task.rs`/`src/player.rs`/`src/reload.rs` (bản copy y hệt
-`sometweaks`'s cùng tên) - thay bằng `common::task`/`common::player`/
-`common::reload` (crate `common`, xem README `autoregen` mục "Tách
-`task_hook.rs`.../Gộp crate `engine` ngược vào `shared`", 2026-09-14, để
-biết lý do 5 module này (`task_hook`/`alloc_hook`/`task`/`player`/`reload`)
-nằm trong `common`). `dropmultiplier` (mod mới, cùng workspace) là mod đầu
-tiên dùng thẳng bộ này từ đầu; `RiseArcher` là mod **thứ 3** từng có 1 bản
-copy y hệt (sau `autoregen`, `sometweaks`) - migrate xong thì hết còn bản
-copy nào trùng nhau trong workspace này.
-
-Đổi mọi `crate::task::`/`crate::player::`/`crate::reload::` (và các tham
-chiếu không tiền tố `task::`/`player::`/`reload::` trong `lib.rs`) thành
-`common::task::`/`common::player::`/`common::reload::`. Không đổi hành vi -
-build + release build (`build-mod.ps1 -Mod RiseArcher`) xác nhận giống hệt
-trước migrate.
-
-## Fix race condition: bỏ cuộc vĩnh viễn nếu chưa vào world trong 5 phút (2026-09-17)
-
-Phát hiện khi test `DropMultiplier` (xem README `sometweaks`/`dropmultiplier`
-cùng ngày, cùng lỗi): `run()` gọi `wait_for_solo_param_repository(Duration::
-from_secs(300))`, hết 300s không thấy player vào world thì `return` luôn -
-**không chỉ bỏ qua việc áp buff 1 lần**, mà bỏ luôn cả phần đăng ký
-`common::task::run_recurring_safe` theo dõi `ReloadKey` phía sau - tức là
-RiseArcher **tắt vĩnh viễn cho session đó, không có cách nào phục hồi**
-kể cả tự bấm F5 (khác `drop_rate`/`grace_menu::unlock_shop` bên
-`sometweaks`, 2 cái đó vẫn đăng ký reload watch dù lần chờ đầu thất bại).
-
-`common::player::wait_for_solo_param_repository` giờ bỏ hẳn tham số
-`timeout`, chờ vô hạn (không bao giờ bỏ cuộc, giống
-`common::task::wait_for_cs_task`) - `run()` đổi thành gọi thẳng không cần
-nhánh `else { return }` nào nữa. Build + release build xác nhận.
-
-## `LogFile` giờ do `common::logger` tự gate - bỏ điều kiện riêng quanh `logger::init` (2026-09-23)
-
-Mod này vốn đã đúng hành vi "`LogFile=false` thì không tạo file" (tự bọc
-`logger::init` trong `if config::get_bool("LogFile", false)`), nhưng phần
-lớn mod khác trong workspace thì không - `logger::init` gọi vô điều kiện nên
-file log luôn được tạo, `LogFile` chỉ gate log chi tiết. Người dùng phát
-hiện qua PassiveRunes và xác nhận hành vi đúng phải là như mod này: muốn có
-log sẵn thì để mặc định `LogFile=true` khi deploy.
-
-Sửa tập trung trong `shared/src/logger.rs`: `init` chỉ ghi nhớ đường dẫn,
-file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, và
-`LogFile` được đọc lại mỗi lần ghi - nên bật/tắt bằng `ReloadKey` có hiệu
-lực ngay. Vì vậy bỏ điều kiện riêng quanh `logger::init` trong `lib.rs` - giờ gọi thẳng như mọi mod khác. Mô tả key trong ini đổi thành
-"Write RiseArcher.log next to the DLL (for troubleshooting). Off = no log
-file". Không đổi hành vi với người dùng.
-
-
-## Đường dẫn DLL có ký tự không phải ASCII làm mod bỏ qua ini - sửa `common::dll_dir` (2026-09-24)
-
-Bug phát hiện qua AutoRegen (người dùng ME3, thư mục profile tên tiếng
-Trung): `common::dll_dir()` dùng `GetModuleFileNameA` (code page ANSI) rồi
-giải mã như UTF-8, nên đường dẫn có ký tự không phải ASCII (tiếng Trung,
-tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL, và mod âm
-thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
-`from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
-`dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
-`mods/autoregen/README.md`.
-
-
-## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
-
-`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
-mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
-thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
-bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
-`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
-
-
-## Log in phiên bản game + danh sách DLL đã nạp (2026-09-26)
-
-Để log gửi kèm báo lỗi tự trả lời được "khác phiên bản game?" và "có mod nào
-khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1 dòng
-`Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
-không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
-MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
-tiết trong `mods/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
-Không đổi hành vi.
-
-Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
-Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
-game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
-cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
-dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
-(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
-tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
-in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
-loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
-dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).
-
-## Version thật trong thuộc tính file DLL (2026-10-05)
-
-Trước đây DLL không có version resource nên Properties → Details trống và
-dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
-trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
-`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
-File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
-`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
-`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
-`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
-là version hiện trong Properties và trong log.
-
-## Key `ReloadBanner` (2026-10-05)
-
-Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
-"Config reloaded" hiện giữa màn hình sau khi nhấn `ReloadKey`. Dòng log
-`Config reloaded` vẫn ghi. Dùng chung `common::reload::run` (đọc key mỗi lần reload).
-
-## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
-
-Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
-
-Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng.
+- [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
+- [docs/param_patching.md](docs/param_patching.md): bộ lọc vũ khí, họ đạn, baseline, rủi ro.
+- [docs/startup_and_ini_bugs.md](docs/startup_and_ini_bugs.md): crash lặng khi khởi động, ini không tác dụng, bỏ cuộc sau 5 phút.
+- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus.
