@@ -215,7 +215,7 @@ tại thời điểm vào game) là đủ gây lỗi - không liên quan tốc �
 riêng mỗi frame thay vì ghi file đồng bộ giữa lúc xử lý va chạm - không ăn
 thua, chứng minh nguyên nhân không phải do độ trễ).
 
-**Nguyên nhân thật** (đọc lại `.docs/reverse_engineering/AttackFn_decompiled.txt`
+**Nguyên nhân thật** (đọc lại `tmp/reverse_engineering/decompiled/AttackFn_decompiled.txt`
 - bản decompile cũ của đúng hàm đang hook): hàm xử lý va chạm nhận **5 tham
 số**, không phải 4 như hook vẫn tưởng - tham số thứ 5 (1 byte) được truyền
 qua **stack** tại `[rsp+0x20]`, không qua register. Code gốc (đoạn ngay
@@ -1297,7 +1297,7 @@ tối đa).
 
 `HpOnHit`/`FpOnHit` ban đầu hồi máu cho **mọi** đòn trúng của player, kể cả
 cast phép. Ba cách phân loại "vũ khí vs phép" dựa trên `AtkParam` đã thử và
-bỏ (chi tiết xem git history + `reverse_engineering/`):
+bỏ (chi tiết xem git history; các script Ghidra một lần đã xoá 2026-10-07):
 
 1. So `atkParamId` (đọc từ `hitInfo+0x40`) với ngưỡng 100.000 (vũ khí luôn
    theo công thức `WeaponType*100000+AtkId`) — sai với Glintstone Nail (một
@@ -1441,3 +1441,7 @@ Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
 Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
 
 Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+
+## Đường dẫn script/dump dịch ngược đổi chỗ (2026-10-07)
+
+Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `research/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `research/ida/`. Hành vi mod không đổi.

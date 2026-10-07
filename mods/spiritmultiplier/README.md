@@ -119,7 +119,7 @@ Thử Ghidra trước (project `D:/tmp/ghidra_proj_1171`, quét hàm có
 IDA 9.3 (database có sẵn `D:/tmp/ida_re/ida_eldenring_current.i64` =
 `eldenring_2710.exe`, đúng bản 2.7.1.0 đang test). Các script IDA/Ghidra
 dùng lần này: `D:/tmp/ida_re/ida_spirit{1..6}.py`,
-`.docs/reverse_engineering/{DecompileByName,FindBuddySlotFns}.java`.
+`research/ghidra/DecompileByName.java` (giữ lại) và `FindBuddySlotFns.java` (một lần, đã xoá 2026-10-07).
 
 Các bước:
 
@@ -1159,3 +1159,7 @@ Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
 Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
 
 Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+
+## Đường dẫn script/dump dịch ngược đổi chỗ (2026-10-07)
+
+Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `research/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `research/ida/`. Hành vi mod không đổi.

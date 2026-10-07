@@ -169,8 +169,7 @@ riêng. `Torrent` không bị key tổng ảnh hưởng. Mọi key trong `[Speed
 ## Nhóm `Cast`, phân loại theo prefix TAE (2026-09-29)
 
 Người dùng chép tay 2 danh sách TAE từ Nexus (articles 511 và 208: Nexus
-chặn fetch tự động bằng Cloudflare) vào `.docs/Tae List.txt` và
-`.docs/Elden Ring tae list updated for SOTE.txt`. Danh sách này cho biết ý
+chặn fetch tự động bằng Cloudflare) vào 2 file (từ 2026-10-07 đã gộp thành `docs/tae-ids.md`). Danh sách này cho biết ý
 nghĩa của **prefix** `aXXX`:
 
 | Prefix | Ý nghĩa |

@@ -4,8 +4,8 @@
 //! `CSChrDataModule`'s real field offsets from `fromsoftware-rs`
 //! (`std::mem::offset_of!`), not on any 3rd-party AOB.
 //!
-//! Call chain discovered (see `.docs/reverse_engineering/`, `FindHpWrites`/
-//! `FindDamagePath`/`DecompileMulti` scripts and their outputs):
+//! Call chain discovered (found with Ghidra scripts `FindHpWrites`/
+//! `FindDamagePath`/`DecompileMulti`; the one-off ones were removed 2026-10-07, redo with `research/ida/fieldaccess.py 138`):
 //!   hit-resolution (Hexinton's OnAttack target) -> `FUN_140448910(ctx,
 //!   attacker, hit_info, _, flag)` -> `ApplyHpDelta(target_module,
 //!   -hit_info[0x228], ...)` -> `SetHp(module, clamp(new_hp, 0, max_hp))`.
@@ -64,7 +64,7 @@ unsafe extern "system" {
 const PAGE_EXECUTE_READWRITE: u32 = 0x40;
 
 // `FUN_140448910`'s own prologue, found via Ghidra static analysis of the
-// live 1.17.1 exe (`.docs/reverse_engineering/DumpFnPrologue.java` output) -
+// live 1.17.1 exe (`research/ghidra/DumpFnPrologue.java` output) -
 // NOT from any 3rd-party CE table. Anchored on the full 40-byte window
 // (through the stack-cookie load and the R12 shadow-space spill) rather
 // than just the first 15 bytes, to cut collision risk with other functions

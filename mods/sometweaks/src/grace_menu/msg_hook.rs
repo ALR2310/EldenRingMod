@@ -25,7 +25,7 @@
 //! elsewhere in the game that invokes it, and the CALL's own rel32
 //! operand is followed to get `get_message`'s actual entry (confirmed via
 //! Ghidra against the current game build, 2026-08-28 -
-//! `.docs/reverse_engineering/DumpGetMessageFn.java`/`D:/tmp/get_message_dump.txt`).
+//! `DumpGetMessageFn.java` (one-off, removed 2026-10-07)/`D:/tmp/get_message_dump.txt`).
 //! Its signature (Win64 fastcall): `(msg_repository: rcx, unknown: edx,
 //! bnd_id: r8d, msg_id: r9d) -> rax (const wchar_t*)`.
 //!

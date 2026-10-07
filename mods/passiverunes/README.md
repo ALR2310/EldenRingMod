@@ -140,7 +140,7 @@ chuyển sang Rust.
 Thread riêng (`RuneEngine::Run`, tạo từ `DllMain`) `Sleep` theo
 `IntervalSeconds` rồi cộng thẳng vào con trỏ rune. Con trỏ đó lấy được qua
 1 pointer chain **tự dò và giải mã tay** từ 1 DLL cheat khác
-(`RunesClock25.dll`, xem `reverse_engineering/RunesClock25_decompiled.txt`):
+(`RunesClock25.dll`, xem `tmp/reverse_engineering/decompiled/RunesClock25_decompiled.txt`):
 AOB pattern trỏ tới singleton `GameDataMan`, cộng `+0x8` (dereference 1
 lần), rồi `+0x6C` (không dereference) ra địa chỉ rune. Xem chi tiết trong
 comment đầu `src/RuneEngine.cpp` (repo C++ gốc).
@@ -484,3 +484,7 @@ Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
 Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
 
 Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+
+## Đường dẫn script/dump dịch ngược đổi chỗ (2026-10-07)
+
+Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `research/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `research/ida/`. Hành vi mod không đổi.

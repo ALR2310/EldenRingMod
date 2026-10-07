@@ -447,7 +447,7 @@ Giải mã `.docs/DisableRuneLoss.dll` bằng Ghidra headless (`DumpAll.java`)
   `0xE8` rồi NOP 5 byte đó (xoá hẳn 1 lệnh `CALL`).
 - Dùng project Ghidra có sẵn cho `eldenring.exe`
   (`D:/tmp/ghidra_eldenring`, script mới
-  `.docs/reverse_engineering/DumpRuneLossAOB.java`) để tìm đúng vị trí thật
+  `DumpRuneLossAOB.java`, đã xoá 2026-10-07) để tìm đúng vị trí thật
   trong game (RVA `0x594f6c`) và disassemble thật (không chỉ dựa vào
   pseudocode của DLL): lệnh `CALL` bị NOP gọi tới 1 hàm nhận `(manager,
   player_obj, true)`, hàm đó gọi tiếp nhiều hàm con rồi ghi 2-3 giá trị
@@ -797,8 +797,8 @@ sao:
    (`movaps xmm7,xmm8; test rdx,rdx`), patch bằng kỹ thuật JMP tương đối +
    NOP đệm giống hệt `WeightMultiplier`.
 2. Dò tiếp AOB đó trong `eldenring.exe` thật (Ghidra headless `-noanalysis`
-   + `mem.findBytes`, script `DumpDropRateAOB.java` giữ lại trong
-   `.docs/reverse_engineering/`) - chỉ 1 match tại RVA `0x68652c`. Giải mã
+   + `mem.findBytes`, script `DumpDropRateAOB.java` (một lần,
+   đã xoá 2026-10-07) - chỉ 1 match tại RVA `0x68652c`. Giải mã
    ra: DLL này **cộng thẳng** 1 hằng số cấu hình vào 1 giá trị trung gian
    trong công thức tính "discovery-bonus" (`result = max(0, statBonus +
    hookedValue)`) - **không phải phép nhân**, ini key `rate` của nó là số
@@ -1365,7 +1365,7 @@ kỹ thuật đó:
   `(msg_repository, unknown, bnd_id, msg_id)`, trả `const wchar_t*`) -
   xác nhận qua Ghidra (chạy headless bằng `analyzeHeadless` vào project
   `D:/tmp/ghidra_eldenring` có sẵn, script mới
-  `.docs/reverse_engineering/DumpGetMessageFn.java`, output
+  `DumpGetMessageFn.java`, đã xoá 2026-10-07, output
   `D:/tmp/get_message_dump.txt`) đúng trên bản game hiện tại - hàm là 1
   leaf function, prologue 15 byte đầu là `cmp;jae;cmp;jae;mov`, không có
   stack frame.
@@ -1963,7 +1963,7 @@ việc Hook A/B ở mục trên có còn khớp sau update game sau này hay kh�
 Người dùng yêu cầu thêm tính năng "triệu hồi lại không cần nghỉ ở bia đá"
 (giống `unlimited_resummon` của `er10x.dll`), đưa 2 file tham khảo:
 
-- **`.docs/reverse_engineering/zibinha_infinite_summoning.dll`**: giải mã
+- **`tmp/reverse_engineering/reference-dlls/zibinha_infinite_summoning.dll`**: giải mã
   bằng Ghidra headless (project mới `D:/tmp/zibinha_infinite_summon/`) -
   toàn bộ log string bên trong ghi **"Friendly Invocation Range"** (PDB
   gốc: `Zibinha_ID2000_Range1000`), code thực tế
@@ -2442,3 +2442,7 @@ in-game riêng; code giống hệt bản DropMultiplier đã test.
 Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
 
 Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+
+## Đường dẫn script/dump dịch ngược đổi chỗ (2026-10-07)
+
+Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `research/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `research/ida/`. Hành vi mod không đổi.
