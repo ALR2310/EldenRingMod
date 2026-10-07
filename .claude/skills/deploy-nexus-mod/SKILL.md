@@ -224,7 +224,7 @@ sửa code để "cho qua".
    - Mod file (update group) sẽ được thêm version vào (tên + id).
    - Version + toàn bộ changelog (đã chốt ở bước 2, nhắc lại cho chắc) -
      dùng cho endpoint changelog riêng (bước 13). `description` của file
-     (bước 12): changelog > 3 dòng → 2 dòng cố định; <= 3 dòng → các dòng
+     (bước 12): changelog >= 3 dòng → 2 dòng cố định; < 3 dòng → các dòng
      changelog + dòng antivirus. Ghi rõ `description` sẽ gửi trong tóm tắt.
    - Tên file zip vừa build, kích thước, md5.
 
@@ -284,15 +284,17 @@ sửa code để "cho qua".
     `createModFileVersion`, **không** dùng `POST /mod-files` - endpoint đó
     tạo file hoàn toàn mới, sai mục đích):
     `description` của file phụ thuộc số dòng changelog của version này
-    (quy tắc 2026-10-06, bổ sung cho quyết định 2026-10-03; phân cách các
-    dòng bằng `\n`):
-    - Changelog **nhiều hơn 3 dòng** → **không** lặp lại changelog, dùng
+    (quy tắc 2026-10-06; ngưỡng đổi từ "> 3" thành ">= 3" ngày 2026-10-07
+    vì SpeedMultiplier 1.3.0 có changelog đúng 3 dòng, bị đẩy bản liệt kê 3
+    dòng trong khi người dùng muốn bản 2 dòng cố định; phân cách các dòng
+    bằng `\n`):
+    - Changelog **từ 3 dòng trở lên** → **không** lặp lại changelog, dùng
       đúng 2 dòng cố định:
       ```
       See the changelog for details.
       Mod files may be detected as false positives by antivirus software.
       ```
-    - Changelog **từ 3 dòng trở xuống** → thay dòng `See the changelog for
+    - Changelog **ít hơn 3 dòng** (1 hoặc 2) → thay dòng `See the changelog for
       details.` bằng chính các dòng changelog (nguyên văn từng bullet, mỗi
       dòng 1 dòng, không thêm dấu `-`), giữ nguyên dòng cuối `Mod files may
       be detected as false positives by antivirus software.`
@@ -308,7 +310,7 @@ sửa code để "cho qua".
     version, không cần vào tay trang Nexus chỉnh lại sau khi publish:
     ```bash
     curl -sS -X POST -H "apikey: $NEXUS_API_KEY" -H "Content-Type: application/json" \
-      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"<theo quy tắc số dòng changelog ở trên; vd > 3 dòng: See the changelog for details.\nMod files may be detected as false positives by antivirus software.>\"}" \
+      -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"<theo quy tắc số dòng changelog ở trên; vd >= 3 dòng: See the changelog for details.\nMod files may be detected as false positives by antivirus software.>\"}" \
       "https://api.nexusmods.com/v3/mod-files/<mod_file_id>/versions"
     ```
 
