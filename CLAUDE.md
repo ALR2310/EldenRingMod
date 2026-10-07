@@ -1,19 +1,39 @@
 # Project Rules
 
-## Cập nhật README.md sau khi thêm/sửa tính năng
+## Tài liệu của mỗi mod: README, HISTORY, research
 
-Mỗi mod trong `mods/<mod>/README.md` được viết theo kiểu "nhật ký phát
-triển": các mục có tiêu đề kèm ngày (`(YYYY-MM-DD)`), ghi lại lý do quyết
-định, hướng đã thử/bỏ, và trạng thái hiện tại - không chỉ là hướng dẫn dùng.
+Mỗi mod có 3 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn:
+
+- `mods/<mod>/README.md` = **trạng thái hiện tại** (không phải nhật ký):
+  version, Nexus ID, trạng thái test; bảng key cấu hình; cách hoạt động;
+  giới hạn; link tới HISTORY và research. Khuôn mẫu:
+  `mods/dropmultiplier/README.md`.
+- `mods/<mod>/HISTORY.md` = dòng thời gian, bảng `Ngày | Thay đổi | Chi
+  tiết`, mỗi thay đổi **1 dòng**, mới nhất ở dưới cùng; chuyện nào có phân
+  tích dài thì cột "Chi tiết" link sang `research/`.
+- `research/<mod>_<chủ đề>.md` = phân tích theo chủ đề, viết theo **trạng
+  thái hiện tại** (không viết kiểu nhật ký theo ngày): mở đầu bằng
+  `**Status <ngày>: ...**`, rồi kết luận, bằng chứng, hướng đã thử/bỏ (kèm lý
+  do), tham chiếu code. Công cụ dịch ngược nằm ở `scripts/` (IDA:
+  `scripts/ida/`), không để trong `research/`.
 
 Sau khi hoàn thành một thay đổi đáng kể ở 1 mod (thêm tính năng, đổi ini
-key, sửa bug về hành vi, đổi cấu trúc code/thư mục), **luôn thêm 1 mục mới**
-vào `README.md` của mod đó, ghi ngày hôm nay, mô tả: đã đổi gì, vì sao (đặc
-biệt nếu sửa 1 hiểu lầm/bug trong thiết kế trước đó), và cập nhật lại mọi
-đường dẫn file/tên key cũ được nhắc tới ở phần trên của README nếu chúng đã
-lỗi thời.
+key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
 
-Không cần hỏi lại người dùng trước khi làm việc này - tự thêm ngay sau khi
+1. **Luôn thêm 1 dòng** vào bảng `HISTORY.md`, ghi ngày hôm nay: đã đổi gì và
+   vì sao (1-2 câu, đặc biệt nếu sửa 1 hiểu lầm/bug trong thiết kế trước đó).
+2. **Sửa `README.md` tại chỗ** nếu trạng thái, bảng key, cách hoạt động hay
+   giới hạn thay đổi (không thêm mục có ngày vào README); sửa mọi đường dẫn
+   file/tên key lỗi thời được nhắc tới.
+3. **Viết mới hoặc bổ sung `research/<mod>_<chủ đề>.md`** chỉ khi có phát hiện
+   đáng giữ: nguyên nhân gốc, hướng đã thử/bỏ, số liệu, RVA/AOB. Cập nhật dòng
+   `Status`, rồi link từ dòng HISTORY và từ README.
+
+Mod chưa được tách (README vẫn là nhật ký dài theo ngày) thì giữ kiểu cũ
+cho tới khi tách: thêm 1 mục có ngày vào README của mod đó. Đã tách xong:
+`dropmultiplier`.
+
+Không cần hỏi lại người dùng trước khi làm việc này - tự làm ngay sau khi
 code đã ổn định, coi đây là 1 bước không thể thiếu của việc "xong việc",
 giống như build/test.
 
@@ -40,8 +60,8 @@ FasterRevival, SpeedMultiplier, SpiritMultiplier, WindowResize.
 Trước khi thêm/sửa mục changelog trong `mods/<mod>/DESCRIPTION.bbcode`,
 **luôn gọi Nexus Mods API để lấy changelog thật hiện có trên trang mod**
 trước, rồi mới viết mục mới nối tiếp đúng theo đó - không tự đặt số phiên
-bản/nội dung dựa trên suy đoán hay dựa vào lịch sử trong README (lịch sử
-README ghi theo ngày phát triển nội bộ, không phải số phiên bản đã publish
+bản/nội dung dựa trên suy đoán hay dựa vào lịch sử trong README/HISTORY (lịch sử
+này ghi theo ngày phát triển nội bộ, không phải số phiên bản đã publish
 trên Nexus, 2 thứ có thể lệch nhau).
 
 Cách gọi:

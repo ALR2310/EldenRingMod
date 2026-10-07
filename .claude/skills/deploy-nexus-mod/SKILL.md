@@ -123,7 +123,7 @@ không suy đoán từ `name`.
      dùng biết dữ liệu neo đang không chắc chắn trước khi dùng nó để dò
      gap, để họ tự cân nhắc thêm.
 
-     Nếu có commit nào đổi hành vi thật (không phải chỉ sửa README/comment)
+     Nếu có commit nào đổi hành vi thật (không phải chỉ sửa README/HISTORY/research/comment)
      xuất hiện sau mốc trên → nêu rõ danh sách commit đó cho người dùng,
      hỏi thẳng: "Không thấy bản nháp changelog mới, nhưng các commit này có
      vẻ chưa được ghi vào changelog - có đúng không, và nếu đúng thì version

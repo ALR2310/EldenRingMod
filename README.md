@@ -24,8 +24,12 @@ EldenRingMod/
 │   ├── spiritmultiplier/ # SpiritMultiplier: nhân số linh hồn (spirit ash) triệu hồi vượt trần 10 con
 │   ├── weightmultiplier/ # WeightMultiplier (đổi tên từ ReductionWeight): nhân hệ số Trọng Tải qua 1 hook code
 │   └── windowresize/     # WindowResize: kéo viền đổi kích thước cửa sổ Windowed nhỏ hơn mức mặc định
-├── scripts/         # build-mod.ps1: build 1 mod rồi copy .dll + .ini vào builds/<mod>/
-└── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
+├── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
+├── scripts/         # công cụ chạy được: build-mod.ps1 (build 1 mod → builds/<mod>/), ida/ (IDAPython qua run.ps1), ghidra/ (script tham khảo)
+├── research/        # tài liệu nghiên cứu: <mod>_<chủ đề>.md, tae-ids.md, seamless-diff/ (chỉ văn bản và dữ liệu, không có script)
+├── docs/            # tư liệu xuất bản Nexus: nexus_page.bbcode, logo/thumbnail prompt, nexus-openapi.yaml
+├── dumps/           # database IDA (.i64) theo từng bản exe (git-ignored, tạo lại được nhưng mất ~25 phút/bản)
+└── tmp/             # repo/DLL tải về, file tạm nghiên cứu (git-ignored, xoá được bất kỳ lúc nào)
 ```
 
 `shared/` nằm ngoài `mods/` có chủ đích: `mods/` chỉ chứa các mod thật
@@ -41,9 +45,11 @@ Mỗi mod Rust (`mods/autoregen`, `mods/dropmultiplier`, ...) có:
   đây là nguồn sự thật duy nhất cho cấu hình mặc định.
 - `src/lib.rs` mỏng: chỉ có `DllMain` + gọi `common::config`/`common::logger`,
   logic thật nằm trong module riêng của mod (`src/regen/`, ...).
-- `README.md` riêng (lịch sử dịch ngược/quyết định kiến trúc của mod đó) +
-  `DESCRIPTION.bbcode` (mô tả đăng Nexus) khi mod đã publish - port cả 2 file
-  này từ repo C++ gốc mỗi khi thêm mod mới vào workspace, không chỉ port code.
+- `README.md` (trạng thái hiện tại: key, cách hoạt động, giới hạn) + `HISTORY.md`
+  (dòng thời gian, mỗi thay đổi 1 dòng) + các phân tích chi tiết ở
+  `research/<mod>_<chủ đề>.md` - quy ước đầy đủ trong `CLAUDE.md`, khuôn mẫu là
+  `mods/dropmultiplier/`. Mod chưa được tách vẫn còn README kiểu nhật ký dài.
+- `DESCRIPTION.bbcode` (mô tả đăng Nexus) khi mod đã publish.
 
 ## Vì sao tách `common` thay vì copy-paste
 
