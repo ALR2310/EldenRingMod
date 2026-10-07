@@ -11,10 +11,10 @@ vào là chạy, không có gì để chỉnh.
 
 File mẫu nhúng trong DLL (`include_str!`). Không có hot reload.
 
-| Section | Key | Mặc định | Ý nghĩa |
-|---|---|---|---|
-| `[Debug]` | `DeathProbe` | `false` | Log vết animation chết (anim ID, play time, độ dài) mỗi 100ms trong lúc chết, để chẩn đoán |
-| `[Logging]` | `LogFile` | `true` | Ghi `FasterRevival.log` cạnh DLL; `false` thì không tạo file |
+| Section     | Key          | Mặc định | Ý nghĩa                                                                                    |
+| ----------- | ------------ | -------- | ------------------------------------------------------------------------------------------ |
+| `[Debug]`   | `DeathProbe` | `false`  | Log vết animation chết (anim ID, play time, độ dài) mỗi 100ms trong lúc chết, để chẩn đoán |
+| `[Logging]` | `LogFile`    | `true`   | Ghi `FasterRevival.log` cạnh DLL; `false` thì không tạo file                               |
 
 Mỗi lần chết luôn có các dòng log `Died`, `Killed early`, `Death registered by
 the game: +X ms`, `Respawned: X ms after HP hit 0`, nên so sánh thời gian
@@ -46,8 +46,6 @@ Hai việc độc lập, cộng lại ra mức tiết kiệm trên.
 - Chỉ tác dụng với kiểu chết có animation chứa event "Kill Character" (chết
   thường khi bị đánh, đòn tóm). **Rơi vực không đổi** vì game kill ngay frame
   đầu.
-- Hồi sinh có thể lâu hơn khi chết gần **Stake of Marika** (menu chọn điểm hồi
-  sinh); không phải lỗi của mod.
 - **Chưa test khi đang cưỡi Torrent.**
 - Mod không kiểm tra một điều kiện nội bộ của game trước khi kill (nằm trong
   vùng Arxan, chưa hiểu), nên có thể kill sai lúc trong trường hợp hiếm mà điều
@@ -61,10 +59,9 @@ Hai việc độc lập, cộng lại ra mức tiết kiệm trên.
 ## Nguồn ý tưởng
 
 - **FasterDeathAnimation** của 0-F ([Nexus 3367](https://www.nexusmods.com/eldenring/mods/3367),
-  [GitHub](https://github.com/0-F/FasterDeathAnimation), không có LICENSE): chỉ
-  tham khảo ý tưởng, không copy code.
+  [GitHub](https://github.com/0-F/FasterDeathAnimation))
 - **FasterRespawn** của ImAxel0 ([Nexus 501](https://www.nexusmods.com/eldenring/mods/501),
-  [GitHub](https://github.com/ImAxel0/EldenRing-FasterRespawn-Mod), MIT).
+  [GitHub](https://github.com/ImAxel0/EldenRing-FasterRespawn-Mod)).
 
 ## Tài liệu liên quan
 
