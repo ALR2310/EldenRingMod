@@ -13,7 +13,7 @@ EldenRingMod/
 ├── mods/            # mỗi thư mục con = 1 mod (thường là 1 crate Rust build ra 1 DLL; có thể thêm mod chỉ có dữ liệu Smithbox)
 │   ├── autoregen/        # AutoRegen: hồi HP/FP/Stamina theo tick + khi đánh trúng/bị đánh trúng
 │   ├── dropmultiplier/   # DropMultiplier: chỉnh tỉ lệ rớt đồ của quái (nhân hệ số hoặc ép tỉ lệ tổng)
-│   ├── fasterrevival/    # FasterRevival: rút ngắn thời gian từ lúc hết máu tới hồi sinh (đang nghiên cứu)
+│   ├── fasterrevival/    # FasterRevival: rút ngắn thời gian từ lúc hết máu tới hồi sinh (~4-5s thay vì 12-14s)
 │   ├── infiniteailment/  # InfiniteAilment: chỉnh thời lượng + sát thương Poison/Scarlet Rot người chơi gây ra
 │   ├── passiverunes/     # PassiveRunes: cộng rune theo thời gian + bonus mốc thời gian
 │   ├── risearcher/       # RiseArcher: buff Bow/Crossbow/Ballista/Arrow/Bolt qua SoloParamRepository sống
