@@ -34,7 +34,8 @@ phím được đọc lại mỗi frame. Mod **không** dùng `common::reload`, 
   chỉ cập nhật một biến.
 - **Hook thất bại thì mod tắt cho phiên đó** (không tìm thấy neo, không giải
   được `call`, `VirtualAlloc`/`VirtualProtect` lỗi): log ghi lỗi và không patch gì.
-  Khi đó cũng không có reload.
+  Khi đó cũng không có reload. Nếu chỉ không đăng ký được task `ReloadKey` thì hook
+  vẫn chạy, chỉ mất hot reload.
 - **Khởi động:** `DllMain` tạo một thread, nạp/tạo ini, mở log, cài hook, chờ
   `CSTaskImp`, rồi đăng ký task `FrameBegin` đọc `ReloadKey`. Log ghi phiên bản game
   và danh sách DLL đã nạp (`common::diag`, không in đường dẫn đầy đủ).

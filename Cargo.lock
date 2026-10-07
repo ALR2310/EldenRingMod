@@ -627,7 +627,6 @@ dependencies = [
  "chrono",
  "common",
  "eldenring",
- "fromsoftware-shared",
  "winresource",
 ]
 
