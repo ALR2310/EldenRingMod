@@ -1,336 +1,72 @@
 # WeightMultiplier
 
-Đổi tên từ **ReductionWeight** (2026-08-18) khi port sang Rust và gộp vào
-workspace [`EldenRingMod`](../../README.md), theo cùng quy ước đặt tên với
-`RuneMultiplier` (mô tả đúng cơ chế "nhân hệ số", không chỉ "giảm" — ini
-key `WeightReductionPercent` âm sẽ *tăng* tải trọng, không chỉ giảm). Sống
-ở `mods/weightmultiplier`, không còn là repo Git riêng.
+> **v2.0.1** · Nexus mod 10549 · **đã phát hành** (trước là "Reduction Weight")
 
-DLL mod cho Elden Ring: giảm % Trọng Tải (equip load) hiện tại theo 1 hệ số
-cố định, thay vì ghi đè cứng thành 1 số tùy ý như các mod "NoWeight" thông
-thường.
+Mod DLL cho Elden Ring: **nhân Trọng Tải (equip load) hiện tại với một hệ số**,
+hoặc **đặt cứng nó bằng một số**, thay vì ghi đè thành một số tuỳ ý như các mod
+"NoWeight" thông thường. Một hook duy nhất, áp cho cả số hiển thị trên UI lẫn
+hành vi thật (roll, chạy). Đổi tên từ **ReductionWeight** ngày 2026-08-18 khi
+port sang Rust, vì hệ số < 1 giảm, > 1 tăng tải trọng.
 
-## Bản Rust hiện tại (2026-08-18)
+## Cấu hình (`WeightMultiplier.ini`)
 
-Đã **viết lại hoàn toàn bằng Rust** (`cdylib`), thay cho bản C++ ban đầu.
-Giữ nguyên 100% kỹ thuật RE (AOB pattern, offset, điểm hook) — xem mục
-"Cơ chế" và "Lịch sử tìm offset" bên dưới, vẫn đúng nguyên bản. Khác biệt
-so với bản C++:
+File mẫu nhúng trong DLL (`include_str!`), là nguồn sự thật duy nhất cho giá trị
+mặc định.
 
-- **Không dùng được kỹ thuật absolute-jump của `attack_hook.rs`/
-  `runemultiplier`** (patch site chỉ có **7 byte** để ghi đè — không đủ
-  chỗ cho `mov reg,imm64; jmp reg` cần ~12 byte). Giữ nguyên kỹ thuật gốc:
-  JMP tương đối 5 byte (`E9 rel32`) + tìm vùng nhớ thực thi gần bằng
-  `VirtualAlloc` (quét lùi/tiến theo bước `0x10000`) — port thẳng
-  `CodePatch.cpp`/`.h` thành `common::codepatch` (dùng chung, có thể tái
-  sử dụng cho mod khác gặp đúng tình huống "không đủ 12 byte" này).
-- Đọc/ghi ini/log giờ dùng chung crate [`common`](../../shared) thay vì
-  Config/Logger riêng.
-- **Không có `eldenring`/`fromsoftware-shared` trong dependency** — khác
-  mọi mod Rust khác trong workspace. Mod này không đọc/ghi struct nào của
-  game, không cần theo dõi hotkey qua `CSTaskImp` (xem mục dưới) — chỉ
-  patch bộ nhớ 1 lần từ 1 thread thường, y hệt bản C++.
-- **Vẫn cố tình không có hotkey reload** — giữ nguyên quyết định thiết kế
-  gốc (tránh trùng phím với mod khác). Sửa `WeightReductionPercent` cần
-  khởi động lại game, không đổi so với bản C++.
-- Giữ nguyên toàn bộ ini key gốc (`InitialDelaySeconds`,
-  `WeightReductionPercent`) — không đổi tên, dù crate/DLL đã đổi tên.
+| Section | Key | Mặc định | Ý nghĩa |
+|---|---|---|---|
+| `[General]` | `ReloadKey` | `F5` | Phím nạp lại ini; chỉ nhận khi cửa sổ game đang focus |
+| `[General]` | `LoadDelay` | `5000` | Mili giây chờ sau khi game khởi động trước khi áp dụng mod |
+| `[Features]` | `Mode` | `0` | `0` = nhân hệ số (`Multiplier`), `1` = đặt cứng (`FixedValue`) |
+| `[Features]` | `Multiplier` | `0.5` | Hệ số nhân tổng tải; chỉ dùng khi `Mode=0`. `0.5` = một nửa, `1.0` = giữ nguyên, `2.0` = gấp đôi. Cho phép số âm |
+| `[Features]` | `FixedValue` | `0` | Tải luôn bằng đúng số này, bất kể đang mặc gì; chỉ dùng khi `Mode=1` |
+| `[Logging]` | `LogFile` | `true` | Ghi `WeightMultiplier.log` cạnh DLL; `false` thì không tạo file |
 
-Xem `src/hook.rs` cho code hiện tại; `WeightMultiplier.ini` cho toàn bộ key
-cấu hình.
+Đổi `Multiplier`/`FixedValue`/`Mode` rồi bấm `ReloadKey` là có hiệu lực ngay,
+không cần khởi động lại game.
 
-## Cơ chế (không đổi từ bản C++)
+## Cách hoạt động
 
-Không đọc/viết field trong struct (như `autoregen` làm với HP/FP/Stamina).
-Thay vào đó, DLL **patch trực tiếp 1 lệnh CPU** trong code của
-`eldenring.exe` — kỹ thuật inline hook (JMP tới 1 đoạn code tự cấp phát,
-rồi JMP quay lại).
+- **Điểm hook:** game cộng trọng lượng 5 slot trong một vòng lặp rồi copy tổng ra
+  bằng `movaps xmm0,xmm6`. Mod patch đúng lệnh này (chạy một lần sau vòng lặp),
+  nên nhân hay ghi đè ở đó cho một con số sạch, không dồn qua từng slot. Hai
+  điểm hook thử trước đó đều sai (không tác dụng, hoặc chỉ đổi UI). Chi tiết:
+  [docs/hook_point.md](docs/hook_point.md).
+- **Tìm điểm patch bằng AOB** `FF C3 83 FB ?? 7C ?? 4C 8D 5C 24 ??` + 12 byte. Mẫu
+  duy nhất trên 2.6.2.0, 2.7.0.0 và 2.7.1.0, **cùng RVA** ở cả ba.
+- **Patch:** vì chỉ có 7 byte, dùng JMP tương đối 5 byte (`E9 rel32`) tới stub
+  được cấp phát gần đó (`common::codepatch`). Stub nhân hoặc ghi đè `xmm6` rồi chạy
+  lại hai lệnh gốc.
+- **Hot reload:** đổi giá trị chỉ cần ghi lại một biến mà stub đọc mỗi lần chạy.
+  Đổi `Mode` thì mod vá lại 4 byte opcode trong stub (`mulss` ↔ `movss`).
+- **Khởi động:** `DllMain` tạo một thread, nạp/tạo ini, mở log, chờ `LoadDelay`,
+  ghi phiên bản game và danh sách DLL (`common::diag`), rồi cài hook. Sau đó
+  thread thăm dò `ReloadKey` mỗi 100 ms.
+- **Mod khác hook đè cùng chỗ:** nếu không tìm thấy neo, mod kiểm tra xem có phải
+  một mod trọng lượng khác đã hook không và ghi tên DLL đó vào log.
+- **Không phụ thuộc `fromsoftware-rs`** và không dùng bộ lập lịch task của game:
+  mod chỉ patch bộ nhớ một lần từ một thread thường. Vì vậy phím reload dùng
+  `common::input` (thăm dò phím từ thread riêng) và **không có banner "Config
+  reloaded"/`ReloadBanner`** như các mod khác, kết quả reload chỉ hiện trong log.
 
-### Lịch sử tìm offset (3 lần thử)
+Code: [src/hook.rs](src/hook.rs) (toàn bộ logic), [src/lib.rs](src/lib.rs) (entry point).
 
-**Lần 1 (sai, đã bỏ):** suy ra từ decompile `Zibinha_Weight_Control.dll`,
-hook **lùi lại 5 byte** trước AOB match (đoán là lệnh
-`addss xmm6, [rax+0xc]`). Build/chạy không lỗi, nhưng test thực tế cho
-thấy **không có tác dụng gì** — Trọng Tải không đổi dù đổi giáp/vũ khí.
-Nguyên nhân: `addss` chỉ chạy có điều kiện (slot có đồ mới cộng), không
-nằm cố định cách AOB đúng 5 byte — hook trúng byte giữa 1 lệnh khác, vô
-hiệu mà không crash.
+## Giới hạn
 
-**Lần 2 (đúng UI, sai gameplay):** dò trực tiếp qua Cheat Engine trên game
-đang chạy — pin địa chỉ "Trọng Tải Hiện Tại" bằng Value Between, rồi
-**"Find out what writes to this address"** → bắt được `movss [rsi+1C],xmm0`
-(rsi = struct equip-load, xmm0 = tổng cuối). Hook tại đây làm **UI hiện
-đúng số đã giảm %**, nhưng **roll-type/tốc độ chạy trong game không đổi** —
-tức chỉ ảnh hưởng đường hiển thị, không phải đường gameplay thực tế dùng để
-tính vật lý.
+- Đây là patch code sống: nếu game đổi bố cục vùng này, mod không tìm thấy neo và
+  tự tắt cho phiên đó (log ghi lỗi); chưa kiểm chứng ngoài 2.6.2.0, 2.7.0.0, 2.7.1.0.
+- Đổi `Mode` lúc đang chạy ghi đè code có thể đang thực thi; người dùng đã chấp
+  nhận rủi ro này. Nếu vá thất bại, mod giữ `Mode` cũ.
+- Nếu mod trọng lượng khác đã hook cùng chỗ, mod này không cài được hook (có ghi
+  log). Một báo lỗi "anchor not found" trên Nexus (2026-09-26) chưa rõ nguyên
+  nhân.
+- Tài liệu phát triển cũ không ghi kết quả test in-game của bản Rust; khi sửa
+  hook cần kiểm cả số hiển thị trên UI và hành vi thật (roll, chạy).
+- Chỉ dùng ở chế độ offline, tắt EAC.
 
-**Lần 3 (đúng, đang dùng):** người dùng thực sự cài
-`Zibinha_Weight_Control.dll` (set `WeightValue=0`) và xác nhận **roll-type
-đổi đúng thật** trong game — DLL này ghi log địa chỉ patch thật của nó
-(`target=0x...`), và địa chỉ đó khớp *chính xác* với vị trí AOB pattern ở
-Lần 1 (không lùi 5 byte). Vậy AOB pattern ban đầu **đúng** — sai chỉ ở việc
-tự lùi 5 byte để "hook sớm hơn".
+## Tài liệu liên quan
 
-Zibinha hook thẳng vào `inc ebx` (đầu vòng lặp cộng trọng lượng), ghi đè
-`xmm6` = giá trị cố định **mỗi lần lặp** — chỉ có lần ghi cuối (ngay trước
-khi loop thoát) là còn tồn tại, nên tổng cuối luôn = số cố định. Cách này
-tốt cho "set cứng = 0" nhưng **không dùng được cho %**: nhân `xmm6` theo %
-tại chính điểm này sẽ bị **dồn qua từng vòng lặp** (món đồ ở slot đầu bị
-giảm nhiều hơn món ở slot cuối, không đều).
-
-**Điểm hook đúng cho %:** ngay sau khi loop cộng xong, có lệnh copy tổng ra
-làm kết quả trả về:
-
-```asm
-addss xmm6, dword ptr [rax + 0xc]   ; cộng trọng lượng slot này
-inc ebx                              ; <-- Zibinha hook đây (set cứng)
-cmp ebx, 5
-jl <loop start>
-lea r11, [rsp+0x70]
-movaps xmm0, xmm6                    ; <-- WeightMultiplier hook đây (nhân %, chạy đúng 1 lần)
-mov rbx, [r11+0x10]
-```
-
-Nhân `xmm6` ngay tại `movaps` chỉ chạy **đúng 1 lần** sau khi tổng đã cộng
-xong hoàn chỉnh — không bị dồn qua vòng lặp, và tái dùng đúng vị trí đã
-được xác nhận thật qua Zibinha.
-
-### AOB pattern (giữ nguyên từ ban đầu, đã xác nhận qua log thật của
-Zibinha là trúng đúng vị trí code, không phải trùng ngẫu nhiên):
-
-```
-FF C3 83 FB ?? 7C ?? 4C 8D 5C 24 ??
-```
-
-Target = anchor + 12 byte (bỏ qua `inc ebx; cmp ebx,5; jl` = 7 byte +
-`lea r11,[rsp+0x70]` = 5 byte), trúng `movaps xmm0,xmm6` + `mov rbx,[r11+0x10]`
-(7 byte, đủ chỗ cho JMP tương đối 5 byte).
-
-### Stub được chèn
-
-```asm
-mov   rcx, &WEIGHT_FACTOR          ; địa chỉ hệ số nhân (đọc từ .ini)
-mulss xmm6, dword ptr [rcx]        ; nhân tổng trọng lượng cuối theo % giảm (1 lần)
-movaps xmm0, xmm6                  ; lệnh gốc - copy tổng đã giảm ra làm kết quả
-mov   rbx, qword ptr [r11+0x10]    ; lệnh gốc tiếp theo, chạy lại như cũ
-jmp   <target + 7>                 ; quay lại code gốc (E9 rel32, qua common::codepatch)
-```
-
-`WEIGHT_FACTOR` = `1.0 - WeightReductionPercent/100`, đọc từ
-`WeightMultiplier.ini` **một lần khi DLL load**.
-
-## Trạng thái
-
-| Việc | Trạng thái |
-| --- | --- |
-| RE gốc (AOB pattern, xác nhận chéo qua Zibinha) | Xong (bản C++) |
-| Port sang Rust (`common::codepatch` + `hook.rs`) | Xong, build được |
-| Test trong game (cả UI và roll-type thực tế) | **Chưa** (bản C++ lẫn bản Rust) |
-
-## Rủi ro cần lưu ý khi test
-
-- Đây là patch code sống (ghi đè lệnh CPU đang thực thi) — nếu bản game đã
-  đổi, có thể crash game. Test trước ở nơi an toàn (không giữa 1 trận boss).
-- Kiểm tra log `WeightMultiplier.log` xem có dòng
-  `ERROR: weight-summing-loop anchor pattern not found` không.
-- **Luôn test cả 2 mặt**: số hiển thị trên UI *và* hành vi thực tế (roll,
-  chạy) — bài học từ Lần 2 là 1 hook có thể đúng nửa việc (UI) mà sai nửa
-  còn lại (gameplay), dù không crash và không báo lỗi gì.
-
-## Đổi ini sang `Mode`/`Multiplier`/`FixedValue`, thêm chế độ giá trị cố định (2026-09-14)
-
-Đổi hẳn bộ ini key, không cố giữ tương thích với `WeightReductionPercent`
-cũ (theo yêu cầu người dùng - key mới hoàn toàn, không phải chỉ đổi tên):
-
-- `Mode` (0/1) chọn cách tính - `0` = `Multiplier` (hệ số nhân trực tiếp,
-  thay cho `WeightReductionPercent`: `Multiplier=0.5` ~ giảm 50% cũ,
-  `Multiplier=1.0` = không đổi, `Multiplier=2.0` = tăng gấp đôi, cùng đơn vị
-  với key `Multiplier` của [`runemultiplier`](../runemultiplier)), `1` =
-  `FixedValue` (đặt cứng tải trọng bằng đúng 1 số, bất kể đang mặc gì).
-- **Breaking hoàn toàn** với `WeightReductionPercent` - không phải đổi tên
-  suông, đơn vị cũng đổi (% giảm → hệ số nhân trực tiếp), người dùng cũ
-  phải tự tính lại giá trị nếu nâng cấp.
-
-Implementation: tận dụng đúng 1 điểm hook đã có (`movaps xmm0,xmm6`, chạy
-đúng 1 lần sau khi vòng lặp cộng trọng lượng đã xong - xem mục "Cơ chế" ở
-trên) cho cả 2 mode, không cần thêm điểm patch nào khác như DLL "NoWeight"
-bên thứ 3 (Zibinha) phải làm (hook giữa vòng lặp để set cứng, xem mục
-"Lịch sử tìm offset"). `build_stub()` giờ chọn `mulss xmm6,[rcx]` (mode
-`Multiplier`, giữ nguyên như cũ) hay `movss xmm6,[rcx]` (mode `FixedValue`,
-ghi đè thẳng tổng đã cộng xong) tùy `Mode`, cùng 1 static giá trị
-`WEIGHT_VALUE` (đổi tên từ `WEIGHT_FACTOR`) mang ý nghĩa khác nhau tùy
-mode - không cần 2 static riêng vì chỉ 1 trong 2 được dùng tại 1 thời điểm
-(chọn lúc `install()`, trước khi bake vào stub).
-
-## Thêm hot reload (`ReloadKey`), `[Logging] LogFile`, đổi `InitialDelaySeconds` → `LoadDelay` (2026-09-14)
-
-Bỏ hẳn quyết định thiết kế gốc "cố tình không có hotkey reload" (từng ghi
-trong doc comment đầu `hook.rs`) - theo yêu cầu người dùng, thêm `[General]
-ReloadKey=F5` giống mọi mod khác trong workspace, cộng thêm `[Logging]
-LogFile=true` (đồng bộ tên section/key logging chung, xem README của
-`autoregen`/`sometweaks`/`passiverunes`/`runemultiplier` cùng ngày).
-
-- **Không thêm `fromsoftware-rs`**: mod này vẫn cố tình không phụ thuộc
-  crate đó (xem đầu file) - poll `ReloadKey` bằng `GetAsyncKeyState` thô
-  (`common::input::is_key_pressed`, mới thêm, khai báo `extern "system"`
-  thủ công + `#[link(name = "user32")]`, cùng phong cách
-  `codepatch.rs` đã khai báo `VirtualAlloc`/`VirtualProtect` cho
-  `kernel32`) thay vì `eldenring::util::input::is_key_pressed` (cần đăng ký
-  qua `CSTaskImp`, chỉ mods có `fromsoftware-rs` mới dùng được). Vòng lặp
-  reload chạy trên 1 OS thread thường (`std::thread::sleep` 100ms/lần), y
-  hệt kiểu polling gốc mà `runemultiplier` từng dùng trước khi nó chuyển
-  sang `CSTaskGroupIndex::FrameBegin` (xem README của nó, mục "Bản Rust
-  hiện tại").
-- **Đổi `Mode` lúc đang chạy phức tạp hơn đổi `Multiplier`/`FixedValue`**:
-  giá trị (`Multiplier`/`FixedValue`) hot-reload an toàn vì stub đã cài đọc
-  từ 1 địa chỉ cố định (`WEIGHT_VALUE`) mỗi lần chạy - chỉ cần ghi đè giá
-  trị đó. Nhưng `Mode` chọn **opcode nào** chạy (`mulss` hay `movss`) đã
-  ghi cứng vào code thực thi lúc `install()` - đổi `Mode` lúc runtime cần
-  tự vá lại đúng 4 byte đó (`STUB_MODE_INSTR_ADDR`, qua
-  `codepatch::overwrite_bytes`) - rủi ro y hệt lúc `install()` ban đầu
-  (ghi đè code CPU có thể đang thực thi), chỉ khác là lặp lại theo yêu cầu
-  thay vì chỉ 1 lần. Người dùng đã xác nhận chấp nhận đánh đổi này (câu
-  hỏi "hỗ trợ đổi Mode luôn hay chỉ đổi số" - chọn hỗ trợ đổi Mode luôn).
-- **`catch_unwind` quanh mỗi lần poll** (không phải `run_recurring_safe`
-  kiểu `autoregen`/`sometweaks`): vòng lặp reload chạy trên thread riêng
-  của chính mod, không phải do game gọi vào qua `CSTaskImp` như các mod
-  kia - panic ở đây không có rủi ro phá call stack C++ của game, chỉ cần
-  không làm chết luôn thread reload cho phần còn lại của session.
-- **`InitialDelaySeconds` → `LoadDelay`, đơn vị giây → mili giây** (giá trị
-  mặc định đổi từ `5` thành `5000`, cùng độ trễ thực tế) - khớp quy ước
-  "mili giây" mà mọi key thời gian khác trong workspace đang dùng
-  (`Regen.PerTick.Interval`, `Rune.Passive.Interval`...).
-
-`WeightMultiplier.ini` đổi section: `[General]` (mới, chứa `ReloadKey` +
-`LoadDelay`), `[Features]` (đổi tên từ không-section-cụ-thể, chứa
-`Mode`/`Multiplier`/`FixedValue`), `[Logging]` (mới, chứa `LogFile`).
-
-## `LogFile=false` giờ không tạo file log nữa - sửa trong `common::logger` (2026-09-23)
-
-Người dùng phát hiện (qua PassiveRunes): `LogFile=false` nhưng file `.log`
-vẫn được tạo. Đúng là trước đó `logger::init` được gọi vô điều kiện trong
-`lib.rs` - file luôn tạo, `LogFile` chỉ gate log chi tiết - trái với tên
-key và với cách RiseArcher/RuneMultiplier vốn làm. Người dùng xác nhận hành
-vi đúng: `LogFile=true` mới tạo file; muốn có log sẵn thì deploy với mặc
-định `LogFile=true` (mod này mặc định `true`).
-
-Sửa tập trung trong `shared/src/logger.rs`: `init` chỉ ghi nhớ đường dẫn,
-file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, `LogFile`
-đọc lại mỗi lần ghi - bật/tắt bằng `ReloadKey` có hiệu lực ngay. Comment
-"log is always on" trong `lib.rs` đã bỏ; mô tả key trong ini đổi thành
-"Write WeightMultiplier.log next to the DLL (for troubleshooting). Off = no log
-file". Các mục cũ hơn trong README nói "file log luôn được tạo bất kể
-`LogFile`" giờ đã lỗi thời.
-
-
-## Đường dẫn DLL có ký tự không phải ASCII làm mod bỏ qua ini - sửa `common::dll_dir` (2026-09-24)
-
-Bug phát hiện qua AutoRegen (người dùng ME3, thư mục profile tên tiếng
-Trung): `common::dll_dir()` dùng `GetModuleFileNameA` (code page ANSI) rồi
-giải mã như UTF-8, nên đường dẫn có ký tự không phải ASCII (tiếng Trung,
-tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL, và mod âm
-thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
-`from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
-`dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
-`mods/autoregen/README.md`.
-
-## `ReloadKey` chỉ nhận khi đang ở cửa sổ game - sửa `common::input::is_key_pressed` (2026-09-24)
-
-Phát hiện khi test SoulsTeleport với 2 instance game trên 1 máy:
-`common::input::is_key_pressed` dùng `GetAsyncKeyState(vk) & 1` - bit "đã bấm
-từ lần gọi trước" là cờ chung toàn hệ thống, process nào gọi trước thì xoá
-mất, và phím còn kích hoạt cả khi đang gõ ở ứng dụng khác (vd. bấm `F5` trong
-trình duyệt cũng reload config của mod). Mod này là mod duy nhất (ngoài
-SoulsTeleport, nay đã chuyển sang fromsoftware-rs) dùng hàm đó, vì nó poll
-`ReloadKey` từ 1 thread thường (không có task của game để dùng
-`GetKeyState` như các mod khác).
-
-Sửa trong `shared/src/input.rs`: chỉ poll khi cửa sổ đang focus thuộc chính
-process game; tự giữ trạng thái lên/xuống cho từng phím; lần poll đầu sau khi
-focus lại chỉ ghi nhận trạng thái (không bắn phím đã bấm ở app khác trước
-khi alt-tab về). Vẫn bắt được cú bấm ngắn hơn chu kỳ poll 100ms nhờ bit thấp.
-Hệ quả với người dùng: bấm `ReloadKey` khi đang ở ngoài game sẽ không còn
-reload nữa - đúng với ý định ban đầu.
-
-
-## Dòng lỗi bị gắn nhãn `[INFO ] ERROR: ...` - chuyển sang `logger::error`/`warn` (2026-09-26)
-
-Phát hiện qua 1 báo lỗi trên Nexus (anchor pattern không tìm thấy): log in ra
-`[INFO ] ERROR: weight-summing-loop anchor pattern not found...` - nhãn cấp
-độ nói INFO nhưng nội dung lại là ERROR. Nguyên nhân: `hook.rs` viết từ trước
-khi `common::logger` có `warn`/`error`/`debug`, nên vẫn gọi
-`logger::log("ERROR: ...")`. Đã đổi:
-
-- anchor không tìm thấy, cài hook thất bại, dòng "disabled for this session"
-  → `logger::error` (bỏ chữ "ERROR:" trong message, cột level đã nói rồi).
-- re-patch stub khi đổi `Mode` lúc reload thất bại → `logger::warn`, vì mod
-  vẫn chạy tiếp với `Mode` cũ (không mất tính năng).
-
-Không đổi hành vi, chỉ đổi cấp độ log. Bản thân lỗi anchor của người báo
-chưa rõ nguyên nhân (nghi có DLL giảm trọng lượng khác đã hook đè lên
-`inc ebx`, hoặc khác phiên bản game) - đang chờ họ trả lời.
-
-
-## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
-
-`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
-mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
-thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
-bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
-`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
-
-
-## Log in phiên bản game + danh sách DLL đã nạp, nhận ra mod khác hook đè (2026-09-26)
-
-Tiếp nối báo lỗi "anchor pattern not found" ở mục trên: log cũ không đủ để
-biết người dùng khác phiên bản game hay đang cài thêm 1 mod trọng lượng khác.
-Làm theo kiểu header của MapForGoblins:
-
-- Module mới `common::diag` (`shared/src/diag.rs`): `log_environment()` in
-  1 dòng `Game: eldenring.exe v<file version> base=0x.. size=0x.. ts=0x..` (`ts` =
-  `TimeDateStamp` trong PE header, phân biệt đúng từng build kể cả khi
-  version không đổi), rồi danh sách mọi DLL không nằm trong thư mục Windows (trừ chính exe, đã có ở dòng `Game:`)
-  (tên, version, base, size). Kèm `loaded_modules()`/`module_containing(addr)`.
-  `dll_dir` trong `shared/src/lib.rs` tách phần đọc đường dẫn ra
-  `module_path()` để `diag` dùng chung.
-- `hook::run` gọi `diag::log_environment()` **sau** `LoadDelay`, ngay trước
-  khi quét anchor - gọi từ `DllMain` thì các mod nạp sau chưa có trong danh
-  sách.
-- Khi không thấy `ANCHOR_PATTERN`, quét thêm `FOREIGN_PATCH_PATTERN`
-  (`E9 ?? ?? ?? ?? 7C ?? 4C 8D 5C 24 ??`) - tức `inc ebx; cmp ebx,5` (đúng
-  5 byte) đã bị thay bằng `jmp rel32`, đúng chỗ mà các DLL kiểu "NoWeight"
-  hook vào. Nếu khớp thì log thêm 1 dòng ERROR nói rõ đã bị mod khác hook,
-  kèm tên DLL chứa đích của `jmp` (hoặc "unknown" nếu `jmp` nhảy vào 1 stub
-  cấp phát ngoài mọi module).
-
-Chưa test được trong game (cần 1 mod weight khác để dựng lại tình huống);
-`common::diag` có unit test liệt kê module của chính process test.
-
-Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
-Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
-game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
-cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
-dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
-(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
-tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
-in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
-loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
-dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).
-
-## Version thật trong thuộc tính file DLL (2026-10-05)
-
-Trước đây DLL không có version resource nên Properties → Details trống và
-dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
-trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
-`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
-File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
-`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
-`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
-`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
-là version hiện trong Properties và trong log.
-
-## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
-
-Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
-
-Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng.
+- [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
+- [docs/hook_point.md](docs/hook_point.md): lịch sử tìm điểm hook, stub, tương thích.
+- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus.
