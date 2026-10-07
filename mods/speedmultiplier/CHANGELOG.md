@@ -6,13 +6,13 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
-## [1.2.0]
+## [1.2.0] - 2026-10-06
 
 - Added a separate speed for ladders.
 - Added a condition to apply speeds at a given equip load.
 - Fixed Placidusax's Ruin's laser going out of sync with faster casting.
 
-## [1.1.0]
+## [1.1.0] - 2026-10-03
 
 - Added separate speeds for walking, running and sneaking.
 - Added a separate speed for jumping.
@@ -23,6 +23,6 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 - Added a condition to apply speeds while certain effects are active.
 - Updated the config file to allow more customization.
 
-## [1.0.0]
+## [1.0.0] - 2026-09-29
 
 - Initial release.

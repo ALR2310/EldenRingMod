@@ -6,30 +6,30 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
-## [1.1.4]
+## [1.1.4] - 2026-10-01
 
 - Fixed the game failing to launch with Seamless Co-op.
 - Fixed the Fortune of the Spiritcaller Spirit Ring not working with ER Reforged.
 - Fixed the Spirit-Severing Blade not sending spirits back in ER Reforged.
 
-## [1.1.3]
+## [1.1.3] - 2026-10-01
 
 - Fixed re-using an upgraded Spirit Ash summoning more spirits instead of sending them back.
 
-## [1.1.2]
+## [1.1.2] - 2026-09-30
 
 - Fixed ghost color removal not working with ER Reforged.
 
-## [1.1.1]
+## [1.1.1] - 2026-09-30
 
 - Fixed summoning outside summoning pool areas.
 
-## [1.1.0]
+## [1.1.0] - 2026-09-29
 
 - Added summoning several different Spirit Ashes at once.
 - Added re-summoning spirits without resting.
 - Added summoning spirits outside summoning pool areas.
 
-## [1.0.0]
+## [1.0.0] - 2026-09-29
 
 - Initial release.

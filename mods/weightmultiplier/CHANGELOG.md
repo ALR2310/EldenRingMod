@@ -6,11 +6,11 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
-## [2.0.1]
+## [2.0.1] - 2026-09-24
 
 - Fixed install paths with non-ASCII characters.
 
-## [2.0.0]
+## [2.0.0] - 2026-09-21
 
 - Rewritten from C++ to Rust.
 - Added a fixed-value option.

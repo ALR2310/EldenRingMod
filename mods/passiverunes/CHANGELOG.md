@@ -6,11 +6,11 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
-## [2.1.1]
+## [2.1.1] - 2026-09-24
 
 - Fixed install paths with non-ASCII characters.
 
-## [2.1.0]
+## [2.1.0] - 2026-09-23
 
 - Added runes based on your next level-up cost.
 - Added compound interest on held runes.
