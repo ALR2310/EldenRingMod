@@ -15,4 +15,7 @@ __pycache__/
 
 /.claude/scheduled_tasks.lock
 tmp/
-dumps/
+
+
+dumps/*
+!dumps/seamless-diff/
