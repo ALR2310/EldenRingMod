@@ -26,9 +26,8 @@ EldenRingMod/
 │   └── windowresize/     # WindowResize: kéo viền đổi kích thước cửa sổ Windowed nhỏ hơn mức mặc định
 ├── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
 ├── scripts/         # công cụ chạy được: build-mod.ps1 (build 1 mod → builds/<mod>/), ida/ (IDAPython qua run.ps1), ghidra/ (script tham khảo)
-├── research/        # tài liệu nghiên cứu: <mod>_<chủ đề>.md, tae-ids.md, seamless-diff/ (chỉ văn bản và dữ liệu, không có script)
-├── docs/            # tư liệu xuất bản Nexus: nexus_page.bbcode, logo/thumbnail prompt, nexus-openapi.yaml
-├── dumps/           # database IDA (.i64) theo từng bản exe (git-ignored, tạo lại được nhưng mất ~25 phút/bản)
+├── docs/            # tư liệu dùng chung: nexus-page.bbcode, logo/thumbnail prompt, nexus-openapi.yaml, tae-ids.md
+├── dumps/           # dữ liệu dịch ngược, git-ignored (database IDA ở eldenring/<ver>/, ~25 phút/bản nếu mất), ngoại lệ seamless-diff/ được commit
 └── tmp/             # repo/DLL tải về, file tạm nghiên cứu (git-ignored, xoá được bất kỳ lúc nào)
 ```
 
@@ -47,7 +46,7 @@ Mỗi mod Rust (`mods/autoregen`, `mods/dropmultiplier`, ...) có:
   logic thật nằm trong module riêng của mod (`src/regen/`, ...).
 - `README.md` (trạng thái hiện tại: key, cách hoạt động, giới hạn) + `HISTORY.md`
   (dòng thời gian, mỗi thay đổi 1 dòng) + các phân tích chi tiết ở
-  `research/<mod>_<chủ đề>.md` - quy ước đầy đủ trong `CLAUDE.md`, khuôn mẫu là
+  `mods/<mod>/docs/<chủ đề>.md` - quy ước đầy đủ trong `CLAUDE.md`, khuôn mẫu là
   `mods/dropmultiplier/`. Mod chưa được tách vẫn còn README kiểu nhật ký dài.
 - `DESCRIPTION.bbcode` (mô tả đăng Nexus) khi mod đã publish.
 

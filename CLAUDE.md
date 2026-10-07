@@ -10,12 +10,15 @@ Mỗi mod có 3 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn
   `mods/dropmultiplier/README.md`.
 - `mods/<mod>/HISTORY.md` = dòng thời gian, bảng `Ngày | Thay đổi | Chi
   tiết`, mỗi thay đổi **1 dòng**, mới nhất ở dưới cùng; chuyện nào có phân
-  tích dài thì cột "Chi tiết" link sang `research/`.
-- `research/<mod>_<chủ đề>.md` = phân tích theo chủ đề, viết theo **trạng
-  thái hiện tại** (không viết kiểu nhật ký theo ngày): mở đầu bằng
-  `**Status <ngày>: ...**`, rồi kết luận, bằng chứng, hướng đã thử/bỏ (kèm lý
-  do), tham chiếu code. Công cụ dịch ngược nằm ở `scripts/` (IDA:
-  `scripts/ida/`), không để trong `research/`.
+  tích dài thì cột "Chi tiết" link sang file trong `docs/` của mod.
+- `mods/<mod>/docs/<chủ đề>.md` = phân tích theo chủ đề (vd.
+  `mods/dropmultiplier/docs/materials.md`), viết theo **trạng thái hiện
+  tại** (không viết kiểu nhật ký theo ngày): mở đầu bằng `**Status <ngày>:
+  ...**`, rồi kết luận, bằng chứng, hướng đã thử/bỏ (kèm lý do), tham chiếu
+  code. Chủ đề liên mod hoặc tư liệu dùng chung (bảng TAE id, tư liệu đăng
+  Nexus) nằm ở `docs/` gốc repo. Công cụ dịch ngược nằm ở `scripts/` (IDA:
+  `scripts/ida/`); dữ liệu sinh ra từ dịch ngược nằm ở `dumps/` (git-ignored,
+  ngoại lệ `dumps/seamless-diff/`).
 
 Sau khi hoàn thành một thay đổi đáng kể ở 1 mod (thêm tính năng, đổi ini
 key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
@@ -25,7 +28,7 @@ key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
 2. **Sửa `README.md` tại chỗ** nếu trạng thái, bảng key, cách hoạt động hay
    giới hạn thay đổi (không thêm mục có ngày vào README); sửa mọi đường dẫn
    file/tên key lỗi thời được nhắc tới.
-3. **Viết mới hoặc bổ sung `research/<mod>_<chủ đề>.md`** chỉ khi có phát hiện
+3. **Viết mới hoặc bổ sung `mods/<mod>/docs/<chủ đề>.md`** chỉ khi có phát hiện
    đáng giữ: nguyên nhân gốc, hướng đã thử/bỏ, số liệu, RVA/AOB. Cập nhật dòng
    `Status`, rồi link từ dòng HISTORY và từ README.
 

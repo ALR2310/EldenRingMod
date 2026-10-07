@@ -42,12 +42,12 @@ khi nạp (giữ giá trị người dùng đã chỉnh).
   nguyên). Công thức đầy đủ và các trường hợp biên nằm ở comment đầu file.
 - **Nguyên liệu (`src/materials.rs`):** nhân `lotItemNum0N` (làm tròn, tối thiểu
   1, tối đa 255), phân nhóm từng ô bằng `EquipParamGoods.goodsType` đọc lúc
-  chạy và cờ nhặt. Chi tiết phân loại: [research/dropmultiplier_materials.md](../../research/dropmultiplier_materials.md).
+  chạy và cờ nhặt. Chi tiết phân loại: [docs/materials.md](docs/materials.md).
 - **Hot reload không cộng dồn:** trọng số/số lượng gốc được chụp một lần trước
   mọi chỉnh sửa; mỗi lần áp hoặc reload tính lại từ bản chụp đó.
 - **Duyệt param an toàn:** dùng `common::params::for_each_row_mut` (duyệt theo
   index), không dùng `rows_mut()` của fromsoftware-rs vì panic với regulation
-  bị lệch header: [research/dropmultiplier_convergence_panic.md](../../research/dropmultiplier_convergence_panic.md).
+  bị lệch header: [docs/convergence_panic.md](docs/convergence_panic.md).
 - **Log:** ghi phiên bản game và danh sách DLL đã nạp (`common::diag`, không in
   đường dẫn đầy đủ, ẩn DLL của game/Steam/bản crack).
 
@@ -63,6 +63,6 @@ khi nạp (giữ giá trị người dùng đã chỉnh).
 ## Tài liệu liên quan
 
 - [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
-- [research/dropmultiplier_materials.md](../../research/dropmultiplier_materials.md): thiết kế và phân loại nguyên liệu.
-- [research/dropmultiplier_convergence_panic.md](../../research/dropmultiplier_convergence_panic.md): panic với Convergence và cách sửa.
+- [docs/materials.md](docs/materials.md): thiết kế và phân loại nguyên liệu.
+- [docs/convergence_panic.md](docs/convergence_panic.md): panic với Convergence và cách sửa.
 - [DESCRIPTION.bbcode](DESCRIPTION.bbcode): trang Nexus (kèm changelog đã phát hành).

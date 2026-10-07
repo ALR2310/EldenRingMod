@@ -569,7 +569,7 @@ hành; người dùng tạm dừng hướng này, làm lại sau khi đăng 1.0.
 
 Người dùng muốn tìm hiểu tính năng "gọi nhiều Ash khác nhau cùng lúc" của
 `.docs/Solid Uncapper.dll` (MojoW, C++/MSVC, 2.3.3). Phân tích bằng IDA
-(db tạm trong scratchpad cho DLL; `dumps/ida/2.7.1.0` cho game) - không đổi
+(db tạm trong scratchpad cho DLL; `dumps/eldenring/2.7.1.0` cho game) - không đổi
 code.
 
 Game gốc (2.7.1.0, offset theo `SummonBuddyManager` của fromsoftware-rs):
@@ -1024,7 +1024,7 @@ chạy được với Seamless.
 
 Điều tra:
 - `ersc.dll` (13 MB, không có version resource, SHA256 `FCD11A18...`):
-  database IDA ở `dumps/ida/ersc/fcd11a18/` (gitignore). Chuỗi gần như
+  database IDA ở `dumps/ersc/fcd11a18/` (gitignore). Chuỗi gần như
   đều mã hoá; `ersc\buddy\buddy.cpp` / "seamless buddy system" chỉ là
   cấp slot spirit (65 slot / người chơi, `sub_18008A7D0`).
 - Dump `dumps/eldenring.exe.180280.dmp` (400 MB, lúc lỗi): chữ ký của

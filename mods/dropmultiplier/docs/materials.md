@@ -61,7 +61,7 @@ không có "mạch quặng" hồi lại. Mô phỏng trên CSV vanilla: 1602 ô 
 như Convergence tự phân loại đúng đồ của nó. Tra theo ID đi qua
 `common::params::row_ids::<P>()` chứ không qua `repo.get()`, vì `repo.get()`
 binary search trên chính lookup table gây panic (xem
-`dropmultiplier_convergence_panic.md`).
+`convergence_panic.md`).
 
 ## Công thức và thứ tự áp
 

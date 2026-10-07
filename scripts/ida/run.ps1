@@ -4,16 +4,16 @@
 
 .DESCRIPTION
     Dùng idat (headless): idat -A -S"<script> <args>" -L<log> <db>.i64.
-    Database nằm ở dumps/ida/<version>/eldenring.exe.i64 (version = FileVersion
+    Database nằm ở dumps/eldenring/<version>/eldenring.exe.i64 (version = FileVersion
     của exe, vd. 2.7.1.0 = patch 1.17.1). Output của script ghi vào
-    dumps/ida/<version>/out/ (biến môi trường ER_OUT). Không mở database đang
+    dumps/eldenring/<version>/out/ (biến môi trường ER_OUT). Không mở database đang
     được IDA GUI giữ - đóng GUI trước.
 
 .PARAMETER Script
     Tên file trong scripts/ida/ (vd. decompile.py), có hoặc không có đuôi .py.
 
 .PARAMETER Version
-    Thư mục version trong dumps/ida/ (vd. 2.7.1.0), hoặc `all` để chạy lần lượt
+    Thư mục version trong dumps/eldenring/ (vd. 2.7.1.0), hoặc `all` để chạy lần lượt
     mọi version có .i64. Mặc định: version mới nhất.
 
 .PARAMETER Arguments
@@ -34,7 +34,7 @@ param(
 $ErrorActionPreference = "Stop"
 $Here = $PSScriptRoot
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $Here)
-$IdaRoot = Join-Path $RepoRoot "dumps\ida"
+$IdaRoot = Join-Path $RepoRoot "dumps\eldenring"
 
 $Idat = if ($env:ER_IDAT) { $env:ER_IDAT } else { "D:\Programs\IDA Professional 9.3\idat.exe" }
 if (-not (Test-Path $Idat)) { throw "Không thấy idat.exe ($Idat). Đặt biến môi trường ER_IDAT." }

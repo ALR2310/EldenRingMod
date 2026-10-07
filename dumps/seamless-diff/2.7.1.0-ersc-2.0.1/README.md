@@ -1,7 +1,7 @@
 # What Seamless Co-op patches in the game - ELDEN RING 2.7.1.0 + Seamless 2.0.1
 
 Reference for making mods compatible with Seamless Co-op (`ersc.dll`, SHA256
-`FCD11A18...`, IDA db in `dumps/ida/ersc/fcd11a18/`). `ersc.dll` itself is
+`FCD11A18...`, IDA db in `dumps/ersc/fcd11a18/`). `ersc.dll` itself is
 protected (VM/packer section, imports resolved at run time), so instead of
 reading it, the running game was compared with its exe on disk.
 
@@ -12,7 +12,7 @@ reading it, the running game was compared with its exe on disk.
 | `diff_offline.txt` | Every byte range where the running `eldenring.exe` (code sections + `.rdata`, after relocations) differs from the file on disk - **without** Seamless. |
 | `diff_seamless.txt` | Same, **with** Seamless 2.0.1 loaded. |
 | `seamless_only.json` | Ranges only in a Seamless run = Seamless's patches (363 of them), `[rva, {len, sec, mem, disk}]`. Built from an earlier pair of runs (offline 293 / Seamless 654 ranges). |
-| `seamless_only_ida.txt` | Each of those mapped in IDA (`dumps/ida/2.7.1.0/eldenring.exe.i64`): containing function, the instruction, and for a redirected `call`/`jmp` the original target. `NEAR` = close to the phantom-colour code that was being chased. |
+| `seamless_only_ida.txt` | Each of those mapped in IDA (`dumps/eldenring/2.7.1.0/eldenring.exe.i64`): containing function, the instruction, and for a redirected `call`/`jmp` the original target. `NEAR` = close to the phantom-colour code that was being chased. |
 
 The two `diff_*.txt` here are a later pair of runs (offline 441 / Seamless 794
 ranges) than the one `seamless_only.json` came from - both offline runs carry

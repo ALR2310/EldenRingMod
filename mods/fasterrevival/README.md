@@ -34,7 +34,7 @@ Vì sao làm bản DLL thay vì patch file:
 - Bản build mod gốc trên Nexus lúc tải về (2023-04-15) còn cũ hơn commit
   sửa lỗi đường dẫn output (`8b49722`, 2023-04-22).
 
-Hướng đang cân nhắc (cần IDA, db ở `dumps/ida/2.7.1.0/`):
+Hướng đang cân nhắc (cần IDA, db ở `dumps/eldenring/2.7.1.0/`):
 
 1. Patch TAE trong RAM sau khi game nạp `c0000` (port 1:1 thuật toán gốc).
    Rủi ro: event trỏ vào bảng thời gian dùng chung, sửa thẳng float có
@@ -56,7 +56,7 @@ Cấu trúc: `src/lib.rs` (DllMain, ini, logger, reload), `src/death.rs`
 ## IDA: tìm ra hàm kill, bản thử `FastDeath` (2026-09-28)
 
 Phân tích `eldenring.exe` 2.7.1.0 (db lưu cố định ở
-`dumps/ida/2.7.1.0/eldenring.exe.i64`). Luồng chết của game:
+`dumps/eldenring/2.7.1.0/eldenring.exe.i64`). Luồng chết của game:
 
 1. HP về 0 → bật `ChrIns+0x1C5` bit 7 (`chr_flags1c5.death_flag`).
    `sub_1403F84C0` mỗi frame: hoặc yêu cầu phát animation chết, hoặc (chết

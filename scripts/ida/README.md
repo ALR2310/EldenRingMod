@@ -1,6 +1,6 @@
 # Công cụ IDAPython cho `eldenring.exe`
 
-Bộ script dùng lại được để hỏi database IDA có sẵn (`dumps/ida/<version>/eldenring.exe.i64`)
+Bộ script dùng lại được để hỏi database IDA có sẵn (`dumps/eldenring/<version>/eldenring.exe.i64`)
 những câu lặp đi lặp lại khi viết mod: hàm này làm gì, ai gọi nó, AOB này có
 duy nhất ở mọi bản exe không, field `+0x17C8` bị ai đọc ghi. Mỗi lần chạy mất
 ~15 giây (mở lại database, không phân tích lại).
@@ -11,10 +11,10 @@ duy nhất ở mọi bản exe không, field `+0x17C8` bị ai đọc ghi. Mỗi
 pwsh scripts/ida/run.ps1 <script> [-Version <ver|all>] <tham số...>
 ```
 
-- `-Version`: thư mục trong `dumps/ida/` (vd. `2.7.1.0` = patch 1.17.1,
+- `-Version`: thư mục trong `dumps/eldenring/` (vd. `2.7.1.0` = patch 1.17.1,
   `2.7.0.0` = 1.17, `2.6.2.0` = 1.16.2); `all` chạy lần lượt mọi version;
   bỏ trống = version mới nhất.
-- Output ghi vào `dumps/ida/<version>/out/` (cùng file log `<script>.log`),
+- Output ghi vào `dumps/eldenring/<version>/out/` (cùng file log `<script>.log`),
   không vào git. Địa chỉ trong output đều là **RVA**.
 - Địa chỉ nhập vào: RVA (`1e92100`), VA (`0x141e92100`) hoặc tên symbol. Địa
   chỉ nằm giữa hàm cũng được (vd. địa chỉ crash `exe+0x1E92100`).

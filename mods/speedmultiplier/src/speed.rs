@@ -10,7 +10,7 @@
 //! action suffix). Spells and Ashes of War share the `04xxxx` suffix, so
 //! they're told apart by prefix first: `a400`-`a599` = sorcery/incantation
 //! TAEs, `a600`-`a999` = Sword Arts (minus a few special-weapon movesets
-//! numbered in that range), per `research/tae-ids.md`. Everything else goes by suffix, ranges from SpeedProbe logs -
+//! numbered in that range), per `docs/tae-ids.md`. Everything else goes by suffix, ranges from SpeedProbe logs -
 //! see README (2026-09-29).
 //!
 //! `animation_speed` is never reset by the game (probe test 2), so it's

@@ -49,7 +49,7 @@ trùng), fromsoftware-rs đọc lố 1 phần tử ra vùng nhớ rác, ra index
   (fromsoftware-rs chỉ kiểm tra bằng `debug_assert!`, bản release không có).
 - `describe::<P>()`: in tên resource/struct, paramdef version, số dòng header
   và runtime, để log báo lỗi tự trả lời được.
-- `row_ids::<P>()` (thêm sau, xem `dropmultiplier_materials.md`): đọc ID thẳng
+- `row_ids::<P>()` (thêm sau, xem `materials.md`): đọc ID thẳng
   từ row descriptor, tự đối chiếu data offset với `get_row_by_index`; lệch thì
   trả `None` chứ không ra ID sai.
 
