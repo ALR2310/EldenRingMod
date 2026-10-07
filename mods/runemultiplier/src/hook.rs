@@ -33,14 +33,10 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 
 use eldenring::cs::CSTaskGroupIndex;
-use eldenring::util::input;
 
 use common::config;
-use common::input::parse_virtual_key;
 use common::logger;
 use common::memscan;
-
-const VK_F5: i32 = 0x74;
 
 unsafe extern "system" {
     fn VirtualAlloc(lp_address: *mut c_void, dw_size: usize, fl_allocation_type: u32, fl_protect: u32) -> *mut c_void;
@@ -224,11 +220,10 @@ fn install(debug_log: bool) -> bool {
     true
 }
 
-/// Installs the hook, then watches `ReloadKey` on the game's own
-/// `FrameBegin` task group for the rest of the DLL's lifetime, reloading
-/// `RuneMultiplier.ini` on each press. Meant to run on its own worker thread
-/// spawned from `DllMain`; never returns (except early, if the hook fails to
-/// install).
+/// Installs the hook, then re-reads `Multiplier` every time
+/// [`common::reload`] reloads the ini (it owns the `ReloadKey` watcher and the
+/// "Config reloaded" banner). Meant to run on its own worker thread spawned
+/// from `DllMain`; never returns (except early, if the hook fails to install).
 pub fn run(ini_path: String) {
     init_multiplier();
 
@@ -243,6 +238,11 @@ pub fn run(ini_path: String) {
     let hotkey_name = config::get_string("ReloadKey", "F5");
     logger::log(&format!("Hook active. Press {hotkey_name} in-game to reload RuneMultiplier.ini."));
 
+    // `common::reload` must stay the only watcher of `ReloadKey` (see its module
+    // doc), so this module just follows `RELOAD_GENERATION`.
+    let mut last_seen_generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+    std::thread::spawn(move || common::reload::run(ini_path));
+
     let cs_task = common::task::wait_for_cs_task();
     common::diag::log_environment();
 
@@ -251,16 +251,15 @@ pub fn run(ini_path: String) {
         "RuneMultiplier",
         CSTaskGroupIndex::FrameBegin,
         move |_data: &eldenring::fd4::FD4TaskData| {
-            let reload_key = parse_virtual_key(&config::get_string("ReloadKey", "F5"), VK_F5);
-            if input::is_key_pressed(reload_key) {
-                config::load(&ini_path);
+            let generation = common::reload::RELOAD_GENERATION.load(Ordering::Relaxed);
+            if generation != last_seen_generation {
+                last_seen_generation = generation;
                 init_multiplier();
-                logger::log("Config reloaded");
             }
         },
     );
     if !registered {
-        logger::error("Couldn't register the ReloadKey task, hot reload is off for this session.");
+        logger::error("Couldn't register the reload-follow task, hot reload is off for this session.");
     }
 
     loop {

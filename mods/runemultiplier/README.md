@@ -15,12 +15,14 @@ mặc định.
 | Section | Key | Mặc định | Ý nghĩa |
 |---|---|---|---|
 | `[General]` | `ReloadKey` | `F5` | Phím nạp lại ini. Nhận `F1`-`F24`, một ký tự/số, hoặc mã virtual-key dạng hex (`0x2D`) / decimal |
+| `[General]` | `ReloadBanner` | `true` | Hiện banner "Config reloaded" sau khi reload |
 | `[Settings]` | `Multiplier` | `2.0` | Hệ số nhân lên rune **nhận được**; `1.0` = vanilla, nhỏ hơn 1 để nhận ít đi, số âm để bị trừ rune |
 | `[Logging]` | `LogFile` | `false` | Ghi `RuneMultiplier.log` cạnh DLL (khác phần lớn mod khác, mặc định **tắt**); `false` thì không tạo file. Bật thì log thêm byte gốc tại điểm patch và byte của stub |
 
 Đổi ini rồi bấm `ReloadKey` là có hiệu lực ngay, kể cả đổi chính `ReloadKey`, vì
-phím được đọc lại mỗi frame. Mod **không** dùng `common::reload`, nên không có
-`ReloadBanner`; kết quả reload chỉ hiện trong log (`Config reloaded`).
+phím được đọc lại mỗi frame. Sau khi reload, mod hiện banner "Config reloaded"
+(tắt bằng `ReloadBanner=false`) và ghi dòng log tương ứng. Phím và banner do
+`common::reload` lo, giống các mod khác.
 
 ## Cách hoạt động
 
@@ -34,10 +36,11 @@ phím được đọc lại mỗi frame. Mod **không** dùng `common::reload`, 
   chỉ cập nhật một biến.
 - **Hook thất bại thì mod tắt cho phiên đó** (không tìm thấy neo, không giải
   được `call`, `VirtualAlloc`/`VirtualProtect` lỗi): log ghi lỗi và không patch gì.
-  Khi đó cũng không có reload. Nếu chỉ không đăng ký được task `ReloadKey` thì hook
+  Khi đó cũng không có reload. Nếu chỉ không đăng ký được task theo dõi reload thì hook
   vẫn chạy, chỉ mất hot reload.
-- **Khởi động:** `DllMain` tạo một thread, nạp/tạo ini, mở log, cài hook, chờ
-  `CSTaskImp`, rồi đăng ký task `FrameBegin` đọc `ReloadKey`. Log ghi phiên bản game
+- **Khởi động:** `DllMain` tạo một thread, nạp/tạo ini, mở log, cài hook, chạy
+  watcher `ReloadKey` (`common::reload`), chờ `CSTaskImp`, rồi đăng ký task
+  `FrameBegin` theo dõi mỗi lần reload để cập nhật hệ số. Log ghi phiên bản game
   và danh sách DLL đã nạp (`common::diag`, không in đường dẫn đầy đủ).
 - Chi tiết kỹ thuật, các hướng đã thử và bỏ, cách kiểm tra tương thích:
   [docs/addsoul_hook.md](docs/addsoul_hook.md).

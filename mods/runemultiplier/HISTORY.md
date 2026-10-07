@@ -18,4 +18,5 @@ sử git của `README.md`.
 | 2026-09-26 | Dòng lỗi `[INFO ] ERROR:` chuyển sang `logger::error`; `[INFO ]` thành `[INFO]`; thêm phiên bản game và danh sách DLL vào log (`common::diag`) | |
 | 2026-10-05 | Version thật trong thuộc tính file DLL (`build.rs` + `winresource`) | |
 | 2026-10-07 | Dùng `common::task::wait_for_cs_task` và `run_recurring_safe` thay hai bản chép riêng trong `hook.rs` (-65 dòng); task reload giờ đăng ký bằng AOB của `common::task_hook` thay vì `rva::get()` khoá theo phiên bản game; bỏ dependency `fromsoftware-shared` không còn dùng | |
+| 2026-10-07 | Dùng `common::reload`: thêm banner "Config reloaded" và key `ReloadBanner` (mặc định `true`) như các mod khác; mod chỉ còn theo dõi `RELOAD_GENERATION` để cập nhật hệ số | |
 | 2026-10-07 | Đổi thư mục `crates/` thành `mods/`; tách README thành README + HISTORY + docs/; kiểm tra bằng IDA: mẫu AOB neo duy nhất trên 2.6.2.0, 2.7.0.0, 2.7.1.0 | [docs](docs/addsoul_hook.md) |
