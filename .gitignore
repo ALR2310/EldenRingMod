@@ -3,14 +3,16 @@
 /builds
 /.env
 
-# risearcher: Smithbox project cache (regenerable, machine-specific) and its
-# compiled regulation.bin (regenerated from csv/RiseArcher.MASSEDIT / csv/*.csv)
 .smithbox/
 regulation.bin
 regulation.bin.prev
 *.zip
 
-# Claude Code harness runtime state (session lock, machine/PID-specific) -
-# not project content.
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
 /.claude/scheduled_tasks.lock
-/dumps/
+tmp/
+dumps/
