@@ -1,0 +1,363 @@
+1401ecf95 f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED6A0 | orig=1401ed6a0 sub_1401ED6A0 
+1401ecfda f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED650 | orig=1401ed650 sub_1401ED650 
+1401ed01f f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED6B0 | orig=1401ed6b0 sub_1401ED6B0 
+1401ed064 f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED660 | orig=1401ed660 sub_1401ED660 
+1401ed0a9 f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED680 | orig=1401ed680 sub_1401ED680 
+1401ed0ee f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED670 | orig=1401ed670 sub_1401ED670 
+1401ed133 f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED690 | orig=1401ed690 sub_1401ED690 
+1401ed183 f=1401eccd0(sub_1401ECCD0) len=4 | call    sub_1401ED640 | orig=1401ed640 sub_1401ED640 
+1401f8f88 f=1401f8600(sub_1401F8600) len=4 | call    sub_1401F96C0 | orig=1401f96c0 sub_1401F96C0 
+140255b08 f=140255ab0(sub_140255AB0) len=1 | cmp     dword ptr [rcx+0Ch], 6 | orig= 
+14025875f f=140258700(sub_140258700) len=1 | cmp     dword ptr [rax+0Ch], 6 | orig= 
+14025be50 f=14025be50(sub_14025BE50) len=5 | push    rbx | orig=FUNC START hook 
+14025f5d0 f=14025f5d0(sub_14025F5D0) len=5 | cmp     byte ptr [rcx+0ABDh], 0 | orig=FUNC START hook 
+140260f30 f=140260f30(sub_140260F30) len=5 | mov     [rcx+98h], edx | orig=FUNC START hook 
+1402eb14d f=1402eb100(sub_1402EB100) len=3 | call    sub_1402EC890 | orig=1402ec890 sub_1402EC890 
+140393d90 f=140393d90(sub_140393D90) len=5 | mov     rax, [rcx+10h] | orig=FUNC START hook 
+140394fa0 f=140394fa0(sub_140394FA0) len=5 | mov     [rsp+arg_0], rcx | orig=FUNC START hook 
+1403bc645 f=1403bc5f0(sub_1403BC5F0) len=4 | call    sub_1403BCB20 | orig=1403bcb20 sub_1403BCB20 
+1403bc6ea f=1403bc5f0(sub_1403BC5F0) len=4 | call    sub_1403BCB30 | orig=1403bcb30 sub_1403BCB30 
+1403c10ae f=1403c1030(sub_1403C1030) len=4 | call    sub_1403E8D50 | orig=1403e8d50 sub_1403E8D50 
+1403d69af f=1403d6940(sub_1403D6940) len=4 | call    sub_1404E9FA0 | orig=1404e9fa0 sub_1404E9FA0 
+1403d9b54 f=1403d99f0(sub_1403D99F0) len=4 | call    sub_1404EA360 | orig=1404ea360 sub_1404EA360 
+1403d9b69 f=1403d99f0(sub_1403D99F0) len=2 | inc     ebx | orig= 
+1403ee7b0 f=1403ee7b0(sub_1403EE7B0) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1403f0700 f=1403f0700(sub_1403F0700) len=5 | push    rdi | orig=FUNC START hook 
+1403f0c20 f=1403f0c20(sub_1403F0C20) len=5 | push    rbx | orig=FUNC START hook 
+1403f1c90 f=1403f1c90(sub_1403F1C90) len=5 | mov     [rsp+arg_8], rbx | orig=FUNC START hook NEAR
+1403f59a0 f=1403f59a0(sub_1403F59A0) len=5 | mov     [rcx+1E4h], edx | orig=FUNC START hook 
+1403f6610 f=1403f6610(sub_1403F6610) len=5 | and     byte ptr [rcx+1C9h], 0DFh | orig=FUNC START hook 
+1403f887b f=1403f8770(sub_1403F8770) len=1 | test    al, al | orig= 
+1403f8d19 f=1403f8770(sub_1403F8770) len=4 | call    sub_1403FE7A0 | orig=1403fe7a0 sub_1403FE7A0 
+1403faed0 f=1403faed0(sub_1403FAED0) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1403fc4a0 f=1403fc4a0(sub_1403FC4A0) len=5 | mov     rax, rsp | orig=FUNC START hook 
+140404d34 f=140404c10(sub_140404C10) len=4 | call    sub_1405099B0 | orig=1405099b0 sub_1405099B0 
+140417ea1 f=140417ea0(sub_140417EA0) len=3 | jmp     sub_14036834A | orig=14036834a sub_14036834A 
+140437970 f=140437970(sub_140437970) len=5 | sub     rsp, 28h | orig=FUNC START hook 
+1404379d0 f=1404379d0(sub_1404379D0) len=5 | push    rbx | orig=FUNC START hook 
+140472077 f=0() len=4 | db 1Eh | orig= 
+1404812db f=1404811d0(sub_1404811D0) len=4 | call    sub_140482890 | orig=140482890 sub_140482890 
+140495535 f=1404954b0(sub_1404954B0) len=2 | mov     edx, 500h | orig= 
+14049554c f=1404954b0(sub_1404954B0) len=2 | mov     edi, 50h ; 'P' | orig= 
+140495557 f=1404954b0(sub_1404954B0) len=2 | mov     r8d, 500h; Size | orig= 
+1404a730b f=1404a7280(sub_1404A7280) len=4 | call    sub_1404C85C0 | orig=1404c85c0 sub_1404C85C0 
+1404b7710 f=1404b7710(sub_1404B7710) len=5 | push    rdi | orig=FUNC START hook 
+1404b7e0e f=1404b7ca0(sub_1404B7CA0) len=4 | call    sub_1404BAEA0 | orig=1404baea0 sub_1404BAEA0 
+1404b85b0 f=1404b85b0(sub_1404B85B0) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1404b92b0 f=1404b92b0(sub_1404B92B0) len=5 | mov     [rsp+arg_10], rbx | orig=FUNC START hook 
+1404b941b f=1404b92b0(sub_1404B92B0) len=4 | call    sub_140509200 | orig=140509200 sub_140509200 
+1404b956d f=1404b92b0(sub_1404B92B0) len=3 | call    sub_1403F21B0 | orig=1403f21b0 sub_1403F21B0 
+1404b95aa f=1404b92b0(sub_1404B92B0) len=1 | jnz     short loc_1404B95B4 | orig= 
+1404b95c8 f=1404b92b0(sub_1404B92B0) len=3 | call    sub_140437A80 | orig=140437a80 sub_140437A80 
+1404cf202 f=1404cee70(sub_1404CEE70) len=4 | call    sub_1405099B0 | orig=1405099b0 sub_1405099B0 
+1404dc2e0 f=1404dc2e0(sub_1404DC2E0) len=5 | or      r11d, 0FFFFFFFFh | orig=FUNC START hook 
+1404dc4d0 f=1404dc4d0(sub_1404DC4D0) len=5 | mov     r8, [rdx] | orig=FUNC START hook 
+1404e2b24 f=1404e2990(sub_1404E2990) len=4 | call    sub_140CA6E80 | orig=140ca6e80 sub_140CA6E80 
+1404e2e2f f=1404e2c10(sub_1404E2C10) len=4 | call    sub_140CA81F0 | orig=140ca81f0 sub_140CA81F0 
+1404e6119 f=1404e5af0(sub_1404E5AF0) len=4 | call    sub_1409FA210 | orig=1409fa210 sub_1409FA210 
+14050777e f=140507340(sub_140507340) len=3 | call    sub_14037B190 | orig=14037b190 sub_14037B190 
+14050abeb f=14050abd0(sub_14050ABD0) len=4 | call    sub_140A61B70 | orig=140a61b70 sub_140A61B70 
+14050b580 f=14050b580(sub_14050B580) len=5 | cmp     dword ptr [rcx+1E524h], 0 | orig=FUNC START hook 
+140514011 f=140514010(sub_140514010) len=4 | jmp     sub_1405AF943 | orig=1405af943 sub_1405AF943 
+140554b59 f=140554ae0(sub_140554AE0) len=4 | call    sub_140554F30 | orig=140554f30 sub_140554F30 
+140554b9c f=140554ae0(sub_140554AE0) len=4 | call    sub_140554F00 | orig=140554f00 sub_140554F00 
+140554bdf f=140554ae0(sub_140554AE0) len=4 | call    sub_140554EF0 | orig=140554ef0 sub_140554EF0 
+140554c22 f=140554ae0(sub_140554AE0) len=4 | call    sub_140554F20 | orig=140554f20 sub_140554F20 
+140554c65 f=140554ae0(sub_140554AE0) len=4 | call    sub_140554F10 | orig=140554f10 sub_140554F10 
+140554ca8 f=140554ae0(sub_140554AE0) len=4 | call    sub_140554F40 | orig=140554f40 sub_140554F40 
+140554ceb f=140554ae0(sub_140554AE0) len=4 | call    sub_140554EE0 | orig=140554ee0 sub_140554EE0 
+140554d3c f=140554ae0(sub_140554AE0) len=4 | call    sub_140554F50 | orig=140554f50 sub_140554F50 
+140555357 f=140555240(sub_140555240) len=4 | call    sub_140555630 | orig=140555630 sub_140555630 
+14055539a f=140555240(sub_140555240) len=4 | call    sub_140555670 | orig=140555670 sub_140555670 
+1405553dd f=140555240(sub_140555240) len=4 | call    sub_140555640 | orig=140555640 sub_140555640 
+140555420 f=140555240(sub_140555240) len=4 | call    sub_140555620 | orig=140555620 sub_140555620 
+140555463 f=140555240(sub_140555240) len=4 | call    sub_140555660 | orig=140555660 sub_140555660 
+1405554a6 f=140555240(sub_140555240) len=4 | call    sub_140555650 | orig=140555650 sub_140555650 
+1405554e9 f=140555240(sub_140555240) len=4 | call    sub_140555680 | orig=140555680 sub_140555680 
+14055553a f=140555240(sub_140555240) len=4 | call    sub_140555610 | orig=140555610 sub_140555610 
+14055698a f=1405565e0(sub_1405565E0) len=4 | call    sub_1405D2180 | orig=1405d2180 sub_1405D2180 
+14055f42d f=14055f390(sub_14055F390) len=4 | call    sub_140564A40 | orig=140564a40 sub_140564A40 
+14055f439 f=14055f390(sub_14055F390) len=4 | call    sub_140560EB0 | orig=140560eb0 sub_140560EB0 
+140561c27 f=140561bd0(sub_140561BD0) len=4 | call    sub_14067ADE0 | orig=14067ade0 sub_14067ADE0 
+140561cf3 f=140561bd0(sub_140561BD0) len=4 | call    sub_14067ADE0 | orig=14067ade0 sub_14067ADE0 
+140561d8b f=140561bd0(sub_140561BD0) len=4 | call    sub_1405D2F60 | orig=1405d2f60 sub_1405D2F60 
+140561dfc f=140561bd0(sub_140561BD0) len=4 | call    sub_1405D2F60 | orig=1405d2f60 sub_1405D2F60 
+140563fd4 f=140563cc0(sub_140563CC0) len=4 | call    sub_1405D2F60 | orig=1405d2f60 sub_1405D2F60 
+14057350b f=1405734b0(sub_1405734B0) len=6 | jnz     loc_1405735A8 | orig= 
+140578e50 f=140578e50(sub_140578E50) len=5 | push    rbx | orig=FUNC START hook 
+140579f70 f=140579f70(sub_140579F70) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+14057f0f0 f=14057f0f0(sub_14057F0F0) len=5 | push    rdi | orig=FUNC START hook 
+14057f300 f=14057f300(sub_14057F300) len=5 | mov     rax, rsp | orig=FUNC START hook 
+1405801f0 f=1405801f0(sub_1405801F0) len=5 | push    rdi | orig=FUNC START hook 
+140583d5f f=140583ba0(sub_140583BA0) len=4 | call    sub_140584BA0 | orig=140584ba0 sub_140584BA0 
+14058a0a6 f=14058a000(sub_14058A000) len=6 | jnz     loc_14058A26D | orig= 
+1405929e0 f=1405929e0(sub_1405929E0) len=5 | sub     rsp, 38h | orig=FUNC START hook 
+140595020 f=140595020(sub_140595020) len=5 | sub     rsp, 28h | orig=FUNC START hook 
+1405960b9 f=140595fc0(sub_140595FC0) len=1 | test    al, al | orig= 
+14059610e f=140595fc0(sub_140595FC0) len=4 | call    sub_1409FC2C0 | orig=1409fc2c0 sub_1409FC2C0 
+140598150 f=140598150(sub_140598150) len=5 | push    rbx | orig=FUNC START hook 
+14059a27a f=14059a1e0(sub_14059A1E0) len=2 | call    sub_1405929E0 | orig=1405929e0 sub_1405929E0 
+14059aa60 f=14059aa60(sub_14059AA60) len=5 | mov     [rsp+arg_8], rbx | orig=FUNC START hook 
+14059c5e0 f=0() len=5 | movzx   eax, byte ptr [r8+14h] | orig= 
+14059d0c0 f=14059d0c0(sub_14059D0C0) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+14059ede0 f=14059ede0(sub_14059EDE0) len=5 | mov     rax, rsp | orig=FUNC START hook 
+14059f670 f=14059f670(sub_14059F670) len=5 | push    rbp | orig=FUNC START hook 
+1405aac49 f=1405aabc0(sub_1405AABC0) len=6 | jz      loc_1405AAD36 | orig= 
+1405d1c10 f=1405d1c10(sub_1405D1C10) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1405e55ef f=1405e5590(sub_1405E5590) len=4 | call    sub_1405E5B10 | orig=1405e5b10 sub_1405E5B10 
+1405e5a45 f=1405e57b0(sub_1405E57B0) len=4 | call    sub_1405E5B00 | orig=1405e5b00 sub_1405E5B00 
+1405f5400 f=1405f5400(sub_1405F5400) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1405f6b45 f=1405f6b20(sub_1405F6B20) len=3 | jmp     sub_1403E8DC0 | orig=1403e8dc0 sub_1403E8DC0 
+1405f8a3d f=1405f89c0(sub_1405F89C0) len=4 | call    sub_14067ADE0 | orig=14067ade0 sub_14067ADE0 
+1405f9e10 f=1405f9e10(sub_1405F9E10) len=5 | mov     r8d, [rcx+20h]; Size | orig=FUNC START hook 
+1405fa250 f=1405fa250(sub_1405FA250) len=5 | mov     r8d, [rcx+1Ch] | orig=FUNC START hook 
+1405faa40 f=1405faa40(sub_1405FAA40) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1405fcf95 f=1405fcf10(sub_1405FCF10) len=4 | call    sub_14067ADE0 | orig=14067ade0 sub_14067ADE0 
+140605c18 f=140605ba0(sub_140605BA0) len=4 | call    sub_140605D60 | orig=140605d60 sub_140605D60 
+14060900e f=140608ff0(sub_140608FF0) len=3 | call    sub_14067ADE0 | orig=14067ade0 sub_14067ADE0 
+14060949f f=140609410(sub_140609410) len=4 | call    sub_14067ADE0 | orig=14067ade0 sub_14067ADE0 
+1406095a5 f=140609410(sub_140609410) len=4 | call    sub_140609630 | orig=140609630 sub_140609630 
+14060d216 f=14060d110(sub_14060D110) len=4 | call    sub_14060D8E0 | orig=14060d8e0 sub_14060D8E0 
+14062255a f=0() len=4 | dw 5A83h, 1351h, 0FCCh | orig= 
+14065463b f=140654610(sub_140654610) len=3 | call    sub_1403F4270 | orig=1403f4270 sub_1403F4270 NEAR
+14065a400 f=14065a310(sub_14065A310) len=4 | call    sub_14067B020 | orig=14067b020 sub_14067B020 
+14065a8d7 f=14065a800(sub_14065A800) len=3 | call    sub_140248150 | orig=140248150 sub_140248150 
+14065bc23 f=14065b780(sub_14065B780) len=3 | call    sub_1405F2790 | orig=1405f2790 sub_1405F2790 
+140660bcf f=140660b80(sub_140660B80) len=1 | test    al, al | orig= 
+140660da3 f=140660b80(sub_140660B80) len=13 | call    sub_1409FA5F0 | orig=1409fa5f0 sub_1409FA5F0 
+14067a78e f=14067a6d0(sub_14067A6D0) len=3 | call    sub_1405CC960 | orig=1405cc960 sub_1405CC960 
+14067bab0 f=14067bab0(sub_14067BAB0) len=5 | mov     eax, [rcx] | orig=FUNC START hook 
+14067bd00 f=14067bd00(sub_14067BD00) len=5 | mov     rax, cs:qword_143D6D988 | orig=FUNC START hook 
+14068ee60 f=14068ee60(sub_14068EE60) len=5 | mov     [rsp-8+arg_18], r9d | orig=FUNC START hook 
+1406d49f5 f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D8310 | orig=1406d8310 sub_1406D8310 
+1406d4a39 f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D82C0 | orig=1406d82c0 sub_1406D82C0 
+1406d4a7d f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D82F0 | orig=1406d82f0 sub_1406D82F0 
+1406d4ac1 f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D8300 | orig=1406d8300 sub_1406D8300 
+1406d4b05 f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D82E0 | orig=1406d82e0 sub_1406D82E0 
+1406d4b49 f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D8320 | orig=1406d8320 sub_1406D8320 
+1406d4b8d f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D82D0 | orig=1406d82d0 sub_1406D82D0 
+1406d4bd1 f=1406d4870(sub_1406D4870) len=4 | call    sub_1406D82B0 | orig=1406d82b0 sub_1406D82B0 
+1406d8135 f=1406d80b0(sub_1406D80B0) len=2 | mov     bl, 1 | orig= 
+1406eee0f f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0BF0 | orig=1406f0bf0 sub_1406F0BF0 
+1406eee55 f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0C10 | orig=1406f0c10 sub_1406F0C10 
+1406eee9b f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0C40 | orig=1406f0c40 sub_1406F0C40 
+1406eeee1 f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0C30 | orig=1406f0c30 sub_1406F0C30 
+1406eef27 f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0C00 | orig=1406f0c00 sub_1406F0C00 
+1406eef6d f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0BE0 | orig=1406f0be0 sub_1406F0BE0 
+1406eefb3 f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0BD0 | orig=1406f0bd0 sub_1406F0BD0 
+1406eeff9 f=1406ee1b0(sub_1406EE1B0) len=4 | call    sub_1406F0C20 | orig=1406f0c20 sub_1406F0C20 
+140703f9f f=140703e30(sub_140703E30) len=3 | call    sub_140704C20 | orig=140704c20 sub_140704C20 
+140703fe1 f=140703e30(sub_140703E30) len=4 | call    sub_140704C00 | orig=140704c00 sub_140704C00 
+140704024 f=140703e30(sub_140703E30) len=4 | call    sub_140704C10 | orig=140704c10 sub_140704C10 
+140704068 f=140703e30(sub_140703E30) len=3 | call    sub_140704C50 | orig=140704c50 sub_140704C50 
+1407040aa f=140703e30(sub_140703E30) len=4 | call    sub_140704C30 | orig=140704c30 sub_140704C30 
+1407040ed f=140703e30(sub_140703E30) len=4 | call    sub_140704C40 | orig=140704c40 sub_140704C40 
+140704130 f=140703e30(sub_140703E30) len=4 | call    sub_140704BF0 | orig=140704bf0 sub_140704BF0 
+140704173 f=140703e30(sub_140703E30) len=4 | call    sub_140704BE0 | orig=140704be0 sub_140704BE0 
+14071554a f=140715360(sub_140715360) len=4 | call    sub_140715840 | orig=140715840 sub_140715840 
+140765e80 f=140765e80(sub_140765E80) len=5 | movsx   rax, byte ptr [rcx] | orig=FUNC START hook 
+1407677b9 f=140767770(sub_140767770) len=4 | call    sub_140768280 | orig=140768280 sub_140768280 
+140767881 f=140767800(sub_140767800) len=4 | call    sub_140768290 | orig=140768290 sub_140768290 
+140768142 f=140768000(sub_140768000) len=4 | call    sub_1407682A0 | orig=1407682a0 sub_1407682A0 
+1407711cf f=140771150(sub_140771150) len=4 | call    sub_140776450 | orig=140776450 sub_140776450 
+140771608 f=140771590(sub_140771590) len=4 | call    sub_1407763A0 | orig=1407763a0 sub_1407763A0 
+1407717df f=140771760(sub_140771760) len=4 | call    sub_140776440 | orig=140776440 sub_140776440 
+140771f76 f=140771f00(sub_140771F00) len=4 | call    sub_1407763D0 | orig=1407763d0 sub_1407763D0 
+140772158 f=140772110(sub_140772110) len=4 | call    sub_1407763B0 | orig=1407763b0 sub_1407763B0 
+1407724c0 f=1407721f0(sub_1407721F0) len=4 | call    sub_140776470 | orig=140776470 sub_140776470 
+140772587 f=1407724f0(sub_1407724F0) len=4 | call    sub_1407763F0 | orig=1407763f0 sub_1407763F0 
+140772a0d f=1407724f0(sub_1407724F0) len=4 | call    sub_140776490 | orig=140776490 sub_140776490 
+140772aaf f=140772a50(sub_140772A50) len=4 | call    sub_140776410 | orig=140776410 sub_140776410 
+140772c75 f=140772bf0(sub_140772BF0) len=4 | call    sub_1407763C0 | orig=1407763c0 sub_1407763C0 
+1407736e8 f=1407736a0(sub_1407736A0) len=4 | call    sub_140776460 | orig=140776460 sub_140776460 
+1407738ed f=140773830(sub_140773830) len=4 | call    sub_140776480 | orig=140776480 sub_140776480 
+14077399a f=140773900(sub_140773900) len=4 | call    sub_140776400 | orig=140776400 sub_140776400 
+140774e6a f=140773900(sub_140773900) len=4 | call    sub_140A4E110 | orig=140a4e110 sub_140A4E110 
+140774ebd f=140773900(sub_140773900) len=4 | call    sub_140A4E100 | orig=140a4e100 sub_140A4E100 
+140774f3d f=140773900(sub_140773900) len=4 | call    sub_140A4E050 | orig=140a4e050 sub_140A4E050 
+140775058 f=140774fd0(sub_140774FD0) len=4 | call    sub_140776380 | orig=140776380 sub_140776380 
+14077570d f=1407756b0(sub_1407756B0) len=4 | call    sub_140776430 | orig=140776430 sub_140776430 
+140775c20 f=140775bd0(sub_140775BD0) len=4 | call    sub_1407763E0 | orig=1407763e0 sub_1407763E0 
+140775e5b f=140775df0(sub_140775DF0) len=4 | call    sub_140776420 | orig=140776420 sub_140776420 
+140775f9f f=140775df0(sub_140775DF0) len=4 | call    sub_140776390 | orig=140776390 sub_140776390 
+140779370 f=140779370(sub_140779370) len=5 | mov     [rsp+arg_10], rbp | orig=FUNC START hook 
+14077ae32 f=14077adc0(sub_14077ADC0) len=4 | call    sub_14077B330 | orig=14077b330 sub_14077B330 
+14077b0e4 f=14077adc0(sub_14077ADC0) len=4 | call    sub_14077B340 | orig=14077b340 sub_14077B340 
+140786895 f=1407867d0(sub_1407867D0) len=2 | call    sub_1405D21A0 | orig=1405d21a0 sub_1405D21A0 
+140787207 f=140787160(sub_140787160) len=3 | call    sub_1405D21A0 | orig=1405d21a0 sub_1405D21A0 
+14078728b f=140787160(sub_140787160) len=3 | call    sub_1405D3080 | orig=1405d3080 sub_1405D3080 
+140789b70 f=140789b70(sub_140789B70) len=5 | mov     [rsp+arg_8], rbx | orig=FUNC START hook 
+14078eeb0 f=14078eeb0(sub_14078EEB0) len=5 | push    rbx | orig=FUNC START hook 
+1407a4247 f=1407a4230(sub_1407A4230) len=3 | call    sub_140789E80 | orig=140789e80 sub_140789E80 
+1407a4369 f=1407a4360(sub_1407A4360) len=3 | call    sub_14078B140 | orig=14078b140 sub_14078B140 
+1407e2e00 f=1407e2cb0(sub_1407E2CB0) len=3 | jmp     sub_1402535E0 | orig=1402535e0 sub_1402535E0 
+1407eb13a f=0() len=4 | dw 0E891h, 19B0h, 0B790h | orig= 
+14086510b f=140865090(sub_140865090) len=4 | call    sub_140865580 | orig=140865580 sub_140865580 
+140888083 f=140887c30(sub_140887C30) len=3 | call    sub_14087A4B0 | orig=14087a4b0 sub_14087A4B0 
+1408d29c2 f=1408d2970(sub_1408D2970) len=1 | jle     short loc_1408D29CB | orig= 
+1409d2ae0 f=1409d2ae0(sub_1409D2AE0) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1409d2b70 f=1409d2b70(sub_1409D2B70) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+1409fa290 f=1409fa290(sub_1409FA290) len=5 | push    rbx | orig=FUNC START hook 
+1409fa390 f=1409fa390(sub_1409FA390) len=5 | push    rbx | orig=FUNC START hook 
+1409fc709 f=1409fc2c0(sub_1409FC2C0) len=1 | cmp     dword ptr [rax+0Ch], 6 | orig= 
+1409fc7b0 f=1409fc2c0(sub_1409FC2C0) len=1 | jz      short loc_1409FC7D3 | orig= 
+1409fdac5 f=1409fcfa0(sub_1409FCFA0) len=4 | call    sub_1409FE6E0 | orig=1409fe6e0 sub_1409FE6E0 
+1409fe361 f=1409fe110(sub_1409FE110) len=3 | call    sub_1405922A0 | orig=1405922a0 sub_1405922A0 
+140a64fa0 f=140a64fa0(sub_140A64FA0) len=5 | mov     r8, rcx | orig=FUNC START hook 
+140a84d27 f=140a84580(sub_140A84580) len=4 | call    sub_140A85A50 | orig=140a85a50 sub_140A85A50 
+140a84d6d f=140a84580(sub_140A84580) len=3 | call    sub_140A85A30 | orig=140a85a30 sub_140A85A30 
+140a84db2 f=140a84580(sub_140A84580) len=3 | call    sub_140A85A40 | orig=140a85a40 sub_140A85A40 
+140a84df6 f=140a84580(sub_140A84580) len=4 | call    sub_140A85A20 | orig=140a85a20 sub_140A85A20 
+140a84e3b f=140a84580(sub_140A84580) len=4 | call    sub_140A85A70 | orig=140a85a70 sub_140A85A70 
+140a84e80 f=140a84580(sub_140A84580) len=4 | call    sub_140A85A90 | orig=140a85a90 sub_140A85A90 
+140a84ec5 f=140a84580(sub_140A84580) len=4 | call    sub_140A85A60 | orig=140a85a60 sub_140A85A60 
+140a84f0a f=140a84580(sub_140A84580) len=4 | call    sub_140A85A80 | orig=140a85a80 sub_140A85A80 
+140abb87f f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBC50 | orig=140abbc50 sub_140ABBC50 
+140abb8c3 f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBC70 | orig=140abbc70 sub_140ABBC70 
+140abb907 f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBC90 | orig=140abbc90 sub_140ABBC90 
+140abb94b f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBCC0 | orig=140abbcc0 sub_140ABBCC0 
+140abb98f f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBC60 | orig=140abbc60 sub_140ABBC60 
+140abb9d3 f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBCB0 | orig=140abbcb0 sub_140ABBCB0 
+140abba17 f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBCA0 | orig=140abbca0 sub_140ABBCA0 
+140abba69 f=140abb4b0(sub_140ABB4B0) len=4 | call    sub_140ABBC80 | orig=140abbc80 sub_140ABBC80 
+140ae8f6a f=140ae8dd0(sub_140AE8DD0) len=4 | call    sub_140AE95D0 | orig=140ae95d0 sub_140AE95D0 
+140aed0d0 f=140aed0d0(sub_140AED0D0) len=5 | mov     [rsp+arg_10], r8d | orig=FUNC START hook 
+140af4381 f=140af3be0(sub_140AF3BE0) len=2 | mov     dl, 1 | orig= 
+140af6b16 f=140af6ad0(sub_140AF6AD0) len=2 | cmp     dword ptr [rcx+10h], 4 | orig= 
+140af9098 f=140af9000(sub_140AF9000) len=4 | call    sub_140B04780 | orig=140b04780 sub_140B04780 
+140afae54 f=140afa990(sub_140AFA990) len=3 | call    sub_1402553F0 | orig=1402553f0 sub_1402553F0 
+140afb041 f=140afb010(sub_140AFB010) len=4 | call    sub_140AFE280 | orig=140afe280 sub_140AFE280 
+140b01978 f=140b01760(sub_140B01760) len=4 | call    sub_140B04770 | orig=140b04770 sub_140B04770 
+140b01f70 f=140b01d70(sub_140B01D70) len=4 | call    sub_140B04740 | orig=140b04740 sub_140B04740 
+140b02377 f=140b01fc0(sub_140B01FC0) len=3 | call    sub_140887C30 | orig=140887c30 sub_140887C30 
+140b024bf f=140b01fc0(sub_140B01FC0) len=3 | call    sub_140888140 | orig=140888140 sub_140888140 
+140b02656 f=140b025f0(sub_140B025F0) len=4 | call    sub_140B04720 | orig=140b04720 sub_140B04720 
+140b02f91 f=140b02f60(sub_140B02F60) len=3 | call    sub_140AFEEA0 | orig=140afeea0 sub_140AFEEA0 
+140b032d7 f=140b03170(sub_140B03170) len=4 | call    sub_140B04750 | orig=140b04750 sub_140B04750 
+140b03a84 f=140b038d0(sub_140B038D0) len=4 | call    sub_140B04730 | orig=140b04730 sub_140B04730 
+140b043e1 f=140b04140(sub_140B04140) len=4 | call    sub_140B04760 | orig=140b04760 sub_140B04760 
+140b0658e f=140b05cc0(sub_140B05CC0) len=4 | call    sub_140B06D80 | orig=140b06d80 sub_140B06D80 
+140b065d2 f=140b05cc0(sub_140B05CC0) len=4 | call    sub_140B06D90 | orig=140b06d90 sub_140B06D90 
+140b0769b f=140b07450(sub_140B07450) len=4 | call    sub_140CAFE70 | orig=140cafe70 sub_140CAFE70 
+140b15a5a f=140b15980(sub_140B15980) len=4 | call    sub_140B171A0 | orig=140b171a0 sub_140B171A0 
+140b15e66 f=140b15b40(sub_140B15B40) len=4 | call    sub_140B17180 | orig=140b17180 sub_140B17180 
+140b1674e f=140b15e80(sub_140B15E80) len=4 | call    sub_140B171B0 | orig=140b171b0 sub_140B171B0 
+140b16981 f=140b16840(sub_140B16840) len=4 | call    sub_140B17170 | orig=140b17170 sub_140B17170 
+140b16ae1 f=140b169a0(sub_140B169A0) len=4 | call    sub_140B17190 | orig=140b17190 sub_140B17190 
+140b1a387 f=140b1a200(sub_140B1A200) len=4 | call    sub_140B1CB50 | orig=140b1cb50 sub_140B1CB50 
+140b1a3f8 f=140b1a200(sub_140B1A200) len=4 | call    sub_140B1CB60 | orig=140b1cb60 sub_140B1CB60 
+140b1a7cb f=140b1a5c0(sub_140B1A5C0) len=4 | call    sub_140B1CB80 | orig=140b1cb80 sub_140B1CB80 
+140b1ac70 f=140b1ac10(sub_140B1AC10) len=3 | call    sub_140B1CB40 | orig=140b1cb40 sub_140B1CB40 
+140b1af6f f=140b1ac10(sub_140B1AC10) len=4 | call    sub_140B1CB90 | orig=140b1cb90 sub_140B1CB90 
+140b1afef f=140b1af90(sub_140B1AF90) len=4 | call    sub_140B1CB30 | orig=140b1cb30 sub_140B1CB30 
+140b1c3cc f=140b1c1d0(sub_140B1C1D0) len=4 | call    sub_140B1CB20 | orig=140b1cb20 sub_140B1CB20 
+140b1c5a6 f=140b1c1d0(sub_140B1C1D0) len=4 | call    sub_140B1CB70 | orig=140b1cb70 sub_140B1CB70 
+140b21826 f=140b20f50(sub_140B20F50) len=4 | call    sub_140B24380 | orig=140b24380 sub_140B24380 
+140b21a0b f=140b20f50(sub_140B20F50) len=4 | call    sub_140B24360 | orig=140b24360 sub_140B24360 
+140b23080 f=140b22ee0(sub_140B22EE0) len=4 | call    sub_140B24370 | orig=140b24370 sub_140B24370 
+140b3f4da f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F940 | orig=140b3f940 sub_140B3F940 
+140b3f51d f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F950 | orig=140b3f950 sub_140B3F950 
+140b3f560 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F960 | orig=140b3f960 sub_140B3F960 
+140b3f5a3 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F970 | orig=140b3f970 sub_140B3F970 
+140b3f5e6 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F980 | orig=140b3f980 sub_140B3F980 
+140b3f629 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F990 | orig=140b3f990 sub_140B3F990 
+140b3f66c f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F9A0 | orig=140b3f9a0 sub_140B3F9A0 
+140b3f6af f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F9B0 | orig=140b3f9b0 sub_140B3F9B0 
+140b3f6f2 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F9C0 | orig=140b3f9c0 sub_140B3F9C0 
+140b3f735 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F9D0 | orig=140b3f9d0 sub_140B3F9D0 
+140b3f778 f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F9E0 | orig=140b3f9e0 sub_140B3F9E0 
+140b3f7bb f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3F9F0 | orig=140b3f9f0 sub_140B3F9F0 
+140b3f7fe f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3FA00 | orig=140b3fa00 sub_140B3FA00 
+140b3f84f f=140b3f480(sub_140B3F480) len=4 | call    sub_140B3FA10 | orig=140b3fa10 sub_140B3FA10 
+140b42df9 f=140b42cc0(sub_140B42CC0) len=3 | call    sub_140B433A0 | orig=140b433a0 sub_140B433A0 
+140c4a3df f=140c4a380(sub_140C4A380) len=4 | call    sub_140C4A990 | orig=140c4a990 sub_140C4A990 
+140c4bc41 f=140c4bbd0(sub_140C4BBD0) len=4 | call    sub_140C4C400 | orig=140c4c400 sub_140C4C400 
+140c51fb7 f=140c51f50(sub_140C51F50) len=4 | call    sub_140C525F0 | orig=140c525f0 sub_140C525F0 
+140c52140 f=140c520d0(sub_140C520D0) len=3 | call    sub_140C525E0 | orig=140c525e0 sub_140C525E0 
+140c9764f f=140c97580(sub_140C97580) len=4 | call    sub_140CB0880 | orig=140cb0880 sub_140CB0880 
+140c978b5 f=140c97580(sub_140C97580) len=3 | call    sub_1403A43B0 | orig=1403a43b0 sub_1403A43B0 
+140c9a8c8 f=140c9a870(sub_140C9A870) len=4 | call    sub_140CB07F0 | orig=140cb07f0 sub_140CB07F0 
+140c9ade0 f=140c9ade0(sub_140C9ADE0) len=5 | push    rbx | orig=FUNC START hook 
+140c9bc3a f=140c9bb70(sub_140C9BB70) len=4 | call    sub_140CB07F0 | orig=140cb07f0 sub_140CB07F0 
+140c9c570 f=140c9c570(sub_140C9C570) len=5 | push    rbx | orig=FUNC START hook 
+140c9f1e6 f=140c9f190(sub_140C9F190) len=4 | call    sub_140CB0D60 | orig=140cb0d60 sub_140CB0D60 
+140c9f560 f=140c9f560(sub_140C9F560) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+140c9f722 f=140c9f620(sub_140C9F620) len=4 | call    sub_140CB0C90 | orig=140cb0c90 sub_140CB0C90 
+140ca0c64 f=140ca0b70(sub_140CA0B70) len=6 | jnz     loc_140CA0DEB | orig= 
+140ca3155 f=140ca3030(sub_140CA3030) len=3 | call    sub_140C9AED0 | orig=140c9aed0 sub_140C9AED0 
+140ca3ef5 f=140ca3e60(sub_140CA3E60) len=2 | jz      short loc_140CA3E97 | orig= 
+140ca44cd f=140ca4440(sub_140CA4440) len=4 | call    sub_140CB07F0 | orig=140cb07f0 sub_140CB07F0 
+140ca490b f=140ca4770(sub_140CA4770) len=6 | jnz     loc_140CA4820 | orig= 
+140ca4ff6 f=140ca4ef0(sub_140CA4EF0) len=4 | jmp     sub_140CB0D60 | orig=140cb0d60 sub_140CB0D60 
+140ca7390 f=140ca7390(sub_140CA7390) len=5 | push    rdi | orig=FUNC START hook 
+140cab1b6 f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB820 | orig=140cab820 sub_140CAB820 
+140cab1fa f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB830 | orig=140cab830 sub_140CAB830 
+140cab23e f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB840 | orig=140cab840 sub_140CAB840 
+140cab282 f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB850 | orig=140cab850 sub_140CAB850 
+140cab2c6 f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB880 | orig=140cab880 sub_140CAB880 
+140cab30a f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB890 | orig=140cab890 sub_140CAB890 
+140cab34e f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB860 | orig=140cab860 sub_140CAB860 
+140cab392 f=140cab0d0(sub_140CAB0D0) len=4 | call    sub_140CAB870 | orig=140cab870 sub_140CAB870 
+140cafcb0 f=140cafcb0(sub_140CAFCB0) len=5 | movss   xmm0, dword ptr [rcx+1CCh] | orig=FUNC START hook 
+140cb41a6 f=140cb3d80(sub_140CB3D80) len=1 | test    al, al | orig= 
+140cb41c8 f=140cb3d80(sub_140CB3D80) len=2 | mov     dword ptr [rdi+14h], 41200000h | orig= 
+140cb453d f=140cb4220(sub_140CB4220) len=1 | jnz     short loc_140CB4549 | orig= 
+140cc83a2 f=140cc8340(sub_140CC8340) len=4 | call    sub_140CCA620 | orig=140cca620 sub_140CCA620 
+140cc8517 f=140cc84a0(sub_140CC84A0) len=4 | call    sub_140CCA630 | orig=140cca630 sub_140CCA630 
+140cc8c62 f=140cc8850(sub_140CC8850) len=4 | call    sub_140CCA600 | orig=140cca600 sub_140CCA600 
+140cc9c4f f=140cc9420(sub_140CC9420) len=4 | call    sub_140CCA650 | orig=140cca650 sub_140CCA650 
+140cc9cb8 f=140cc9420(sub_140CC9420) len=4 | call    sub_140CCA5F0 | orig=140cca5f0 sub_140CCA5F0 
+140cc9e95 f=140cc9d70(sub_140CC9D70) len=4 | call    sub_140CCA640 | orig=140cca640 sub_140CCA640 
+140cca18d f=140cc9eb0(sub_140CC9EB0) len=4 | call    sub_140CCA610 | orig=140cca610 sub_140CCA610 
+140d2ad20 f=140d2ad20(sub_140D2AD20) len=5 | push    rdi | orig=FUNC START hook 
+140d30040 f=140d30040(sub_140D30040) len=5 | push    rdi | orig=FUNC START hook 
+140d3b5b0 f=140d3b5b0(sub_140D3B5B0) len=5 | push    rdi | orig=FUNC START hook 
+140d41450 f=140d41450(sub_140D41450) len=5 | push    rbx | orig=FUNC START hook 
+140d41480 f=140d41480(sub_140D41480) len=5 | mov     rax, rcx | orig=FUNC START hook 
+140d43260 f=140d43260(sub_140D43260) len=5 | mov     r8, [rcx+8] | orig=FUNC START hook 
+140d44e20 f=140d44e20(sub_140D44E20) len=5 | push    rbx | orig=FUNC START hook 
+140d46420 f=140d46420(sub_140D46420) len=5 | mov     [rsp+arg_8], edx | orig=FUNC START hook 
+140d4a2e0 f=140d4a2e0(sub_140D4A2E0) len=5 | push    rbp | orig=FUNC START hook 
+140d4a600 f=140d4a600(sub_140D4A600) len=5 | mov     [rsp+arg_0], rbx | orig=FUNC START hook 
+140d523a0 f=140d523a0(sub_140D523A0) len=5 | push    r14 | orig=FUNC START hook 
+140d532f0 f=140d532f0(sub_140D532F0) len=5 | push    rdi | orig=FUNC START hook 
+140d70630 f=140d704a0(sub_140D704A0) len=4 | call    sub_140D71510 | orig=140d71510 sub_140D71510 
+140d70674 f=140d704a0(sub_140D704A0) len=4 | call    sub_140D71500 | orig=140d71500 sub_140D71500 
+140d706b8 f=140d704a0(sub_140D704A0) len=4 | call    sub_140D71530 | orig=140d71530 sub_140D71530 
+140d706fc f=140d704a0(sub_140D704A0) len=4 | call    sub_140D71520 | orig=140d71520 sub_140D71520 
+140d70740 f=140d704a0(sub_140D704A0) len=4 | call    sub_140D714E0 | orig=140d714e0 sub_140D714E0 
+140d70784 f=140d704a0(sub_140D704A0) len=4 | call    sub_140D714F0 | orig=140d714f0 sub_140D714F0 
+140d707c9 f=140d704a0(sub_140D704A0) len=3 | call    sub_140D71540 | orig=140d71540 sub_140D71540 
+140d7081b f=140d704a0(sub_140D704A0) len=3 | call    sub_140D71550 | orig=140d71550 sub_140D71550 
+140dac080 f=140dabde0(sub_140DABDE0) len=4 | call    sub_140DB18D0 | orig=140db18d0 sub_140DB18D0 
+140dac144 f=140dac0a0(sub_140DAC0A0) len=4 | call    sub_140DB18C0 | orig=140db18c0 sub_140DB18C0 
+140dacd9d f=140dac0a0(sub_140DAC0A0) len=4 | call    sub_140DB18F0 | orig=140db18f0 sub_140DB18F0 
+140db0206 f=140db0050(sub_140DB0050) len=4 | call    sub_140DB18E0 | orig=140db18e0 sub_140DB18E0 
+140dbfef2 f=140dbf410(sub_140DBF410) len=4 | call    sub_140DC0D00 | orig=140dc0d00 sub_140DC0D00 
+140df87e1 f=140df85d0(sub_140DF85D0) len=4 | call    sub_140DFA6A0 | orig=140dfa6a0 sub_140DFA6A0 
+140df928e f=140df91e0(sub_140DF91E0) len=4 | call    sub_140DFA680 | orig=140dfa680 sub_140DFA680 
+140df9ae1 f=140df94d0(sub_140DF94D0) len=4 | call    sub_140DFA690 | orig=140dfa690 sub_140DFA690 
+140df9ee0 f=140df94d0(sub_140DF94D0) len=4 | call    sub_140DFA6B0 | orig=140dfa6b0 sub_140DFA6B0 
+140e0a4b2 f=140e0a3a0(sub_140E0A3A0) len=4 | call    sub_140E0A530 | orig=140e0a530 sub_140E0A530 
+140e36156 f=140e35910(sub_140E35910) len=4 | call    sub_140E36BA0 | orig=140e36ba0 sub_140E36BA0 
+140e36348 f=140e35910(sub_140E35910) len=4 | call    sub_140E36BB0 | orig=140e36bb0 sub_140E36BB0 
+140e6631f f=140e662c0(sub_140E662C0) len=4 | call    sub_140E66720 | orig=140e66720 sub_140E66720 
+140e67e1f f=140e67dc0(sub_140E67DC0) len=4 | call    sub_140E683A0 | orig=140e683a0 sub_140E683A0 
+140e7974a f=140e796f0(sub_140E796F0) len=4 | call    sub_140E7A150 | orig=140e7a150 sub_140E7A150 
+140e79cda f=140e79a60(sub_140E79A60) len=4 | call    sub_140E7A160 | orig=140e7a160 sub_140E7A160 
+140e79f06 f=140e79df0(sub_140E79DF0) len=4 | call    sub_140E7A170 | orig=140e7a170 sub_140E7A170 
+140e7b46f f=140e7b2b0(sub_140E7B2B0) len=4 | call    sub_140E7B8F0 | orig=140e7b8f0 sub_140E7B8F0 
+140ea8f95 f=140ea7100(sub_140EA7100) len=4 | call    sub_14055D7C0 | orig=14055d7c0 sub_14055D7C0 
+14125603d f=0() len=19 | dd 869588C0h | orig= 
+1420410c0 f=1420410c0(sub_1420410C0) len=5 | mov     rcx, [rcx] | orig=FUNC START hook 
+142401e99 f=142401cc0(sub_142401CC0) len=4 | call    sub_142404A70 | orig=142404a70 sub_142404A70 
+14240d0d0 f=14240d0d0(sub_14240D0D0) len=5 | mov     [rsp+arg_0], rcx | orig=FUNC START hook 
+142645610 f=142645610(sub_142645610) len=5 | push    rbx | orig=FUNC START hook 
+14266fc40 f=14266fc40(sub_14266FC40) len=5 | cmp     edx, [rcx+10h] | orig=FUNC START hook 
+142a41388 f=0() len=3 | dq offset sub_140495890 | orig= 
+142a5fbe8 f=0() len=3 | dq offset sub_14057F500 | orig= 
+142a7fc78 f=0() len=3 | dq offset sub_140660B80 | orig= 
+142a80720 f=0() len=3 | dq offset sub_1406634F0 | orig= 
+142aea758 f=0() len=3 | dq offset sub_1408C4300 | orig= 
+143279fa8 f=0() len=4 | dq offset sub_14263D5B0 | orig= 
+14327b2f8 f=0() len=4 | dq offset sub_142643440 | orig= 
