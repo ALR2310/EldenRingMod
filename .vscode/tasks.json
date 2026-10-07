@@ -3,7 +3,7 @@
     "tasks": [
         {
             "label": "Cargo: Build AutoRegen (Release)",
-            "detail": "Builds AutoRegen (release), then copies AutoRegen.dll + AutoRegen.ini into build/<crate>/",
+            "detail": "Builds AutoRegen (release), then copies AutoRegen.dll + AutoRegen.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -20,7 +20,7 @@
         },
         {
             "label": "Cargo: Build SomeTweaks (Release)",
-            "detail": "Builds SomeTweaks (release), then copies SomeTweaks.dll + SomeTweaks.ini into build/<crate>/",
+            "detail": "Builds SomeTweaks (release), then copies SomeTweaks.dll + SomeTweaks.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -37,7 +37,7 @@
         },
         {
             "label": "Cargo: Build PassiveRunes (Release)",
-            "detail": "Builds PassiveRunes (release), then copies PassiveRunes.dll + PassiveRunes.ini into build/<crate>/",
+            "detail": "Builds PassiveRunes (release), then copies PassiveRunes.dll + PassiveRunes.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -54,7 +54,7 @@
         },
         {
             "label": "Cargo: Build RuneMultiplier (Release)",
-            "detail": "Builds RuneMultiplier (release), then copies RuneMultiplier.dll + RuneMultiplier.ini into build/<crate>/",
+            "detail": "Builds RuneMultiplier (release), then copies RuneMultiplier.dll + RuneMultiplier.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -71,7 +71,7 @@
         },
         {
             "label": "Cargo: Build WeightMultiplier (Release)",
-            "detail": "Builds WeightMultiplier (release), then copies WeightMultiplier.dll + WeightMultiplier.ini into build/<crate>/",
+            "detail": "Builds WeightMultiplier (release), then copies WeightMultiplier.dll + WeightMultiplier.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -88,7 +88,7 @@
         },
         {
             "label": "Cargo: Build RiseArcher (Release)",
-            "detail": "Builds RiseArcher (release), then copies RiseArcher.dll + RiseArcher.ini into build/<crate>/",
+            "detail": "Builds RiseArcher (release), then copies RiseArcher.dll + RiseArcher.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -105,7 +105,7 @@
         },
         {
             "label": "Cargo: Build DropMultiplier (Release)",
-            "detail": "Builds DropMultiplier (release), then copies DropMultiplier.dll + DropMultiplier.ini into build/<crate>/",
+            "detail": "Builds DropMultiplier (release), then copies DropMultiplier.dll + DropMultiplier.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -122,7 +122,7 @@
         },
         {
             "label": "Cargo: Build InfiniteAilment (Release)",
-            "detail": "Builds InfiniteAilment (release), then copies InfiniteAilment.dll + InfiniteAilment.ini into build/<crate>/",
+            "detail": "Builds InfiniteAilment (release), then copies InfiniteAilment.dll + InfiniteAilment.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -139,7 +139,7 @@
         },
         {
             "label": "Cargo: Build SoulsTeleport (Release)",
-            "detail": "Builds SoulsTeleport (release), then copies SoulsTeleport.dll + SoulsTeleport.ini into build/<crate>/",
+            "detail": "Builds SoulsTeleport (release), then copies SoulsTeleport.dll + SoulsTeleport.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -156,7 +156,7 @@
         },
         {
             "label": "Cargo: Build FasterRevival (Release)",
-            "detail": "Builds FasterRevival (release), then copies FasterRevival.dll + FasterRevival.ini into build/<crate>/",
+            "detail": "Builds FasterRevival (release), then copies FasterRevival.dll + FasterRevival.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -173,7 +173,7 @@
         },
         {
             "label": "Cargo: Build SpeedMultiplier (Release)",
-            "detail": "Builds SpeedMultiplier (release), then copies SpeedMultiplier.dll + SpeedMultiplier.ini into build/<crate>/",
+            "detail": "Builds SpeedMultiplier (release), then copies SpeedMultiplier.dll + SpeedMultiplier.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -190,7 +190,7 @@
         },
         {
             "label": "Cargo: Build SpiritMultiplier (Release)",
-            "detail": "Builds SpiritMultiplier (release), then copies SpiritMultiplier.dll + SpiritMultiplier.ini into build/<crate>/",
+            "detail": "Builds SpiritMultiplier (release), then copies SpiritMultiplier.dll + SpiritMultiplier.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -207,7 +207,7 @@
         },
         {
             "label": "Cargo: Build WindowResize (Release)",
-            "detail": "Builds WindowResize (release), then copies WindowResize.dll + WindowResize.ini into build/<crate>/",
+            "detail": "Builds WindowResize (release), then copies WindowResize.dll + WindowResize.ini into builds/<crate>/",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -224,7 +224,7 @@
         },
         {
             "label": "Cargo: Build All (Release)",
-            "detail": "Runs every per-mod build task - build/<crate>/ holds each mod's .dll + .ini",
+            "detail": "Runs every per-mod build task - builds/<crate>/ holds each mod's .dll + .ini",
             "dependsOrder": "sequence",
             "dependsOn": [
                 "Cargo: Build AutoRegen (Release)",

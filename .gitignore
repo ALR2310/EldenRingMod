@@ -1,6 +1,6 @@
 /.docs
 /target
-/build
+/builds
 /.secrets
 
 # risearcher: Smithbox project cache (regenerable, machine-specific) and its

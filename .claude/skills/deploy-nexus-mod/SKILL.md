@@ -171,7 +171,7 @@ Rồi tự chạy (không cần hỏi lại):
 pwsh -File scripts/build-mod.ps1 -Mod <Mod> -Zip -Version <version đã chốt>
 ```
 
-Kết quả mong đợi: `build/<crate>/<Mod>-<version>.zip` (`<crate>` = tên crate lowercase, vd `build/autoregen/AutoRegen-2.6.0.zip`). Nếu script báo lỗi (build
+Kết quả mong đợi: `builds/<crate>/<Mod>-<version>.zip` (`<crate>` = tên crate lowercase, vd `builds/autoregen/AutoRegen-2.6.0.zip`). Nếu script báo lỗi (build
 fail, thiếu ini...) - dừng lại, báo nguyên văn lỗi cho người dùng, không tự
 sửa code để "cho qua".
 

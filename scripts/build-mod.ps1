@@ -2,8 +2,8 @@
 .SYNOPSIS
     Builds one mod's release DLL and copies it next to its config file
     (<Mod>.toml, or <Mod>.ini for mods still on the ini config) into
-    build/<crate>/ (<crate> = the lowercased Cargo package name, e.g.
-    build/autoregen/), so each mod's output sits in its own easy-to-find
+    builds/<crate>/ (<crate> = the lowercased Cargo package name, e.g.
+    builds/autoregen/), so each mod's output sits in its own easy-to-find
     folder instead of buried among the many other files cargo puts in
     target/release/. Optionally also zips the pair for uploading (e.g. to
     Nexus) into the same folder.
@@ -17,8 +17,8 @@
     crate in this workspace is named.
 
 .PARAMETER Zip
-    When set, also packages build\<crate>\<Mod>.dll + its config
-    file into build\<crate>\<Mod>-<version>.zip. No zip is created unless this switch is
+    When set, also packages builds\<crate>\<Mod>.dll + its config
+    file into builds\<crate>\<Mod>-<version>.zip. No zip is created unless this switch is
     passed - most local test builds don't need one.
 
 .PARAMETER Version
@@ -77,9 +77,9 @@ if (-not (Test-Path $DllPath)) {
     throw "Build succeeded but '$DllPath' wasn't produced - check the crate's [lib] name in Cargo.toml matches '$Mod'."
 }
 
-# One folder per mod (named after the Cargo package): build/autoregen/,
-# build/sometweaks/, ... so each mod's dll/config/zip stay together.
-$BuildDir = Join-Path $RepoRoot "build\$Crate"
+# One folder per mod (named after the Cargo package): builds/autoregen/,
+# builds/sometweaks/, ... so each mod's dll/config/zip stay together.
+$BuildDir = Join-Path $RepoRoot "builds\$Crate"
 New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
 
 $BuildDllPath = Join-Path $BuildDir "$Mod.dll"
@@ -87,7 +87,7 @@ $BuildConfigPath = Join-Path $BuildDir $ConfigName
 Copy-Item $DllPath -Destination $BuildDllPath -Force
 Copy-Item $ConfigPath -Destination $BuildConfigPath -Force
 
-Write-Host "==> build\$Crate\$Mod.dll + build\$Crate\$ConfigName ready" -ForegroundColor Green
+Write-Host "==> builds\$Crate\$Mod.dll + builds\$Crate\$ConfigName ready" -ForegroundColor Green
 
 if ($Zip) {
     $ZipVersion = $Version
