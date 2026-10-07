@@ -15,8 +15,8 @@ Mỗi mod có 3 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn
   `mods/dropmultiplier/docs/materials.md`), viết theo **trạng thái hiện
   tại** (không viết kiểu nhật ký theo ngày): mở đầu bằng `**Status <ngày>:
   ...**`, rồi kết luận, bằng chứng, hướng đã thử/bỏ (kèm lý do), tham chiếu
-  code. Chủ đề liên mod hoặc tư liệu dùng chung (bảng TAE id, tư liệu đăng
-  Nexus) nằm ở `docs/` gốc repo. Công cụ dịch ngược nằm ở `scripts/` (IDA:
+  code. Chủ đề liên mod và tư liệu dùng chung (trang Nexus, prompt
+  logo/thumbnail, spec Nexus API) nằm ở `docs/` gốc repo. Công cụ dịch ngược nằm ở `scripts/` (IDA:
   `scripts/ida/`); dữ liệu sinh ra từ dịch ngược nằm ở `dumps/` (git-ignored,
   ngoại lệ `dumps/seamless-diff/`).
 

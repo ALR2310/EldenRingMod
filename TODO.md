@@ -58,7 +58,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Cần: log anim id khi niệm phép này; hướng sửa có thể là giữ 1.0 cho anim đó (hoặc nhóm phép tương tự), cần xem có phép nào khác bị không
 - [x] Thang: nhóm `Player.Ladder` (đuôi `028000`-`028999`: leo lên/xuống, trượt, đánh/đá trên thang) - xong 2026-10-06, mặc định 1.0; đã test trong game, hoạt động
 - [ ] Hệ số tốc độ đánh riêng cho từng loại vũ khí (Nexus, InvertedButt, 2026-10-01)
-  - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `docs/tae-ids.md`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
+  - Prefix TAE của đòn đánh đã theo loại vũ khí (`a020`-`a062` loại chung, `a1xx`/`a2xx` vũ khí đặc biệt - xem `mods/speedmultiplier/docs/tae-ids.md`) - có thể map prefix → loại vũ khí; cần nghĩ cách đặt key ini cho gọn (~40 loại)
 - [ ] Tốc độ giương cung / nạp nỏ (Nexus, TechnoMonkeyDJ, 2026-10-04: "bow draw speed and crossbows reload rate"; đã trả lời "sẽ xem")
   - **Đã được hỗ trợ qua `Attack`** (người dùng test 2026-10-06, `Attack = 5`): cung `a044_036000`/`036010` và nỏ `a046_037101`/`037110`/`037120`/`037131` đều ra nhóm `Attack` và tăng tốc đúng (dòng log đầu mỗi anim còn ghi tốc độ cũ 1.00 vì log trước khi áp - bình thường). Anim rút/đổi vũ khí (`a014_029090`, `a016_029090`, `029030`) là `Other`, không phải giương cung
   - Người dùng chốt 2026-10-06: **tạm không làm** - tách cung/nỏ khỏi `Attack` thực chất là bắt đầu tách `Attack` theo từng loại vũ khí (cùng việc với mục "theo loại vũ khí" ở trên), quá lớn so với yêu cầu chỉ có cung/nỏ; cung/nỏ đã chạy qua `Attack`
