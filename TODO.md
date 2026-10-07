@@ -1,7 +1,8 @@
 # TODO
 
 Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
-`mods/<mod>/README.md` (nhật ký phát triển), không ghi ở đây.
+`mods/<mod>/HISTORY.md` và `mods/<mod>/docs/` (mod chưa tách tài liệu: trong
+`README.md` kiểu nhật ký), không ghi ở đây.
 
 ## SpiritMultiplier
 
@@ -74,6 +75,8 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
   - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
+- [ ] Sửa comment lỗi thời trong `mods/speedmultiplier/src/speed.rs::group_of`: nhánh Placidusax's Ruin còn ghi "Not tested in game yet" dù đã test 2026-10-06 (hết lệch)
+
 ## DropMultiplier
 
 - [ ] Tăng số lượng nhặt được từ cây/hoa hái trên bản đồ (Erdleaf Flower, Trina's Lily...) - không phải đồ quái rơi (Nexus, LordSoulOfNito, 2026-10-02)
@@ -81,6 +84,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
 
 ## RuneMultiplier
 
+- [ ] Test trong game: reload qua `common::reload` + banner `ReloadBanner` và task đăng ký qua `common::task` (2026-10-07, mới build, chưa chạy thử). Chỉnh `Multiplier`, bấm phím reload, xem banner + log `Config reloaded` + hệ số đổi thật. Bullet changelog nằm ở `[Unreleased]` của `mods/runemultiplier/CHANGELOG.md`, phát hành sau khi test xong
 - [ ] Nghiên cứu: hệ số riêng cho từng nguồn rune, vd. giết địch x2, bán đồ x0.5 (Nexus, julianpratt, 2026-08-31)
   - Hiện tại 1 hệ số chung cho mọi nguồn (giết địch, dùng item, bán đồ...) - cần xem các nguồn có đi qua cùng 1 hàm cộng rune không, và có phân biệt được nguồn tại đó không
 
@@ -99,3 +103,10 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - (1) Dòng khởi động ghi phiên bản: `Activating <Mod> <ver>...` từ `env!("CARGO_PKG_VERSION")` - mỗi mod 1 dòng (Cargo.toml đã khớp Nexus)
   - (2) Nhúng version resource bằng `build.rs` (crate `winresource`) điền từ `CARGO_PKG_VERSION` → "Loaded modules" và Properties của file hiện đúng, các mod thấy phiên bản của nhau trong log; cần `rc.exe` (Visual Studio Build Tools); làm helper chung để mỗi mod chỉ thêm `build.rs` ngắn
 - [x] Đồng bộ `version` trong `Cargo.toml` của các mod cũ với version mới nhất trên Nexus - xong 2026-10-02 (autoregen 2.6.3, runemultiplier 1.0.4, weightmultiplier 2.0.1, passiverunes 2.1.1, dropmultiplier 1.1.0, infiniteailment 1.0.1, soulsteleport 1.1.0; risearcher 2.0.0 theo changelog local - trang Nexus ghi 1.17.1, API không có changelog)
+
+- [ ] **`ReloadKey` lọt sang instance khác khi chạy 2 game trên cùng desktop**: `common::reload` (`shared/src/reload.rs`) và `mods/autoregen/src/regen.rs` gọi thẳng `eldenring::util::input::is_key_pressed` (`GetKeyState` từ luồng task của game, thấy phím cả desktop) nên bấm 1 phím reload cả 2 bản game. SoulsTeleport đã tránh bằng `common::input::is_key_pressed` (kiểm tra cửa sổ foreground thuộc process). Hướng sửa: `common::reload` và autoregen dùng bản `common::input`. Chi tiết: `mods/soulsteleport/docs/position_exchange.md`. Người dùng thường chỉ chạy 1 instance nên hiếm gặp
+- [ ] Mod còn duyệt param qua lookup table của fromsoftware-rs (`rows()`/`rows_mut()`/`get_mut()`, có thể panic với regulation lệch header như Convergence): `risearcher` (`weapon.rs`, `bullet.rs`), `infiniteailment` (`status_effect.rs`), cùng `sometweaks` (đã bỏ, bỏ qua). Chuyển sang `common::params::for_each_row_mut` / `row_ids` (xem `mods/dropmultiplier/docs/convergence_panic.md`); cần test trên regulation thật
+- [ ] `ReloadBanner` cho `weightmultiplier`: hiện chưa có banner vì mod cố ý không dùng `fromsoftware-rs` / task của game (vòng reload riêng bằng `common::input`). Thêm banner nghĩa là chuyển sang `common::reload`, bỏ quyết định thiết kế đó - người dùng cần quyết định
+- [ ] Tài liệu: tách nốt README theo khuôn mới (README chung + `HISTORY.md` + `docs/`, quy ước ở `CLAUDE.md`): `spiritmultiplier` (~1165 dòng), `autoregen` (~1447 dòng); `sometweaks` (đã bỏ) chỉ cần README ngắn ghi "đã bỏ" hoặc giữ vài file `docs/` - chưa quyết. Đã tách xong 10 mod còn lại
+- [ ] Dọn tham chiếu `.docs/...` đã lỗi thời (thư mục này đã đổi thành `tmp/`, một phần sang `docs/`): ~47 dòng / 15 file, chủ yếu comment + README của `sometweaks` và `spiritmultiplier`
+- [ ] `mods/risearcher/project.json` (Smithbox) đang được commit và chứa đường dẫn game của máy (`GameRoot`): cân nhắc git-ignore hoặc đổi thành file mẫu
