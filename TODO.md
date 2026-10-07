@@ -44,6 +44,13 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Hiện tại (đã sửa Seamless hook getter `animation_speed`, `src/seamless.rs`): mỗi máy chỉ tăng tốc nhân vật của chính nó; nhân vật người khác trên máy mình chạy anim ở tốc độ thường → lệch hình ảnh (test 2 game qua Sandboxie, join `Attack = 5`: host thấy đòn chậm hơn). Sát thương/thời điểm trúng vẫn do máy người ra đòn quyết định - chỉ là hình ảnh
   - Hướng B: mỗi máy gửi `animation_speed` hiện tại của nhân vật mình (khi đổi) cho người khác qua Steam P2P (như `soulsteleport/src/steam.rs`, kênh riêng); máy nhận áp đúng giá trị đó cho ChrIns của người gửi (ghép Steam ID ↔ ChrIns như `soulsteleport/src/party.rs`; stub trả giá trị nhận được cho các ChrIns đó). Đúng cả khi 2 bên cấu hình khác nhau; trễ ~1 ping ở đầu mỗi đòn. Cần cả 2 bên cài mod
   - Đã cân nhắc hướng A (áp cấu hình của mình cho người khác, không cần mạng - chỉ đúng khi 2 bên cùng cấu hình) - người dùng chọn B
+- [x] Nghiên cứu: tăng tốc nạn nhân của critical (backstab / riposte) cho khớp với `Player.Critical` (Nexus, Pietrasante, 2026-10-07: "enemies doubling over in pain" khi player đã xong đòn; đã trả lời "có kế hoạch")
+  - Phát hiện từ fromsoftware-rs (chưa thử trong game): `ChrIns.modules.throw` (`CSChrThrowModule`, `throw.rs`) có `throw_node.throw_state` = `InThrowAttacker(3)` / `InThrowTarget(4)` / `DeathAttacker(5)` / `DeathTarget(6)` → nhận diện đúng nạn nhân mà không cần lọc kẻ địch theo team/anim; `throw_target` (usize, "cần xác minh") có thể trỏ từ kẻ tấn công sang nạn nhân
+  - **Đã xác nhận bằng log 2026-10-07** (backstab `a020_031710`, riposte `a020_031700`, cùng số): người chơi `0→3→5→0`, nạn nhân `0→4→6→0`; 3→5 và 4→6 xảy ra gần như cùng lúc ngay đầu đòn, nạn nhân về 0 sau người chơi ~1-2 giây (đúng chỗ "lệch nhịp" người dùng thấy). Nạn nhân luôn anim `a004_043000` (con test)
+  - Đã code 2026-10-07 (`speed.rs::sync_victims`, chưa test với `Critical` khác 1): nạn nhân (state 4/6) ghi theo tốc độ hiện tại của người chơi, giữ giá trị cuối khi đuôi nạn nhân dài hơn, trả 1.0 khi hết túm. **Chưa hỗ trợ Seamless** (stub getter chỉ cho 2 con trỏ player/Torrent - nạn nhân vẫn đọc 1.0, không hại)
+  - Còn cần test: đặt `Critical = 1.5`, backstab + riposte, xem nạn nhân có khớp không / có giật không; boss, quái lớn; người chơi bị túm ngược lại (không đụng - chỉ xử lý nạn nhân khi người chơi là bên tấn công)
+  - (ghi chú thiết kế gốc) Hướng làm: mỗi frame duyệt `WorldChrMan.chr_sets` / `ChrSet::characters()`; nếu `throw_state` là 4 hoặc 6 và người chơi là bên tấn công (`main_player` có `throw_state` 3/5) thì ghi `animation_speed` của nạn nhân = tốc độ đang áp cho `Critical` của người chơi; trả về 1.0 khi hết túm (game không tự reset `animation_speed`). Không cần key mới: nạn nhân luôn theo `Critical`
+  - Cần test: (1) log `throw_state` của cả 2 bên khi backstab/riposte để xác nhận số; (2) pair anim có thể đồng bộ theo 1 timeline (ghi 2 phía khác nhau gây lệch) - thử đặt cùng giá trị; (3) Seamless: thêm nạn nhân vào `set_own` của stub, máy khách không ghi kẻ địch của host
 - [ ] Nghiên cứu: chỉnh tốc độ cho kẻ địch (Nexus, bloodaxis hỏi 2026-10-05: "an enemy only value"; đã trả lời "chưa chắc khả thi"; chưa rõ muốn tăng hay làm chậm, mọi kẻ địch hay chỉ boss)
   - bloodaxis kể đã thử làm kiểu tương tự qua HKS script của game (giống chế độ slow/turbo của Reforged) nhưng bỏ ý tưởng đó - hướng ghi `animation_speed` bên dưới là hướng khác
   - Khả thi về kỹ thuật: giống Torrent (`speed.rs`) - ghi `chr.modules.behavior.animation_speed`; danh sách nhân vật lấy từ `WorldChrMan.chr_sets` / `ChrSet::characters()` (`world_chr_man.rs:365`)
@@ -75,7 +82,7 @@ Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
   - Mỗi frame duyệt `chr.special_effect.entries()` trước khi chọn giá trị trong `speed.rs::apply`
   - Không làm "reload khi load khu vực" (override áp theo frame nên không cần); `HideReloadMessage` cân nhắc sau
 
-- [ ] Sửa comment lỗi thời trong `mods/speedmultiplier/src/speed.rs::group_of`: nhánh Placidusax's Ruin còn ghi "Not tested in game yet" dù đã test 2026-10-06 (hết lệch)
+- [x] Sửa comment lỗi thời trong `mods/speedmultiplier/src/speed.rs::group_of`: nhánh Placidusax's Ruin còn ghi "Not tested in game yet" dù đã test 2026-10-06 (hết lệch)
 
 ## DropMultiplier
 

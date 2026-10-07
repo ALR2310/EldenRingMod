@@ -19,3 +19,4 @@ sử git của `README.md`.
 | 2026-10-05 | Version thật trong thuộc tính file DLL (`build.rs` + `winresource`) | |
 | 2026-10-06 | 1.2.0: nhóm thang, điều kiện equip load trong `[[Override]]`, sửa tia Placidusax's Ruin lệch nhịp | [docs](docs/action_groups.md) |
 | 2026-10-07 | Đổi thư mục `crates/` thành `mods/`; tách README thành README + HISTORY + docs/; bảng TAE chuyển vào `docs/`; kiểm tra bằng IDA: mẫu AOB của phần Seamless duy nhất trên 2.6.2.0, 2.7.0.0, 2.7.1.0 | [docs](docs/seamless.md) |
+| 2026-10-07 | Nạn nhân của backstab/riposte chạy theo tốc độ `Critical` của người chơi (trước đây chỉ người chơi nhanh nên kẻ địch lệch nhịp, Nexus Pietrasante); nhận diện bằng `throw_state` | [docs](docs/critical_victim.md) |

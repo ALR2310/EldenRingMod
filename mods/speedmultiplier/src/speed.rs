@@ -18,7 +18,7 @@
 
 use std::time::Duration;
 
-use eldenring::cs::{CSTaskGroupIndex, ChrIns, ChrLoadStatus, WorldChrMan};
+use eldenring::cs::{CSTaskGroupIndex, CSThrowNode, ChrIns, ChrLoadStatus, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
 use common::logger;
@@ -116,7 +116,7 @@ pub fn group_of(anim_id: i32) -> Group {
     // 045110 spawns a laser on the game's own clock, so a sped-up anim
     // desyncs from it (Nexus, bloodaxis, 2026-10-04; probe 2026-10-06:
     // 045100 -> 045110, ~6 s). Out of Cast, into Other (1 by default); the
-    // wind-up 045100 stays Cast. Not tested in game yet.
+    // wind-up 045100 stays Cast. Tested in game 2026-10-06: no more desync.
     if prefix == 451 && (45_110..=45_119).contains(&(anim_id % 1_000_000)) {
         return Group::Other;
     }
@@ -198,6 +198,63 @@ pub fn torrent(world_chr_man: &mut WorldChrMan) -> Option<&mut ChrIns> {
     None
 }
 
+/// The raw `throw_state` of a character, or None when it has no throw node.
+/// Read as a `u32` so a value outside the known enum isn't undefined behavior.
+pub fn throw_state(chr: &ChrIns) -> Option<u32> {
+    let module = &*chr.modules.throw;
+    // `throw_node` is the third pointer-sized field (vftable, owner, node).
+    let node = unsafe { *(module as *const _ as *const usize).add(2) };
+    if node == 0 {
+        return None;
+    }
+    let node = node as *const CSThrowNode;
+    Some(unsafe { std::ptr::addr_of!((*node).throw_state).cast::<u32>().read_volatile() })
+}
+
+/// `throw_state` values (probe 2026-10-07, backstab and riposte alike): the
+/// attacker goes 1, 3 (`InThrowAttacker`), then 5 (`DeathAttacker`) if the
+/// victim dies; the victim 2, 4 (`InThrowTarget`), then 6 (`DeathTarget`).
+/// Back to 0 a second or two after the attacker's.
+fn is_throw_attacker(state: u32) -> bool {
+    matches!(state, 1 | 3 | 5)
+}
+
+fn is_throw_victim(state: u32) -> bool {
+    matches!(state, 2 | 4 | 6)
+}
+
+/// The victim of a critical hit is paired with the player's anim, so it
+/// runs at the player's speed (else a sped-up player is done while the
+/// enemy is still doubling over). Only while the player is still in the
+/// throw: the victim's state outlasts the attacker's by a second or two
+/// (getting up after a hit it survives), and that part must stay at 1. The
+/// victim's own anim time can't be used instead: its `time_act` only holds
+/// a 0.033 s placeholder (`a004_043000`), the pair anim runs elsewhere.
+/// `sped` holds the victims written to, to put them back to 1.
+fn sync_victims(world_chr_man: &WorldChrMan, sped: &mut Vec<usize>) {
+    let speed = world_chr_man.main_player.as_ref().and_then(|player| {
+        throw_state(&player.chr_ins)
+            .filter(|&state| is_throw_attacker(state))
+            .map(|_| clamped(player.chr_ins.modules.behavior.animation_speed))
+    });
+    let mut seen = Vec::new();
+    for set in world_chr_man.chr_sets.iter().flatten() {
+        for chr in set.characters() {
+            let key = chr as *const ChrIns as usize;
+            let victim = throw_state(chr).is_some_and(is_throw_victim);
+            match speed {
+                Some(speed) if victim => {
+                    set_animation_speed(chr, speed);
+                    seen.push(key);
+                }
+                _ if sped.contains(&key) => set_animation_speed(chr, 1.0),
+                _ => {}
+            }
+        }
+    }
+    *sped = seen;
+}
+
 /// A multiplier clamped to a sane range (0 or negative would freeze or
 /// reverse the animation).
 fn clamped(value: f32) -> f32 {
@@ -217,7 +274,11 @@ fn set_animation_speed(chr: &mut ChrIns, value: f32) {
 
 /// One frame. `last_active` is the set of active overrides from the last
 /// frame, so a change is logged once instead of every frame.
-fn apply(last_active: &mut Vec<usize>, seamless_fix: &mut crate::seamless::GetterFix) {
+fn apply(
+    last_active: &mut Vec<usize>,
+    seamless_fix: &mut crate::seamless::GetterFix,
+    sped_victims: &mut Vec<usize>,
+) {
     if common::player::main_player_chr_ins_ptr().is_none() {
         return;
     }
@@ -277,6 +338,9 @@ fn apply(last_active: &mut Vec<usize>, seamless_fix: &mut crate::seamless::Gette
         };
         set_animation_speed(chr, value);
     }
+    // Not under Seamless: the getter stub only passes the player's and
+    // Torrent's speed through (see `seamless.rs`), others read 1.
+    sync_victims(world_chr_man, sped_victims);
     if let Some(torrent) = torrent(world_chr_man) {
         let master = clamped(speeds.torrent.all);
         let value = if (master - 1.0).abs() > 0.0001 {
@@ -293,7 +357,10 @@ pub fn run() {
     common::task::run_recurring_safe(cs_task, "Speed", CSTaskGroupIndex::ChrIns_PreBehavior, {
         let mut last_active = Vec::new();
         let mut seamless_fix = crate::seamless::GetterFix::new();
-        move |_data: &eldenring::fd4::FD4TaskData| apply(&mut last_active, &mut seamless_fix)
+        let mut sped_victims = Vec::new();
+        move |_data: &eldenring::fd4::FD4TaskData| {
+            apply(&mut last_active, &mut seamless_fix, &mut sped_victims)
+        }
     });
     logger::log("Speed: per-action multipliers active.");
     loop {

@@ -10,28 +10,54 @@
 //!   `max_equip_load` when either changes (2026-10-06) - to find which
 //!   `weight_type` value is which equip load class, for a `Load`
 //!   condition in `[[Override]]` (see TODO).
+//! - `SpeedProbe` also logs every character whose `CSChrThrowModule`
+//!   `throw_state` changes (2026-10-07; every value, 0 and 1-2 included):
+//!   `InThrowAttacker` 3 / `InThrowTarget` 4 / `DeathAttacker` 5 /
+//!   `DeathTarget` 6 - to find when the victim of a backstab or riposte
+//!   gets up (see TODO).
 //!
 //! Until 2026-09-29 this also force-wrote 4 candidate speed fields at 3
 //! points in the frame (`ProbeForceKey`/`ProbeForceValue`/
 //! `ProbeForceStage`); removed once `animation_speed` was settled on, see
 //! README "Gỡ phần ép field của SpeedProbe".
 
+use std::collections::HashMap;
 use std::time::Duration;
 
-use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
+use eldenring::cs::{CSTaskGroupIndex, ChrIns, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
 use common::logger;
 
 use crate::config;
 
-use crate::speed::{current_anim_id, group_of, torrent, torrent_group_of};
+use crate::speed::{current_anim_id, group_of, throw_state, torrent, torrent_group_of};
 
 fn fmt_anim(id: i32) -> String {
     if id < 0 {
         return format!("{id}");
     }
     format!("a{:03}_{:06}", id / 1_000_000, id % 1_000_000)
+}
+
+fn log_throw(last: &mut HashMap<usize, u32>, who: &str, chr: &ChrIns) {
+    let Some(state) = throw_state(chr) else {
+        return;
+    };
+    let key = chr as *const ChrIns as usize;
+    // First sight of a character: remember it, only log when it isn't idle.
+    let before = last.insert(key, state).unwrap_or(0);
+    if state == before {
+        return;
+    }
+    let anim = current_anim_id(chr);
+    logger::log(&format!(
+        "THROW {who} {key:#x} npc={} state {before}->{state} flags={:#x} {} speed={:.2}",
+        chr.npc_param_id,
+        chr.modules.throw.flags.0,
+        fmt_anim(anim),
+        chr.modules.behavior.animation_speed,
+    ));
 }
 
 pub fn run() {
@@ -49,6 +75,7 @@ pub fn run() {
     let mut last_torrent = i32::MIN;
     let mut last_sp_effects: Vec<i32> = Vec::new();
     let mut last_weight: (u32, f32) = (u32::MAX, f32::NAN);
+    let mut last_throw: HashMap<usize, u32> = HashMap::new();
     // PostPhysics: after `speed.rs` (PreBehavior) has set this frame's value.
     common::task::run_recurring_safe(
         cs_task,
@@ -109,6 +136,16 @@ pub fn run() {
                         chr.modules.data.fp,
                         chr.modules.data.max_fp,
                     ));
+                }
+            }
+            if speed_probe {
+                if let Some(player) = world_chr_man.main_player.as_ref() {
+                    log_throw(&mut last_throw, "player", &player.chr_ins);
+                }
+                for set in world_chr_man.chr_sets.iter().flatten() {
+                    for chr in set.characters() {
+                        log_throw(&mut last_throw, "chr", chr);
+                    }
                 }
             }
             if let Some(chr) = torrent(world_chr_man) {

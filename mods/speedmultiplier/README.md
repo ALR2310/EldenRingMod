@@ -70,6 +70,7 @@ Code: [src/speed.rs](src/speed.rs) (phân nhóm và ghi tốc độ), [src/confi
 - [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
 - [docs/animation_speed_research.md](docs/animation_speed_research.md): các "núm" tốc độ, SpeedProbe, giới hạn của game.
 - [docs/action_groups.md](docs/action_groups.md): phân nhóm hành động.
+- [docs/critical_victim.md](docs/critical_victim.md): kẻ địch bị backstab/riposte chạy theo tốc độ của người chơi.
 - [docs/config_toml.md](docs/config_toml.md): cấu hình TOML, ghi đè theo điều kiện, migration.
 - [docs/seamless.md](docs/seamless.md): sự cố và cách sửa với Seamless Co-op.
 - [docs/tae-ids.md](docs/tae-ids.md): bảng ID TAE của Elden Ring.
