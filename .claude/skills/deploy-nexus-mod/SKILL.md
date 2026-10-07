@@ -56,8 +56,8 @@ API Nexus không trả về dữ liệu changelog nào cho mod này) thì coi l�
 `sometweaks` **chưa có trên Nexus** nên không có entry - không đưa vào
 danh sách chọn ở Bước 1, không tự đoán ID nếu người dùng nhắc tới nó.
 
-`game_domain` luôn là `eldenring`. API key ở `.secrets/nexus_api_key.txt`
-(đã gitignore). Nếu `manifest.json` có vẻ lỗi thời (VD version không khớp
+`game_domain` luôn là `eldenring`. API key ở biến `NEXUS_API_KEY` trong `.env`
+(đã gitignore, chỉ dùng nội bộ). Nếu `manifest.json` có vẻ lỗi thời (VD version không khớp
 `CLAUDE.md` ở gốc repo, mục "Đối chiếu changelog thật trên Nexus Mods...")
 - ưu tiên đọc lại `manifest.json` làm chuẩn vì nó được chính skill này cập
 nhật liên tục, còn `CLAUDE.md` chỉ là bảng tham khảo tĩnh.
@@ -88,8 +88,8 @@ không suy đoán từ `name`.
 2. Gọi API v1 lấy changelog THẬT (luôn gọi mới, không tin dữ liệu cũ trong
    context từ trước đó trong hội thoại):
    ```bash
-   API_KEY=$(cat .secrets/nexus_api_key.txt)
-   curl -sS -H "apikey: $API_KEY" \
+   set -a; . <(tr -d '\r' < .env); set +a   # nạp NEXUS_API_KEY
+   curl -sS -H "apikey: $NEXUS_API_KEY" \
      "https://api.nexusmods.com/v1/games/eldenring/mods/<game_scoped_id>/changelogs.json"
    ```
    **Cố tình dùng v1, không phải v3** cho bước đọc này - đã kiểm tra
@@ -181,7 +181,7 @@ sửa code để "cho qua".
    sẵn trong `manifest.json`. Chỉ gọi lại API để xác nhận nếu nghi ngờ đã
    lỗi thời (hiếm khi đổi):
    ```bash
-   curl -sS -H "apikey: $API_KEY" \
+   curl -sS -H "apikey: $NEXUS_API_KEY" \
      "https://api.nexusmods.com/v3/games/eldenring/mods/<game_scoped_id>"
    ```
    Lấy `.data.id` - nếu khác với `internalId` trong manifest, cập nhật lại
@@ -189,7 +189,7 @@ sửa code để "cho qua".
 
 6. Liệt kê mod file (update group) hiện có, chọn đúng cái cần thêm version:
    ```bash
-   curl -sS -H "apikey: $API_KEY" "https://api.nexusmods.com/v3/mods/<id>/files"
+   curl -sS -H "apikey: $NEXUS_API_KEY" "https://api.nexusmods.com/v3/mods/<id>/files"
    ```
    Nếu có nhiều hơn 1 file khả dĩ (hiếm với các mod đơn giản trong repo
    này) - hỏi người dùng chọn, không tự đoán.
@@ -220,7 +220,7 @@ sửa code để "cho qua".
 
 9. Tạo upload session:
    ```bash
-   curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
+   curl -sS -X POST -H "apikey: $NEXUS_API_KEY" -H "Content-Type: application/json" \
      -d "{\"size_bytes\": $size_bytes, \"filename\": \"<zip_filename>\", \"md5\": \"$md5_hex\"}" \
      "https://api.nexusmods.com/v3/uploads"
    ```
@@ -254,10 +254,10 @@ sửa code để "cho qua".
 
 11. Finalise rồi poll tới khi sẵn sàng:
     ```bash
-    curl -sS -X POST -H "apikey: $API_KEY" \
+    curl -sS -X POST -H "apikey: $NEXUS_API_KEY" \
       "https://api.nexusmods.com/v3/uploads/<upload_id>/finalise"
     # poll:
-    curl -sS -H "apikey: $API_KEY" "https://api.nexusmods.com/v3/uploads/<upload_id>"
+    curl -sS -H "apikey: $NEXUS_API_KEY" "https://api.nexusmods.com/v3/uploads/<upload_id>"
     # lặp lại vài giây/lần tới khi data.state == "available"
     ```
 
@@ -288,7 +288,7 @@ sửa code để "cho qua".
     gửi lên được) để tự động tick "set as primary file" ngay lúc tạo
     version, không cần vào tay trang Nexus chỉnh lại sau khi publish:
     ```bash
-    curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
+    curl -sS -X POST -H "apikey: $NEXUS_API_KEY" -H "Content-Type: application/json" \
       -d "{\"upload_id\": \"<upload_id>\", \"name\": \"<Mod>\", \"version\": \"<version>\", \"file_category\": \"main\", \"update_mod_version\": true, \"primary_mod_manager_download\": true, \"description\": \"<theo quy tắc số dòng changelog ở trên; vd > 3 dòng: See the changelog for details.\nMod files may be detected as false positives by antivirus software.>\"}" \
       "https://api.nexusmods.com/v3/mod-files/<mod_file_id>/versions"
     ```
@@ -296,7 +296,7 @@ sửa code để "cho qua".
 13. Đẩy changelog (cộng dồn - chỉ gọi đúng 1 lần cho version này, gọi lại
     sẽ bị lặp dòng vì API là additive):
     ```bash
-    curl -sS -X POST -H "apikey: $API_KEY" -H "Content-Type: application/json" \
+    curl -sS -X POST -H "apikey: $NEXUS_API_KEY" -H "Content-Type: application/json" \
       -d "{\"version\": \"<version>\", \"changelog\": \"<changelog text, mỗi bullet 1 dòng, phân cách bằng newline (\\\\n)>\"}" \
       "https://api.nexusmods.com/v3/mods/<id>/changelogs"
     ```

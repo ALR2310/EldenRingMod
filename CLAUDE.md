@@ -47,8 +47,8 @@ trên Nexus, 2 thứ có thể lệch nhau).
 Cách gọi:
 
 ```bash
-API_KEY=$(cat .secrets/nexus_api_key.txt)
-curl -sS -H "apikey: $API_KEY" \
+set -a; . <(tr -d '\r' < .env); set +a   # nạp NEXUS_API_KEY
+curl -sS -H "apikey: $NEXUS_API_KEY" \
   "https://api.nexusmods.com/v1/games/eldenring/mods/<mod_id>/changelogs.json"
 ```
 
@@ -66,7 +66,9 @@ Mod ID theo từng mod trong workspace này (game domain luôn là `eldenring`):
 - `speedmultiplier` → 11173 (Speed Multiplier)
 - `windowresize` → **chưa có, chưa đăng lên Nexus**
 
-Key API cá nhân của người dùng lưu ở `.secrets/nexus_api_key.txt` (đã
+Key API cá nhân của người dùng lưu ở biến `NEXUS_API_KEY` trong `.env` ở
+gốc repo (mẫu: `.env.example`; chỉ dùng nội bộ cho quy trình phát hành,
+không mod nào đọc nó lúc chạy/build; đã
 gitignore, không commit). Nếu API trả về thiếu 1 vài version cũ so với thực
 tế trên trang web (đã xảy ra 1 lần, 2026-09-03) - đó là do giới hạn của
 API, không phải version đó không tồn tại - hỏi lại người dùng xác nhận
