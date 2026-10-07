@@ -44,7 +44,8 @@ Mỗi mod Rust (`mods/autoregen`, `mods/dropmultiplier`, ...) có:
   đây là nguồn sự thật duy nhất cho cấu hình mặc định.
 - `src/lib.rs` mỏng: chỉ có `DllMain` + gọi `common::config`/`common::logger`,
   logic thật nằm trong module riêng của mod (`src/regen/`, ...).
-- `README.md` (trạng thái hiện tại: key, cách hoạt động, giới hạn) + `HISTORY.md`
+- `README.md` (mô tả chung: cách hoạt động, giới hạn; cấu hình chỉ ở mức khái niệm,
+  chi tiết ở chú thích `.ini`) + `HISTORY.md`
   (dòng thời gian, mỗi thay đổi 1 dòng) + các phân tích chi tiết ở
   `mods/<mod>/docs/<chủ đề>.md` - quy ước đầy đủ trong `CLAUDE.md`, khuôn mẫu là
   `mods/dropmultiplier/`. Mod chưa được tách vẫn còn README kiểu nhật ký dài.

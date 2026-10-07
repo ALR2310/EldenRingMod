@@ -1,24 +1,22 @@
 # FasterRevival
 
-> **v1.0.0** · Nexus mod 11160 · **đã phát hành**, test trong game (2026-09-28)
+> Nexus mod 11160 · **đã phát hành** · đã test trong game
 
 Mod DLL cho Elden Ring: **rút ngắn thời gian từ lúc nhân vật hết máu tới khi
 hồi sinh**, không sửa file animation (`.anibnd` / `.tae`). Hồi sinh sau chết
 thường từ 12.2-14.4s (vanilla) còn khoảng **4.2-4.7s**. Mod **luôn bật**, cài
 vào là chạy, không có gì để chỉnh.
 
-## Cấu hình (`FasterRevival.ini`)
+## Cấu hình
 
-File mẫu nhúng trong DLL (`include_str!`). Không có hot reload.
+Mod **luôn bật**, không có công tắc; file `FasterRevival.ini` cạnh DLL (tự tạo nếu thiếu) chỉ có hai việc, và **đổi ini cần khởi động lại game** (không có hot reload):
 
-| Section     | Key          | Mặc định | Ý nghĩa                                                                                    |
-| ----------- | ------------ | -------- | ------------------------------------------------------------------------------------------ |
-| `[Debug]`   | `DeathProbe` | `false`  | Log vết animation chết (anim ID, play time, độ dài) mỗi 100ms trong lúc chết, để chẩn đoán |
-| `[Logging]` | `LogFile`    | `true`   | Ghi `FasterRevival.log` cạnh DLL; `false` thì không tạo file                               |
+- chế độ dò animation chết, ghi vết (anim ID, play time, độ dài) vào log để chẩn đoán;
+- ghi log.
 
-Mỗi lần chết luôn có các dòng log `Died`, `Killed early`, `Death registered by
-the game: +X ms`, `Respawned: X ms after HP hit 0`, nên so sánh thời gian
-không cần bật `DeathProbe`.
+Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`FasterRevival.ini`](FasterRevival.ini); file mẫu này được nhúng vào DLL nên là nguồn sự thật duy nhất, README không lặp lại để khỏi lệch.
+
+Mỗi lần chết luôn có các dòng log `Died`, `Killed early`, `Death registered by the game: +X ms`, `Respawned: X ms after HP hit 0`, nên so sánh thời gian không cần bật chế độ dò animation.
 
 ## Cách hoạt động
 

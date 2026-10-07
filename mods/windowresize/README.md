@@ -1,24 +1,25 @@
 # WindowResize
 
-> **v1.0.0** · **không đăng lên Nexus, dùng nội bộ** · đã test trong game
+> **không đăng lên Nexus, dùng nội bộ** · đã test trong game
 
 Mod DLL cho Elden Ring: cho phép **kéo viền để đổi kích thước cửa sổ** ở chế
 độ Windowed, nhỏ hơn mức 800x450 mà menu độ phân giải của game cho chọn. Làm
 cho nhu cầu cá nhân; ban đầu định đăng Nexus nhưng đã bỏ ý định đó (2026-10-07),
 nên mod chỉ dùng nội bộ và không có mod ID, không có bản phát hành.
 
-## Cấu hình (`WindowResize.ini`)
+## Cấu hình
 
-File cạnh DLL, tự tạo nếu thiếu; log ở `WindowResize.log`. **Đổi ini cần khởi
-động lại game** (mod không có hot reload).
+Cấu hình trong `WindowResize.ini` cạnh DLL (tự tạo nếu thiếu). Có thể chỉnh:
 
-| Section | Key | Mặc định | Ý nghĩa |
-|---|---|---|---|
-| `[Window]` | `Resizable` | `true` | Bật/tắt viền kéo resize (chỉ ở chế độ Windowed) |
-| `[Window]` | `Width` / `Height` | trống | Kích thước vùng hình (pixel thật) đặt khi game khởi động; trống cả 2 = giữ kích thước của game, điền 1 = cái còn lại theo tỉ lệ |
-| `[Window]` | `AspectWidth` / `AspectHeight` | `16` / `9` | Khoá tỉ lệ vùng hình khi kéo; `0` ở 1 trong 2 = kéo tự do |
-| `[Window]` | `MinWidth` / `MinHeight` | `160` / `90` | Kích thước vùng hình nhỏ nhất (pixel thật) |
-| `[Logging]` | `LogFile` | `true` | Ghi `WindowResize.log` cạnh DLL |
+- bật/tắt viền kéo resize (chỉ ở chế độ Windowed);
+- kích thước vùng hình đặt khi game khởi động (để trống thì giữ kích thước của game);
+- khoá tỉ lệ vùng hình khi kéo, hoặc kéo tự do;
+- kích thước vùng hình nhỏ nhất;
+- ghi log để chẩn đoán.
+
+Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`WindowResize.ini`](WindowResize.ini); file mẫu này được nhúng vào DLL nên là nguồn sự thật duy nhất, README không lặp lại để khỏi lệch.
+
+**Đổi ini cần khởi động lại game** (mod không có hot reload).
 
 ## Cách hoạt động
 

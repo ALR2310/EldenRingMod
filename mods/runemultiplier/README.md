@@ -1,28 +1,23 @@
 # RuneMultiplier
 
-> **v1.0.4** · Nexus mod 10630 · **đã phát hành** (1.0.0 đến 1.0.4), cập nhật cho ER 1.17.1
+> Nexus mod 10630 · **đã phát hành**
 
 Mod DLL cho Elden Ring: **nhân hệ số cấu hình được lên số rune nhận được từ mọi
 nguồn** (giết quái, nhặt/dùng item, bán đồ...). Rune **chi tiêu** (lên cấp, mua
 đồ) không bị ảnh hưởng. Chỉ một hook duy nhất, patch thẳng vào hàm cộng rune
 thấp nhất của game (`AddSoul_Call`).
 
-## Cấu hình (`RuneMultiplier.ini`)
+## Cấu hình
 
-File mẫu nhúng trong DLL (`include_str!`), là nguồn sự thật duy nhất cho giá trị
-mặc định.
+Cấu hình trong `RuneMultiplier.ini` cạnh DLL (tự tạo nếu thiếu). Có thể chỉnh:
 
-| Section | Key | Mặc định | Ý nghĩa |
-|---|---|---|---|
-| `[General]` | `ReloadKey` | `F5` | Phím nạp lại ini. Nhận `F1`-`F24`, một ký tự/số, hoặc mã virtual-key dạng hex (`0x2D`) / decimal |
-| `[General]` | `ReloadBanner` | `true` | Hiện banner "Config reloaded" sau khi reload |
-| `[Settings]` | `Multiplier` | `2.0` | Hệ số nhân lên rune **nhận được**; `1.0` = vanilla, nhỏ hơn 1 để nhận ít đi, số âm để bị trừ rune |
-| `[Logging]` | `LogFile` | `false` | Ghi `RuneMultiplier.log` cạnh DLL (khác phần lớn mod khác, mặc định **tắt**); `false` thì không tạo file. Bật thì log thêm byte gốc tại điểm patch và byte của stub |
+- hệ số nhân lên rune nhận được (nhỏ hơn 1 để nhận ít đi, số âm để bị trừ rune);
+- phím nạp lại cấu hình và việc hiện banner sau khi nạp;
+- ghi log để chẩn đoán (mặc định tắt, khác phần lớn mod khác).
 
-Đổi ini rồi bấm `ReloadKey` là có hiệu lực ngay, kể cả đổi chính `ReloadKey`, vì
-phím được đọc lại mỗi frame. Sau khi reload, mod hiện banner "Config reloaded"
-(tắt bằng `ReloadBanner=false`) và ghi dòng log tương ứng. Phím và banner do
-`common::reload` lo, giống các mod khác.
+Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`RuneMultiplier.ini`](RuneMultiplier.ini); file mẫu này được nhúng vào DLL nên là nguồn sự thật duy nhất, README không lặp lại để khỏi lệch.
+
+Đổi ini rồi bấm phím reload là có hiệu lực ngay, kể cả đổi chính phím reload, vì phím được đọc lại mỗi frame. Sau khi reload, mod hiện banner "Config reloaded" (tắt được trong ini) và ghi dòng log tương ứng. Phím và banner do `common::reload` lo, giống các mod khác.
 
 ## Cách hoạt động
 

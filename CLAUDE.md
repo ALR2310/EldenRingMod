@@ -4,10 +4,13 @@
 
 Mỗi mod có 4 loại tài liệu, mỗi loại 1 vai trò, không trộn lẫn:
 
-- `mods/<mod>/README.md` = **trạng thái hiện tại** (không phải nhật ký):
-  version, Nexus ID, trạng thái test; bảng key cấu hình; cách hoạt động;
-  giới hạn; link tới CHANGELOG, HISTORY và docs. Khuôn mẫu:
-  `mods/dropmultiplier/README.md`.
+- `mods/<mod>/README.md` = **mô tả chung, ít đổi** (không phải nhật ký): Nexus
+  ID và trạng thái (đã phát hành / nội bộ / đã bỏ), mod làm gì, cấu hình ở mức
+  khái niệm, cách hoạt động, giới hạn; link tới CHANGELOG, HISTORY và docs.
+  **Không** ghi bảng key, giá trị mặc định hay số phiên bản: tên key và mặc
+  định nằm ở chú thích của file `.ini` (nguồn sự thật duy nhất), phiên bản ở
+  `CHANGELOG.md` và `Cargo.toml`. Số liệu hay đổi (số dòng param, RVA, bảng
+  tương thích) để ở `docs/`. Khuôn mẫu: `mods/dropmultiplier/README.md`.
 - `mods/<mod>/CHANGELOG.md` = ghi chú phát hành cho **người dùng cuối**, theo
   từng version (mới nhất ở trên); mục `## [Unreleased]` gom các thay đổi chưa
   phát hành. Mỗi bullet 1 dòng ngắn, văn bản thuần không định dạng, nói điều
@@ -34,9 +37,10 @@ key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
    vì sao (1-2 câu, đặc biệt nếu sửa 1 hiểu lầm/bug trong thiết kế trước đó).
 2. **Nếu người dùng nhìn thấy thay đổi đó** (tính năng, sửa lỗi, đổi hành vi):
    thêm 1 bullet vào `## [Unreleased]` trong `CHANGELOG.md`.
-3. **Sửa `README.md` tại chỗ** nếu trạng thái, bảng key, cách hoạt động hay
-   giới hạn thay đổi (không thêm mục có ngày vào README); sửa mọi đường dẫn
-   file/tên key lỗi thời được nhắc tới.
+3. **Sửa `README.md` tại chỗ** chỉ khi cách hoạt động, giới hạn hay trạng thái
+   (đã phát hành / nội bộ / đã bỏ) thay đổi. Đổi key hay giá trị mặc định chỉ cần
+   sửa chú thích trong `.ini`, không đụng README (không thêm mục có ngày); sửa
+   đường dẫn file lỗi thời được nhắc tới.
 4. **Viết mới hoặc bổ sung `mods/<mod>/docs/<chủ đề>.md`** chỉ khi có phát hiện
    đáng giữ: nguyên nhân gốc, hướng đã thử/bỏ, số liệu, RVA/AOB. Cập nhật dòng
    `Status`, rồi link từ dòng HISTORY và từ README.

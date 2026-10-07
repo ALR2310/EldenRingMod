@@ -1,31 +1,22 @@
 # DropMultiplier
 
-> **v1.1.0** · Nexus mod 11075 · **đã phát hành**, test trong game (1.17 vanilla, 1.16.2 + Convergence)
+> Nexus mod 11075 · **đã phát hành** · đã test trong game
 
 Mod DLL cho Elden Ring chỉnh hai thứ: **tỉ lệ rơi đồ của quái** (`ItemLotParam_enemy`)
 và **số lượng nguyên liệu** nhận được mỗi lần nhặt (`ItemLotParam_enemy` +
 `ItemLotParam_map`). Cấu hình trong `DropMultiplier.ini`, bấm `ReloadKey` để
 nạp lại mà không cần khởi động lại game.
 
-## Cấu hình (`DropMultiplier.ini`)
+## Cấu hình
 
-File mẫu nhúng trong DLL (`include_str!`), là nguồn sự thật duy nhất cho giá
-trị mặc định. Key có sẵn trong file người dùng không bị ghi đè khi nâng cấp.
+Cấu hình trong `DropMultiplier.ini` cạnh DLL (tự tạo nếu thiếu; khi nâng cấp, key mới được thêm vào file có sẵn mà không ghi đè giá trị đã chỉnh). Có thể chỉnh:
 
-| Section | Key | Mặc định | Ý nghĩa |
-|---|---|---|---|
-| `[General]` | `ReloadKey` | `F5` | Phím nạp lại ini (chỉ hoạt động khi cửa sổ game đang focus) |
-| `[General]` | `ReloadBanner` | `true` | Hiện banner "Config reloaded" sau khi reload |
-| `[Drop]` | `Mode` | `0` | `0` = nhân tỉ lệ rơi của từng món; `1` = ép tỉ lệ rơi về giá trị cố định |
-| `[Drop]` | `Multiplier` | `3` | Hệ số, chỉ dùng khi `Mode=0` (1 = vanilla) |
-| `[Drop]` | `Percentage` | `30` | Tỉ lệ cố định %, chỉ dùng khi `Mode=1` (100 = chắc chắn rơi) |
-| `[Materials]` | `Crafting` | `2` | Hệ số số lượng nguyên liệu craft farm được (Rowa Fruit, Herba, bướm, xương...) |
-| `[Materials]` | `Upgrade` | `2` | Hệ số nguyên liệu nâng cấp farm được (Smithing Stone, Glovewort...) |
-| `[Materials]` | `Unique` | `1` | Hệ số nguyên liệu chỉ nhặt được 1 lần (Smithing Stone trên xác, Sacred Tear, Scadutree Fragment...) |
-| `[Logging]` | `LogFile` | `true` | Ghi `DropMultiplier.log` cạnh DLL; `false` thì không tạo file |
+- cách điều chỉnh tỉ lệ rơi: nhân hệ số, hoặc ép về một tỉ lệ cố định;
+- hệ số số lượng cho từng nhóm nguyên liệu: craft, nâng cấp, chỉ nhặt một lần;
+- phím nạp lại cấu hình (áp dụng không cần khởi động lại game) và việc hiện banner sau khi nạp;
+- ghi log để chẩn đoán.
 
-Key cũ `[Settings] ChancePercent` được tự chuyển thành `[Drop] Percentage`
-khi nạp (giữ giá trị người dùng đã chỉnh).
+Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`DropMultiplier.ini`](DropMultiplier.ini); file mẫu này được nhúng vào DLL nên là nguồn sự thật duy nhất, README không lặp lại để khỏi lệch.
 
 ## Cách hoạt động
 
@@ -36,9 +27,9 @@ khi nạp (giữ giá trị người dùng đã chỉnh).
   tự áp dụng.
 - **Tỉ lệ rơi (`src/drop_rate.rs`):** mỗi dòng `ItemLotParam_enemy` có tối đa 8
   ô, ô N rơi với xác suất `lotItemBasePoint0N / tổng 8 ô`. Chỉ ô chứa đồ thật
-  (`lotItemId0N != 0`) được nhân; ô "không rơi gì" giữ nguyên (`Mode=0`) hoặc
-  làm điểm cố định để giải ra trọng số mới (`Mode=1`: tổng xác suất "có rơi gì
-  đó" đúng bằng `Percentage`, tỉ lệ tương đối giữa các món cùng dòng giữ
+  (`lotItemId0N != 0`) được nhân; ô "không rơi gì" giữ nguyên (chế độ nhân) hoặc
+  làm điểm cố định để giải ra trọng số mới (chế độ ép tỉ lệ: tổng xác suất "có rơi gì
+  đó" đúng bằng tỉ lệ đã chọn, tỉ lệ tương đối giữa các món cùng dòng giữ
   nguyên). Công thức đầy đủ và các trường hợp biên nằm ở comment đầu file.
 - **Nguyên liệu (`src/materials.rs`):** nhân `lotItemNum0N` (làm tròn, tối thiểu
   1, tối đa 255), phân nhóm từng ô bằng `EquipParamGoods.goodsType` đọc lúc
@@ -55,7 +46,7 @@ khi nạp (giữ giá trị người dùng đã chỉnh).
 
 - Chỉ chỉnh **tỉ lệ cơ bản**; chỉ số Discovery của người chơi vẫn cộng thêm như
   vanilla.
-- `Mode=1` có thể biến một món vốn chắc chắn rơi (100%) thành rơi theo xác suất.
+- Chế độ ép tỉ lệ cố định có thể biến một món vốn chắc chắn rơi (100%) thành rơi theo xác suất.
 - Chỉ ảnh hưởng `ItemLotParam_enemy` (tỉ lệ rơi, và số lượng) và
   `ItemLotParam_map` (số lượng nguyên liệu); các bảng lot khác giữ nguyên.
 - Chỉ dùng ở chế độ offline, tắt EAC.

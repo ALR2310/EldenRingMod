@@ -1,6 +1,6 @@
 # WeightMultiplier
 
-> **v2.0.1** · Nexus mod 10549 · **đã phát hành** (trước là "Reduction Weight")
+> Nexus mod 10549 · **đã phát hành** (trước là "Reduction Weight")
 
 Mod DLL cho Elden Ring: **nhân Trọng Tải (equip load) hiện tại với một hệ số**,
 hoặc **đặt cứng nó bằng một số**, thay vì ghi đè thành một số tuỳ ý như các mod
@@ -8,22 +8,18 @@ hoặc **đặt cứng nó bằng một số**, thay vì ghi đè thành một s
 hành vi thật (roll, chạy). Đổi tên từ **ReductionWeight** ngày 2026-08-18 khi
 port sang Rust, vì hệ số < 1 giảm, > 1 tăng tải trọng.
 
-## Cấu hình (`WeightMultiplier.ini`)
+## Cấu hình
 
-File mẫu nhúng trong DLL (`include_str!`), là nguồn sự thật duy nhất cho giá trị
-mặc định.
+Cấu hình trong `WeightMultiplier.ini` cạnh DLL (tự tạo nếu thiếu). Có thể chỉnh:
 
-| Section | Key | Mặc định | Ý nghĩa |
-|---|---|---|---|
-| `[General]` | `ReloadKey` | `F5` | Phím nạp lại ini; chỉ nhận khi cửa sổ game đang focus |
-| `[General]` | `LoadDelay` | `5000` | Mili giây chờ sau khi game khởi động trước khi áp dụng mod |
-| `[Features]` | `Mode` | `0` | `0` = nhân hệ số (`Multiplier`), `1` = đặt cứng (`FixedValue`) |
-| `[Features]` | `Multiplier` | `0.5` | Hệ số nhân tổng tải; chỉ dùng khi `Mode=0`. `0.5` = một nửa, `1.0` = giữ nguyên, `2.0` = gấp đôi. Cho phép số âm |
-| `[Features]` | `FixedValue` | `0` | Tải luôn bằng đúng số này, bất kể đang mặc gì; chỉ dùng khi `Mode=1` |
-| `[Logging]` | `LogFile` | `true` | Ghi `WeightMultiplier.log` cạnh DLL; `false` thì không tạo file |
+- chế độ: nhân tổng tải với một hệ số, hoặc đặt cứng bằng một số (hệ số cho phép số âm);
+- độ trễ sau khi game khởi động trước khi áp dụng mod;
+- phím nạp lại cấu hình (chỉ nhận khi cửa sổ game đang focus);
+- ghi log để chẩn đoán.
 
-Đổi `Multiplier`/`FixedValue`/`Mode` rồi bấm `ReloadKey` là có hiệu lực ngay,
-không cần khởi động lại game.
+Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`WeightMultiplier.ini`](WeightMultiplier.ini); file mẫu này được nhúng vào DLL nên là nguồn sự thật duy nhất, README không lặp lại để khỏi lệch.
+
+Đổi chế độ, hệ số hoặc giá trị cố định rồi bấm phím reload là có hiệu lực ngay, không cần khởi động lại game.
 
 ## Cách hoạt động
 
