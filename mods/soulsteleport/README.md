@@ -622,7 +622,7 @@ chuẩn bị phát hành:
 - Gỡ log chẩn đoán `Menu diag`.
 - `Cargo.toml` version `0.1.0` → `1.0.0` (Nexus chưa có trang mod này, nên
   không có changelog thật để đối chiếu - bản đầu tiên).
-- `DESCRIPTION.bbcode` mới theo khung của các mod khác: giới thiệu, Features,
+- `nexus_page.bbcode` mới theo khung của các mod khác: giới thiệu, Features,
   Requirements (Seamless Co-op - Nexus mod 510, đã kiểm tra qua API; mọi
   người muốn teleport tới đều phải cài mod), Usage, Installation, Credits (ghi
   công Noto Sans + giấy phép OFL, hudhook, Dear ImGui), Changelog 1.0.0.
@@ -704,7 +704,7 @@ Review toàn bộ crate trước khi đăng. Sửa:
 - Comment lỗi thời: đầu `net.rs` ("kẻ xâm nhập không được trả lời"),
   `warp.rs` ("turned out hostile"), `message_filter` trong `ui.rs`.
 - Đoạn mở đầu README viết lại cho đúng mod độc lập.
-- `DESCRIPTION.bbcode`: thêm mục Notes - chỉ bàn phím + chuột (chưa tay cầm),
+- `nexus_page.bbcode`: thêm mục Notes - chỉ bàn phím + chuột (chưa tay cầm),
   và khuyên đặt `cooppassword` riêng vì ai trong phiên cài mod cũng hỏi được
   vị trí của mình.
 - 3 unit test mới trong `net.rs` (khớp người gửi, lọc vị trí rác, request id

@@ -1,8 +1,11 @@
-A DLL mod that lets you adjust your equip load multiplier to make yourself lighter or heavier, or set it to a fixed value instead. Fully configurable via its config file.
+A DLL mod that gives you runes passively over time just from playing, plus bonus runes at play-time milestones. Inspired by [url=https://www.nexusmods.com/eldenring/mods/3394]Runes Clock[/url]. Fully configurable via its config file.
 
 [size=4][b]Features[/b][/size]
 [list]
-[*]Multiply your equip load by a configurable factor, or set it to a fixed value.[/*]
+[*]Passive runes on a timer: by default +50 runes plus 0.25% of your next level-up cost every 10 seconds.[/*]
+[*]Optional compound interest on the runes you're holding.[/*]
+[*]Negative values drain runes instead, for a challenge run.[/*]
+[*]Bonus runes at play-time milestones (30 minutes up to 24 hours).[/*]
 [*]Hotkey to reload the ini without restarting the game.[/*]
 [/list]
 
@@ -18,7 +21,7 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
 [*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
 [code]external_dlls = [
-    "natives\\WeightMultiplier.dll",
+    "natives\\PassiveRunes.dll",
 ][/code]
 [/*]
 [*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
@@ -27,30 +30,10 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
 [list=1]
 [*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
-[*]Download this mod and drag [b]WeightMultiplier.dll[/b] and [b]WeightMultiplier.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Download this mod and drag [b]PassiveRunes.dll[/b] and [b]PassiveRunes.ini[/b] into the [b]mods[/b] folder.[/*]
 [*]Launch the game - the mod will be loaded automatically.[/*]
 [/list]
 
-[size=4][b]Changelogs[/b][/size]
-[spoiler=Changelogs][b]2.0.1[/b]
-[list]
-[*]Fixed install paths with non-ASCII characters.[/*]
-[/list]
-[b]2.0.0[/b]
-[list]
-[*]Rewritten from C++ to Rust.[/*]
-[*]Added a fixed-value option.[/*]
-[*]Added a hotkey to reload the config.[/*]
-[/list]
-[b]1.1.0[/b]
-[list]
-[*]Allow negative values.[/*]
-[/list]
-[b]1.0.0[/b]
-[list]
-[*]Reduces equip load.[/*]
-[/list]
-[/spoiler]
 [size=4][b]Support[/b][/size]
 Enjoying the mod? You can buy me a coffee on Ko-fi - it really helps. Thank you!
 

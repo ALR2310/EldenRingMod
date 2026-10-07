@@ -1,7 +1,7 @@
 # WindowResize
 
 Mod làm cho nhu cầu cá nhân, đăng Nexus để ai cần thì dùng (mô tả:
-[DESCRIPTION.bbcode](DESCRIPTION.bbcode)): cho phép kéo viền để đổi kích thước
+[nexus_page.bbcode](nexus_page.bbcode)): cho phép kéo viền để đổi kích thước
 cửa sổ Elden Ring ở chế độ Windowed, nhỏ hơn mức 800x450 nhỏ nhất mà menu
 độ phân giải của game cho chọn.
 
@@ -76,7 +76,7 @@ Chưa kiểm chứng trong game:
 ## Đổi ý: đăng lên Nexus (2026-09-29)
 
 Ban đầu định chỉ dùng nội bộ; sau khi test ổn trong game thì quyết định
-đăng lên Nexus. Thêm `DESCRIPTION.bbcode`: cố ý viết đơn giản, giọng cá
+đăng lên Nexus. Thêm `nexus_page.bbcode`: cố ý viết đơn giản, giọng cá
 nhân ("làm cho mình dùng, đăng lên để ai cần thì dùng"), không có mục
 Features (chỉ 1 tính năng, dòng mở đầu đã nói đủ), không có mục "Why this
 mod?". Crate version lên `1.0.0` khớp với mục changelog đầu tiên. Chưa có

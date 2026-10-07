@@ -271,7 +271,7 @@ code.
 
 ## Chuẩn bị phát hành 1.0.0: description, thumbnail (2026-09-29)
 
-- `DESCRIPTION.bbcode` viết theo `template/`: intro kiểu "A DLL mod that
+- `nexus_page.bbcode` viết theo `template/`: intro kiểu "A DLL mod that
   lets you...", Features (chỉ những gì người chơi được), Notes (khoảng
   0.1–10, và cảnh báo rằng key tổng cũng tăng tốc cả lúc bị đánh, cưỡi ngựa,
   nghỉ grace). Credits ghi 2 bài TAE list trên Nexus (208, 511), bảng CE
@@ -288,7 +288,7 @@ code.
 Người dùng chốt mặc định: `PlayerMovement=1.2`, `PlayerAttack=1.2`,
 `PlayerRoll=1.1`, `PlayerSkill=1.2`, `PlayerCast=1.2`, `Torrent=1.3`.
 `PlayerAll`, `PlayerItem`, `PlayerOther` giữ 1. Các mục trên README ghi
-"mọi key mặc định 1" là trước thay đổi này. Intro của `DESCRIPTION.bbcode`
+"mọi key mặc định 1" là trước thay đổi này. Intro của `nexus_page.bbcode`
 đổi theo câu của người dùng. Features giờ liệt kê đúng 6 mục kèm % mặc
 định, bỏ các bullet về key tổng, SotE và hotkey reload.
 
@@ -339,7 +339,7 @@ TOML trước khi làm tính năng, để còn mở rộng.
   nguyên (`Torrent = 2`) vẫn nhận làm f32.
 - `speed.rs`: `Group::key()` (tên key ini) → `Group::speed(&Speed)`;
   `multiplier(key)` → `clamped(value)` (giữ khoảng 0.1–10, NaN/inf → 1).
-- `DESCRIPTION.bbcode`: "ini" → "config file", file cài đặt
+- `nexus_page.bbcode`: "ini" → "config file", file cài đặt
   `SpeedMultiplier.toml`.
 
 Tính năng ghi đè theo SpEffect (`[[Override]]`) chưa làm - xem `TODO.md`.
@@ -653,12 +653,12 @@ theo % chưa làm. **Test trong game (người dùng, 2026-10-06): hoạt độn
 ## Changelog 1.2.0 + bump version (2026-10-06)
 
 Đối chiếu Nexus (mod 11173, API): có 1.0.0 và 1.1.0, khớp bản local. Thêm
-mục `1.2.0` vào `[Changelog]` của `DESCRIPTION.bbcode` (nhóm thang, điều
+mục `1.2.0` vào `[Changelog]` của `nexus_page.bbcode` (nhóm thang, điều
 kiện equip load, sửa tia Placidusax's Ruin) và 2 dòng ở Features (thang,
 equip load); `version` trong `Cargo.toml` = `1.2.0`, build lại cập nhật
 `Cargo.lock`. Chưa deploy lên Nexus.
 
-Cập nhật cùng ngày: mặc định `Ladder` trong file mẫu là **1.2** (như `Attack`/`Skill`/`Cast`) theo người dùng; Features trong `DESCRIPTION.bbcode` ghi "Faster ladder climbing and sliding (20% by default)". Chỉ áp cho file cấu hình mới - file có sẵn giữ giá trị đang ghi (key đã tồn tại không bị đè).
+Cập nhật cùng ngày: mặc định `Ladder` trong file mẫu là **1.2** (như `Attack`/`Skill`/`Cast`) theo người dùng; Features trong `nexus_page.bbcode` ghi "Faster ladder climbing and sliding (20% by default)". Chỉ áp cho file cấu hình mới - file có sẵn giữ giá trị đang ghi (key đã tồn tại không bị đè).
 
 ## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
 

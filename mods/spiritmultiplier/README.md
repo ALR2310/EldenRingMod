@@ -549,7 +549,7 @@ hành; người dùng tạm dừng hướng này, làm lại sau khi đăng 1.0.
 ## Chuẩn bị phát hành 1.0.0 (2026-09-29)
 
 - `Cargo.toml`: version `0.2.0` → `1.0.0`.
-- `DESCRIPTION.bbcode` mới (theo `template/DESCRIPTION.bbcode`): intro 1
+- `nexus_page.bbcode` mới (theo `template/nexus_page.bbcode`): intro 1
   câu, Features (nhân spirit theo hệ số/số cố định, mọi Ash kể cả Ash của
   mod khác, hồi máu, bỏ màu ma, Seamless Co-op, phím reload), Notes (60 là
   ngưỡng an toàn, có thể tăng nếu máy đủ khoẻ), EAC disclaimer, Credits
@@ -805,7 +805,7 @@ miễn phí. Theo người dùng, Solid Uncapper 2.3.3 không có phần này.
 ## Chuẩn bị phát hành 1.1.0 (2026-09-29)
 
 Changelog thật trên Nexus (API `changelogs.json`, mod 11168) mới có
-`1.0.0` → bản này là `1.1.0` (toàn tính năng mới). `DESCRIPTION.bbcode`:
+`1.0.0` → bản này là `1.1.0` (toàn tính năng mới). `nexus_page.bbcode`:
 thêm 3 dòng Features (MultiSpirit kèm "mỗi Ash tốn FP riêng, dùng lại chỉ
 cho về Ash đó"; NoRestResummon; SummonAnywhere), 1 dòng
 Notes (không dùng chung với mod khác sửa việc triệu hồi spirit, vd. phần

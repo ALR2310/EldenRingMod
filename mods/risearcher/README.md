@@ -43,7 +43,7 @@ map đủ mọi field đang dùng, không cần tự dò offset struct nào.
 2. **Không còn xung đột `regulation.bin` với mod khác** — DLL patch trực
    tiếp vào bộ nhớ process game lúc chạy, không đụng tới file
    `regulation.bin` trên đĩa nữa. Không cần Smithbox Mass Edit để merge
-   với mod khác như hướng dẫn cũ trong `DESCRIPTION.bbcode`.
+   với mod khác như hướng dẫn cũ trong `nexus_page.bbcode`.
 
 Sống ở `mods/risearcher` trong workspace [`EldenRingMod`](../../README.md).
 

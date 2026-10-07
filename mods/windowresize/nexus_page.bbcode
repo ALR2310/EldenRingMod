@@ -1,13 +1,7 @@
-A DLL mod that lets you make Poison and Scarlet Rot's damage-over-time effect last forever once triggered. Fully configurable via its config file.
-
-[size=4][b]Features[/b][/size]
-[list]
-[*]Scarlet Rot and Poison last forever once triggered.[/*]
-[*]Fully customizable damage and duration via the config file.[/*]
-[*]Hotkey to reload the ini without restarting the game.[/*]
-[/list]
+Just a mod that lets you resize the game window freely. Made for my own use, shared in case anyone needs it.
 
 [size=4][b][color=#E74C3C]Disclaimer: Only use in offline mode with EAC disabled![/color][/b][/size]
+The mod doesn't change anything in the game itself - it only touches the window. But since it's loaded through a DLL mod loader, using it online is not recommended.
 
 [size=4][b]Installation[/b][/size]
 
@@ -19,7 +13,7 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
 [*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
 [code]external_dlls = [
-    "natives\\InfiniteAilment.dll",
+    "natives\\WindowResize.dll",
 ][/code]
 [/*]
 [*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
@@ -28,21 +22,10 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [b]Option 2 - [url=https://www.nexusmods.com/eldenring/mods/117]Elden Mod Loader[/url][/b]
 [list=1]
 [*]Download Elden Mod Loader from the link above and extract it into your game folder.[/*]
-[*]Download this mod and drag [b]InfiniteAilment.dll[/b] and [b]InfiniteAilment.ini[/b] into the [b]mods[/b] folder.[/*]
+[*]Download this mod and drag [b]WindowResize.dll[/b] and [b]WindowResize.ini[/b] into the [b]mods[/b] folder.[/*]
 [*]Launch the game - the mod will be loaded automatically.[/*]
 [/list]
 
-[size=4][b]Changelogs[/b][/size]
-[spoiler=Changelogs][b]1.0.1[/b]
-[list]
-[*]Fixed install paths with non-ASCII characters.[/*]
-[/list]
-[b]1.0.0[/b]
-[list]
-[*]Poison and Scarlet Rot infinite duration.[/*]
-[*]Customizable percent/fixed damage per tick.[/*]
-[/list]
-[/spoiler]
 [size=4][b]Support[/b][/size]
 Enjoying the mod? You can buy me a coffee on Ko-fi - it really helps. Thank you!
 

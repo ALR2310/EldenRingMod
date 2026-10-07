@@ -236,7 +236,7 @@ Nhân tiện, `ReloadKey` giờ do `common::reload::run()` lo trên thread riên
 banner **"Config reloaded"** trong game (`common::announce`). Mọi key của
 `rune.rs` đều đọc lại mỗi tick nên không cần `RELOAD_GENERATION`.
 
-`DESCRIPTION.bbcode` cũng đổi sang đúng format của `AutoRegen`: câu mở đầu
+`nexus_page.bbcode` cũng đổi sang đúng format của `AutoRegen`: câu mở đầu
 "A DLL mod that...", bỏ khối Configuration (ini đã tự mô tả), mục cài đặt
 chung cho mọi mod loader, changelog gói trong `[spoiler]`. Sửa luôn mô tả
 lỗi thời "25 runes every 5 seconds" -> đúng mặc định hiện tại của ini (100
@@ -338,7 +338,7 @@ hành vi bản cũ.
 - Log `LogFile` thêm `+ {interest} from {Interest}% interest on {principal}`
   (principal = rune đang giữ **trước** khi cộng tick này).
 
-`DESCRIPTION.bbcode`: thêm 1 dòng Features + 1 dòng changelog 2.3. **Chưa
+`nexus_page.bbcode`: thêm 1 dòng Features + 1 dòng changelog 2.3. **Chưa
 test trong game.**
 
 ## Đổi mặc định: `Amount` 100 -> 50, `Percent` 0 -> 0.25 (2026-09-23)

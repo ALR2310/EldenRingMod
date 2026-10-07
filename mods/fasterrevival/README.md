@@ -231,7 +231,7 @@ rơi vực, Stake of Marika). Tổng kết hồi sinh sau chết thường: vani
 - `Debug.DeathProbe` mặc định đổi sang `false` (log mỗi 100ms trong lúc
   chết quá dày cho người dùng thường; vẫn bật được để chẩn đoán). Các dòng
   `Died` / `Killed early` / `Death registered` / `Respawned` vẫn luôn log.
-- Thêm `DESCRIPTION.bbcode` cho Nexus (chưa có trang mod, nên changelog bắt
+- Thêm `nexus_page.bbcode` cho Nexus (chưa có trang mod, nên changelog bắt
   đầu từ 1.0.0 - không có changelog thật nào để đối chiếu qua API). Credit
   0-F (FasterDeathAnimation) và ImAxel0 (FasterRespawn, MIT).
 
