@@ -8,7 +8,7 @@ duy nhất ở mọi bản exe không, field `+0x17C8` bị ai đọc ghi. Mỗi
 ## Chạy
 
 ```powershell
-pwsh research/ida/run.ps1 <script> [-Version <ver|all>] <tham số...>
+pwsh scripts/ida/run.ps1 <script> [-Version <ver|all>] <tham số...>
 ```
 
 - `-Version`: thư mục trong `dumps/ida/` (vd. `2.7.1.0` = patch 1.17.1,
@@ -65,6 +65,10 @@ pos, flags = common.parse_args()    # tham số vị trí + --cờ / --khóa=gi�
 common.finish()
 ```
 
+Lưu ý: giữ nguyên `import common` (không đổi thành `scripts.ida.common`). Chỉ thư mục
+chứa script nằm trong `sys.path` của idat, và công cụ di chuyển file của IDE có thể
+tự viết lại import khi chuyển thư mục.
+
 Quy ước: script nhận tham số dòng lệnh (không sửa hằng số trong code), ghi
 output vào `common.OUT_DIR`, không đổi database, và có docstring ghi cách dùng.
 Probe một lần chỉ phục vụ 1 câu hỏi thì cứ viết ở scratchpad - nhưng nếu thấy
@@ -77,5 +81,5 @@ nghiên cứu 2026-09-16 đến 2026-10-06 (warp/GameMan, spirit summon, FasterR
 phantom/animation, crash dump). Probe gốc vốn chỉ nằm trong scratchpad tạm của
 từng phiên nên không được lưu; bản khôi phục từ transcript nằm ở
 `tmp/ida-scripts-recovered/` (không vào git, xoá được bất kỳ lúc nào), kèm
-`index.csv` ghi phiên và ngày. Giai đoạn trước dùng Ghidra: 6 script tổng quát còn giữ ở `research/ghidra/`
+`index.csv` ghi phiên và ngày. Giai đoạn trước dùng Ghidra: 6 script tổng quát còn giữ ở `scripts/ghidra/`
 chỉ để tham khảo, các script Ghidra một lần đã xoá hẳn.

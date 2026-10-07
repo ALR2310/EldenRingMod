@@ -1,4 +1,4 @@
-"""Helpers dùng chung cho các script IDAPython trong research/ida/.
+"""Helpers dùng chung cho các script IDAPython trong scripts/ida/.
 
 Các script chạy headless qua `run.ps1` (idat -A -S"<script> <args>"). Mỗi script
 `import common` rồi gọi `common.init()` đầu tiên, `common.finish()` cuối cùng.

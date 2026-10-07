@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Chạy 1 script IDAPython của research/ida/ trên database eldenring.exe.i64 có sẵn.
+    Chạy 1 script IDAPython của scripts/ida/ trên database eldenring.exe.i64 có sẵn.
 
 .DESCRIPTION
     Dùng idat (headless): idat -A -S"<script> <args>" -L<log> <db>.i64.
@@ -10,7 +10,7 @@
     được IDA GUI giữ - đóng GUI trước.
 
 .PARAMETER Script
-    Tên file trong research/ida/ (vd. decompile.py), có hoặc không có đuôi .py.
+    Tên file trong scripts/ida/ (vd. decompile.py), có hoặc không có đuôi .py.
 
 .PARAMETER Version
     Thư mục version trong dumps/ida/ (vd. 2.7.1.0), hoặc `all` để chạy lần lượt
@@ -21,9 +21,9 @@
     có khoảng trắng; với aob.py mỗi mẫu là 1 chuỗi nháy kép riêng.
 
 .EXAMPLE
-    pwsh research/ida/run.ps1 decompile 1e92100 --callees
-    pwsh research/ida/run.ps1 aob -Version all "48 8B 05 ?? ?? ?? ?? 48 85 C0"
-    pwsh research/ida/run.ps1 -Script xrefs.py -Version 2.7.1.0 25e100 --depth=2
+    pwsh scripts/ida/run.ps1 decompile 1e92100 --callees
+    pwsh scripts/ida/run.ps1 aob -Version all "48 8B 05 ?? ?? ?? ?? 48 85 C0"
+    pwsh scripts/ida/run.ps1 -Script xrefs.py -Version 2.7.1.0 25e100 --depth=2
 #>
 param(
     [Parameter(Mandatory, Position = 0)][string]$Script,

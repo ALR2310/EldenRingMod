@@ -82,7 +82,7 @@ unsafe extern "system" {
 const PAGE_EXECUTE_READWRITE: u32 = 0x40;
 
 // `FUN_140448910`'s own prologue, found via Ghidra static analysis of the
-// live game exe (see AutoRegen's `research/ghidra/DumpFnPrologue.java`
+// live game exe (see AutoRegen's `scripts/ghidra/DumpFnPrologue.java`
 // output) - NOT from any 3rd-party CE table. Anchored on the full 40-byte
 // window (through the stack-cookie load and the R12 shadow-space spill)
 // rather than just the first 15 bytes, to cut collision risk with other

@@ -2445,4 +2445,4 @@ Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này 
 
 ## Đường dẫn script/dump dịch ngược đổi chỗ (2026-10-07)
 
-Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `research/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `research/ida/`. Hành vi mod không đổi.
+Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `scripts/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `scripts/ida/`. Hành vi mod không đổi.

@@ -119,7 +119,7 @@ Thử Ghidra trước (project `D:/tmp/ghidra_proj_1171`, quét hàm có
 IDA 9.3 (database có sẵn `D:/tmp/ida_re/ida_eldenring_current.i64` =
 `eldenring_2710.exe`, đúng bản 2.7.1.0 đang test). Các script IDA/Ghidra
 dùng lần này: `D:/tmp/ida_re/ida_spirit{1..6}.py`,
-`research/ghidra/DecompileByName.java` (giữ lại) và `FindBuddySlotFns.java` (một lần, đã xoá 2026-10-07).
+`scripts/ghidra/DecompileByName.java` (giữ lại) và `FindBuddySlotFns.java` (một lần, đã xoá 2026-10-07).
 
 Các bước:
 
@@ -1162,4 +1162,4 @@ Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này 
 
 ## Đường dẫn script/dump dịch ngược đổi chỗ (2026-10-07)
 
-Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `research/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `research/ida/`. Hành vi mod không đổi.
+Thư mục `.docs/` đổi thành `tmp/`; file decompile/DLL tham khảo nằm ở `tmp/reverse_engineering/{decompiled,reference-dlls}/`. Script Ghidra: 6 script tổng quát (`DecompileFn`/`DecompileMulti`/`DecompileByName`, `DumpBytes`, `DumpFnPrologue`, `FindStringXrefs`) giữ ở `scripts/ghidra/` chỉ để tham khảo; các script một lần (RVA/AOB cố định) đã xoá hẳn 2026-10-07, thay bằng công cụ có tham số ở `scripts/ida/`. Hành vi mod không đổi.

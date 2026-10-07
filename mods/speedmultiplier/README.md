@@ -169,7 +169,7 @@ riêng. `Torrent` không bị key tổng ảnh hưởng. Mọi key trong `[Speed
 ## Nhóm `Cast`, phân loại theo prefix TAE (2026-09-29)
 
 Người dùng chép tay 2 danh sách TAE từ Nexus (articles 511 và 208: Nexus
-chặn fetch tự động bằng Cloudflare) vào 2 file (từ 2026-10-07 đã gộp thành `docs/tae-ids.md`). Danh sách này cho biết ý
+chặn fetch tự động bằng Cloudflare) vào 2 file (từ 2026-10-07 đã gộp thành `research/tae-ids.md`). Danh sách này cho biết ý
 nghĩa của **prefix** `aXXX`:
 
 | Prefix | Ý nghĩa |
@@ -549,7 +549,7 @@ Nguyên nhân: game chỉ đọc `CSChrBehaviorModule.animation_speed` ở 1 ch�
 (hardware breakpoint 2026-10-02): update behavior `sub_14041DCA0` gọi thunk
 `sub_140417EA0: jmp <getter>` (getter trả `[rcx+0x18]`, rcx = behavior
 +0x17B0). Bản so code trong RAM vs exe khi có Seamless (2026-10-02, lúc dò
-màu ma của SpiritMultiplier; lưu ở `.docs/seamless-diff/`) có đúng
+màu ma của SpiritMultiplier; lưu ở `research/seamless-diff/`) có đúng
 `0x140417EA1` = rel32 của `jmp` đó → Seamless đổi đích sang code của nó,
 giá trị mod ghi không bao giờ được đọc.
 
