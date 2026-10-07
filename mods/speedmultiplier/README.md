@@ -660,3 +660,9 @@ equip load); `version` trong `Cargo.toml` = `1.2.0`, build lại cập nhật
 `Cargo.lock`. Chưa deploy lên Nexus.
 
 Cập nhật cùng ngày: mặc định `Ladder` trong file mẫu là **1.2** (như `Attack`/`Skill`/`Cast`) theo người dùng; Features trong `DESCRIPTION.bbcode` ghi "Faster ladder climbing and sliding (20% by default)". Chỉ áp cho file cấu hình mới - file có sẵn giữ giá trị đang ghi (key đã tồn tại không bị đè).
+
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

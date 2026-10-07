@@ -627,7 +627,7 @@ chuẩn bị phát hành:
   người muốn teleport tới đều phải cài mod), Usage, Installation, Credits (ghi
   công Noto Sans + giấy phép OFL, hudhook, Dear ImGui), Changelog 1.0.0.
 - `scripts/build-mod.ps1`: khi `-Zip`, gói thêm mọi `*.txt` trong
-  `crates/<crate>/assets/` - để `NotoSans-OFL.txt` luôn đi kèm font nhúng như
+  `mods/<crate>/assets/` - để `NotoSans-OFL.txt` luôn đi kèm font nhúng như
   OFL yêu cầu. Các mod khác không có thư mục `assets/` nên zip không đổi (đã
   thử với AutoRegen).
 
@@ -749,7 +749,7 @@ khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1
 `Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
 không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
 MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
-tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
+tiết trong `mods/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
 Không đổi hành vi.
 
 Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
@@ -828,3 +828,8 @@ File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
 `Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
 là version hiện trong Properties và trong log.
 
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

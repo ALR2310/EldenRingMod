@@ -1,7 +1,7 @@
 # TODO
 
 Việc cần làm, chia theo mod. Lý do / chi tiết kỹ thuật ghi trong
-`crates/<mod>/README.md` (nhật ký phát triển), không ghi ở đây.
+`mods/<mod>/README.md` (nhật ký phát triển), không ghi ở đây.
 
 ## SpiritMultiplier
 

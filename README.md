@@ -10,23 +10,30 @@ plumbing lặp lại giữa các mod (đọc/ghi ini, log ra file, AOB pattern s
 EldenRingMod/
 ├── Cargo.toml       # workspace root - liệt kê member crates + dependency dùng chung
 ├── builds/          # builds/<crate>/ chứa .dll + .ini (+ .zip) của từng mod (git-ignored) - xem `scripts/build-mod.ps1`
-├── scripts/         # build-mod.ps1: build 1 mod rồi copy .dll + .ini vào builds/<crate>/
-├── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
-└── crates/          # chỉ chứa các mod chính, mỗi thư mục build ra 1 DLL
-    ├── autoregen/    # mod AutoRegen: hồi HP/FP/Stamina theo tick + khi đánh trúng/bị đánh trúng
-    ├── sometweaks/    # mod SomeTweaks (đổi tên từ LifeBetween): gộp nhiều QoL, hiện có Regen
-    ├── passiverunes/  # mod PassiveRunes: cộng rune theo thời gian + bonus mốc thời gian
-    ├── runemultiplier/ # mod RuneMultiplier: nhân hệ số rune từ mọi nguồn qua 1 hook AddSoul_Call
-    ├── weightmultiplier/ # mod WeightMultiplier (đổi tên từ ReductionWeight): nhân hệ số Trọng Tải qua 1 hook code
-    └── risearcher/    # mod RiseArcher: buff Bow/Crossbow/Ballista/Arrow/Bolt qua SoloParamRepository sống
+├── mods/            # mỗi thư mục con = 1 mod (thường là 1 crate Rust build ra 1 DLL; có thể thêm mod chỉ có dữ liệu Smithbox)
+│   ├── autoregen/        # AutoRegen: hồi HP/FP/Stamina theo tick + khi đánh trúng/bị đánh trúng
+│   ├── dropmultiplier/   # DropMultiplier: chỉnh tỉ lệ rớt đồ của quái (nhân hệ số hoặc ép tỉ lệ tổng)
+│   ├── fasterrevival/    # FasterRevival: rút ngắn thời gian từ lúc hết máu tới hồi sinh (đang nghiên cứu)
+│   ├── infiniteailment/  # InfiniteAilment: chỉnh thời lượng + sát thương Poison/Scarlet Rot người chơi gây ra
+│   ├── passiverunes/     # PassiveRunes: cộng rune theo thời gian + bonus mốc thời gian
+│   ├── risearcher/       # RiseArcher: buff Bow/Crossbow/Ballista/Arrow/Bolt qua SoloParamRepository sống
+│   ├── runemultiplier/   # RuneMultiplier: nhân hệ số rune từ mọi nguồn qua 1 hook AddSoul_Call
+│   ├── sometweaks/       # SomeTweaks (đã bỏ, không phát triển nữa): gộp nhiều QoL
+│   ├── soulsteleport/    # SoulsTeleport: dịch chuyển tới người chơi khác trong Seamless Co-op
+│   ├── speedmultiplier/  # SpeedMultiplier: tăng tốc di chuyển / tấn công / thi triển phép
+│   ├── spiritmultiplier/ # SpiritMultiplier: nhân số linh hồn (spirit ash) triệu hồi vượt trần 10 con
+│   ├── weightmultiplier/ # WeightMultiplier (đổi tên từ ReductionWeight): nhân hệ số Trọng Tải qua 1 hook code
+│   └── windowresize/     # WindowResize: kéo viền đổi kích thước cửa sổ Windowed nhỏ hơn mức mặc định
+├── scripts/         # build-mod.ps1: build 1 mod rồi copy .dll + .ini vào builds/<mod>/
+└── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
 ```
 
-`shared/` nằm ngoài `crates/` có chủ đích: `crates/` chỉ chứa các mod thật
+`shared/` nằm ngoài `mods/` có chủ đích: `mods/` chỉ chứa các mod thật
 sự (mỗi thư mục = 1 DLL xuất bản), còn `shared/` là hạ tầng dùng chung,
 không phải 1 mod. Tên package Cargo của nó vẫn là `common` (không đổi
 tên package theo tên thư mục) — mỗi mod vẫn `use common::...` như cũ.
 
-Mỗi mod crate (`crates/autoregen`, `crates/sometweaks`, ...) có:
+Mỗi mod Rust (`mods/autoregen`, `mods/dropmultiplier`, ...) có:
 - `Cargo.toml` riêng, `common = { path = "../../shared" }` + các dependency
   `eldenring`/`fromsoftware-shared`/`chrono` lấy version thống nhất từ
   `[workspace.dependencies]` ở root qua cú pháp `xxx.workspace = true`.
@@ -99,5 +106,5 @@ thư mục mod loader.
   và DLL mới đọc/ghi `SoloParamRepository` sống qua `fromsoftware-rs`
   (không cần `libER` như kế hoạch gốc) - DLL không xung đột với mod
   `regulation.bin` khác, mọi hệ số đọc từ ini; 2 cách không tự đồng bộ với
-  nhau, xem `crates/risearcher/README.md`. Mod duy nhất không cần `CSTaskImp` lẫn
+  nhau, xem `mods/risearcher/README.md`. Mod duy nhất không cần `CSTaskImp` lẫn
   hotkey - patch 1 lần lúc `SoloParamRepository` sẵn sàng rồi thôi.

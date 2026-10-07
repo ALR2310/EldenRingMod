@@ -4,7 +4,7 @@
 workspace [`EldenRingMod`](../../README.md), theo cùng quy ước đặt tên với
 `RuneMultiplier` (mô tả đúng cơ chế "nhân hệ số", không chỉ "giảm" — ini
 key `WeightReductionPercent` âm sẽ *tăng* tải trọng, không chỉ giảm). Sống
-ở `crates/weightmultiplier`, không còn là repo Git riêng.
+ở `mods/weightmultiplier`, không còn là repo Git riêng.
 
 DLL mod cho Elden Ring: giảm % Trọng Tải (equip load) hiện tại theo 1 hệ số
 cố định, thay vì ghi đè cứng thành 1 số tùy ý như các mod "NoWeight" thông
@@ -232,7 +232,7 @@ tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL,
 thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
 `from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
 `dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
-`crates/autoregen/README.md`.
+`mods/autoregen/README.md`.
 
 ## `ReloadKey` chỉ nhận khi đang ở cửa sổ game - sửa `common::input::is_key_pressed` (2026-09-24)
 
@@ -329,3 +329,8 @@ File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
 `Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
 là version hiện trong Properties và trong log.
 
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

@@ -4,7 +4,7 @@
 [`EldenRingMod`](../../README.md) - lý do đổi tên: tránh nhầm với tên file
 `AutoRegen.ini`/`SomeTweaks.ini` chung namespace crate (`autoregen`,
 `sometweaks`), tên cũ giữ nguyên trong lịch sử bên dưới vì vẫn phản ánh
-đúng ý tưởng gốc của mod. Sống ở `crates/sometweaks` trong workspace, không
+đúng ý tưởng gốc của mod. Sống ở `mods/sometweaks` trong workspace, không
 còn là repo Git riêng.
 
 Dự định gộp các mod Quality-of-Life hiện có cho Elden Ring (AutoRegen,
@@ -883,7 +883,7 @@ kiểu edition 2015). Lý do: tên file `mod.rs` không tự mô tả được n
 lúc trong editor khiến tab khó phân biệt hơn hẳn `regen.rs`. Không gộp
 `attack_hook.rs` vào cùng file hay đổi tên nó, và không bỏ thư mục con
 `regen/` (giữ thư mục để tránh trùng tên `attack_hook.rs` với
-`crates/autoregen/src/attack_hook.rs` nếu làm phẳng hoàn toàn) - chỉ đổi
+`mods/autoregen/src/attack_hook.rs` nếu làm phẳng hoàn toàn) - chỉ đổi
 đúng 1 việc: tên file `mod.rs`.
 
 ## Thêm `Regen.PerHit.DamageType` - tùy chọn tính cả đòn phép (2026-08-25)
@@ -1225,7 +1225,7 @@ hưởng gì tới hành vi, chỉ tới nội dung `SomeTweaks.log`.
 
 Sau phiên điều tra trước (bị dồn vào `git stash@{0}`, xem mục README cũ ở
 trên) kết luận tạm "OpenEnhanceShop tự nó ép đứng dậy bất kể ngữ cảnh",
-lần này viết lại `crates/sometweaks/src/misc/grace_menu.rs` từ đầu (không
+lần này viết lại `mods/sometweaks/src/misc/grace_menu.rs` từ đầu (không
 tái dùng code cũ trong stash, cố tình không restore) để kiểm chứng riêng
 đúng 1 giả thuyết còn treo: chiếm dụng 1 state vanilla thật ("Tailoring
 Shop", bank1 id 142) ngay trong graph ESD đang sống của Site of Grace, chỉ
@@ -1358,7 +1358,7 @@ mã nguồn mở, xác nhận đang chạy đúng bản game hiện tại qua
 `mod_test`) làm được việc này bằng cách **hook thẳng hàm tra bảng text**
 (`src/grace_test_messages.cpp`), không phải patch dữ liệu FMG.
 
-Thêm module mới `crates/sometweaks/src/misc/msg_hook.rs`, port lại đúng
+Thêm module mới `mods/sometweaks/src/misc/msg_hook.rs`, port lại đúng
 kỹ thuật đó:
 
 - Dò 2 AOB y hệt `erdGameTools` dùng để tìm hàm `get_message` thật (nhận
@@ -1484,8 +1484,8 @@ cụ thể); "Bán" giữ nguyên vanilla (ID 20000011).
 
 `grace_menu` giờ đã là 1 tính năng đầy đủ (3 mục menu + section `[Grace
 Menu]` riêng trong ini), không còn là thử nghiệm nhỏ chia sẻ `[Misc]`
-nữa - chuyển `crates/sometweaks/src/misc/grace_menu/` (kèm 2 submodule
-`msg_hook`/`unlock_shop_inventory`) thành `crates/sometweaks/src/grace_menu/`,
+nữa - chuyển `mods/sometweaks/src/misc/grace_menu/` (kèm 2 submodule
+`msg_hook`/`unlock_shop_inventory`) thành `mods/sometweaks/src/grace_menu/`,
 khai báo `mod grace_menu;` ở `lib.rs` ngang hàng `regen`/`rune`/`spirit`
 thay vì nằm trong `misc::`. Thuần tuý đổi cấu trúc, không đổi hành vi.
 
@@ -2384,7 +2384,7 @@ tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL,
 thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
 `from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
 `dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
-`crates/autoregen/README.md`.
+`mods/autoregen/README.md`.
 
 
 ## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
@@ -2403,7 +2403,7 @@ khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1
 `Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
 không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
 MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
-tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay sau lần `common::task::wait_for_cs_task()` chung trước khi bật các tính năng.
+tiết trong `mods/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay sau lần `common::task::wait_for_cs_task()` chung trước khi bật các tính năng.
 Không đổi hành vi.
 
 Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
@@ -2425,7 +2425,7 @@ Phát hiện qua DropMultiplier (bản tách của module này, báo lỗi trên
 và với regulation.bin của Convergence thì hàm này panic ngay trong
 fromsoftware-rs (`param_repository.rs:357`, `unwrap()` trên `None`), làm chết
 thread nên drop rate không bao giờ được áp. Nguyên nhân (đã xác nhận in-game,
-chi tiết ở mục cùng ngày trong `crates/dropmultiplier/README.md`): header file
+chi tiết ở mục cùng ngày trong `mods/dropmultiplier/README.md`): header file
 ghi 4631 dòng nhưng lookup table game dựng chỉ có 4630 phần tử, fromsoftware-rs
 đọc lố 1 phần tử rác.
 
@@ -2436,3 +2436,9 @@ ghi 4631 dòng nhưng lookup table game dựng chỉ có 4630 phần tử, froms
 Log dòng `DropRate: SoloParamRepository ready, snapshotting ...` giờ kèm tên
 resource/struct và số dòng (header + runtime). Module này chưa được test lại
 in-game riêng; code giống hệt bản DropMultiplier đã test.
+
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

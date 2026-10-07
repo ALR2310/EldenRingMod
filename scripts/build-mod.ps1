@@ -48,7 +48,7 @@ $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
 $Crate = $Mod.ToLower()
-$CrateDir = Join-Path $RepoRoot "crates\$Crate"
+$CrateDir = Join-Path $RepoRoot "mods\$Crate"
 
 if (-not (Test-Path $CrateDir)) {
     throw "No crate directory found at '$CrateDir' - is '$Mod' spelled the same as its Cargo package (lowercased)?"

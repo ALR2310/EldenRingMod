@@ -2,19 +2,19 @@
 resolver = "2"
 members = [
     "shared",
-    "crates/autoregen",
-    "crates/sometweaks",
-    "crates/passiverunes",
-    "crates/runemultiplier",
-    "crates/weightmultiplier",
-    "crates/risearcher",
-    "crates/dropmultiplier",
-    "crates/infiniteailment",
-    "crates/soulsteleport",
-    "crates/spiritmultiplier",
-    "crates/fasterrevival",
-    "crates/windowresize",
-    "crates/speedmultiplier",
+    "mods/autoregen",
+    "mods/sometweaks",
+    "mods/passiverunes",
+    "mods/runemultiplier",
+    "mods/weightmultiplier",
+    "mods/risearcher",
+    "mods/dropmultiplier",
+    "mods/infiniteailment",
+    "mods/soulsteleport",
+    "mods/spiritmultiplier",
+    "mods/fasterrevival",
+    "mods/windowresize",
+    "mods/speedmultiplier",
 ]
 
 [workspace.dependencies]

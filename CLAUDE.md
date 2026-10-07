@@ -2,7 +2,7 @@
 
 ## Cập nhật README.md sau khi thêm/sửa tính năng
 
-Mỗi mod trong `crates/<mod>/README.md` được viết theo kiểu "nhật ký phát
+Mỗi mod trong `mods/<mod>/README.md` được viết theo kiểu "nhật ký phát
 triển": các mục có tiêu đề kèm ngày (`(YYYY-MM-DD)`), ghi lại lý do quyết
 định, hướng đã thử/bỏ, và trạng thái hiện tại - không chỉ là hướng dẫn dùng.
 
@@ -19,25 +19,25 @@ giống như build/test.
 
 ## Cập nhật `.vscode/tasks.json` khi thêm / xoá / đổi tên mod
 
-Mỗi mod trong `crates/` có 1 task build riêng trong `.vscode/tasks.json`
+Mỗi mod trong `mods/` có 1 task build riêng trong `.vscode/tasks.json`
 và nằm trong `dependsOn` của task `Cargo: Build All (Release)`. Khi
 **thêm, xoá hoặc đổi tên** 1 mod, **luôn cập nhật file này cùng lúc**:
 
 - Thêm: 1 task mới theo đúng mẫu các task sẵn có - `label` =
   `Cargo: Build <Mod> (Release)`, `-Mod <Mod>` với `<Mod>` lấy từ
-  `[lib] name` trong `crates/<mod>/Cargo.toml` (PascalCase, không tự
+  `[lib] name` trong `mods/<mod>/Cargo.toml` (PascalCase, không tự
   viết hoa tên thư mục) - và thêm label đó vào `dependsOn` của Build All.
 - Xoá: bỏ task của mod đó và dòng tương ứng trong `dependsOn`.
 - Đổi tên: sửa `label`, `detail`, `-Mod` và dòng trong `dependsOn`.
 
 Sau khi sửa, kiểm tra file vẫn là JSON hợp lệ và số task build riêng
-bằng đúng số thư mục trong `crates/`. Không cần hỏi lại người dùng.
+bằng đúng số thư mục trong `mods/`. Không cần hỏi lại người dùng.
 Người dùng yêu cầu (2026-09-30) sau khi phát hiện thiếu task của
 FasterRevival, SpeedMultiplier, SpiritMultiplier, WindowResize.
 
 ## Đối chiếu changelog thật trên Nexus Mods trước khi viết `[Changelog]` trong DESCRIPTION.bbcode
 
-Trước khi thêm/sửa mục changelog trong `crates/<mod>/DESCRIPTION.bbcode`,
+Trước khi thêm/sửa mục changelog trong `mods/<mod>/DESCRIPTION.bbcode`,
 **luôn gọi Nexus Mods API để lấy changelog thật hiện có trên trang mod**
 trước, rồi mới viết mục mới nối tiếp đúng theo đó - không tự đặt số phiên
 bản/nội dung dựa trên suy đoán hay dựa vào lịch sử trong README (lịch sử
@@ -77,8 +77,8 @@ qua trang web thật trước khi tự xoá bất kỳ mục changelog cũ nào.
 ## Bump `version` trong `Cargo.toml` cùng lúc với changelog mới
 
 Khi thêm 1 mục version mới vào `[Changelog]` của
-`crates/<mod>/DESCRIPTION.bbcode`, **luôn đổi luôn `version` trong
-`crates/<mod>/Cargo.toml` thành đúng số version đó** (vd. changelog
+`mods/<mod>/DESCRIPTION.bbcode`, **luôn đổi luôn `version` trong
+`mods/<mod>/Cargo.toml` thành đúng số version đó** (vd. changelog
 `1.1.0` → `version = "1.1.0"`), rồi build lại để `Cargo.lock` cập nhật
 theo. Version crate phải luôn khớp với version mới nhất trên Nexus.
 
@@ -92,7 +92,7 @@ crate không được bump (vd. `autoregen` vẫn `2.0.0` trong khi Nexus đã l
 Trước khi viết 1 hàm/struct/module mới (helper gate "đã vào game", chờ
 singleton, đăng ký task, quét AOB, đọc/ghi config, log, banner thông
 báo...), **luôn tìm xem đã có sẵn chưa** - trước hết trong `shared/src`
-(crate `common`, mọi mod dùng chung), rồi đến các mod khác trong `crates/`
+(crate `common`, mọi mod dùng chung), rồi đến các mod khác trong `mods/`
 (có thể đã tự viết 1 bản chưa kịp đưa lên `common`). Tìm theo cả tên lẫn
 chức năng (vd. grep `main_player`, `WorldChrMan`, `instance()`), không chỉ
 theo đúng tên định đặt.

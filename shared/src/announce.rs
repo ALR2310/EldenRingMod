@@ -4,7 +4,7 @@
 //! without the player needing to check a log file.
 //!
 //! Ported from `autoregen::regen`'s `show_announcement` (2026-09-10) once a
-//! second mod ([`dropmultiplier`](../../crates/dropmultiplier)) wanted the
+//! second mod ([`dropmultiplier`](../../mods/dropmultiplier)) wanted the
 //! same confirmation on `ReloadKey` press.
 
 use eldenring::cs::{AnnounceNotification, CSMenuManImp, MenuString};

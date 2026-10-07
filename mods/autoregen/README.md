@@ -10,7 +10,7 @@ bản C++/MASM ban đầu — lịch sử dịch ngược AOB/offset/pointer-cha
 `AutoRecovery.dll` vẫn được giữ nguyên bên dưới vì vẫn còn giá trị tham
 khảo (đặc biệt là điểm hook `OnAttack`), nhưng **không còn khớp với code
 hiện tại trong `src/`**. Từ 2026-08-18, crate này sống trong workspace
-[`EldenRingMod`](../../README.md) (`crates/autoregen`) cùng các mod Rust
+[`EldenRingMod`](../../README.md) (`mods/autoregen`) cùng các mod Rust
 khác, không còn là repo Git riêng.
 
 Kiến trúc mẫu lấy từ mod [`SomeTweaks`](../sometweaks) (đổi tên từ
@@ -1404,7 +1404,7 @@ khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1
 `Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
 không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
 MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
-tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
+tiết trong `mods/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
 Không đổi hành vi.
 
 Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
@@ -1436,3 +1436,8 @@ Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
 "Config reloaded" hiện giữa màn hình sau khi nhấn `ReloadKey`. Dòng log
 `Config reloaded` vẫn ghi. Banner của mod này là "AutoRegen: config reloaded" (watcher riêng trong `regen.rs`, không qua `common::reload`).
 
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

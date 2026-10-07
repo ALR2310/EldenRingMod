@@ -8,7 +8,7 @@ gian (`Rune.Milestone`).
 ## Bản Rust hiện tại (2026-08-18)
 
 Đã **viết lại hoàn toàn bằng Rust** (`cdylib`), thay cho bản C++ ban đầu -
-sống ở `crates/passiverunes` trong workspace
+sống ở `mods/passiverunes` trong workspace
 [`EldenRingMod`](../../README.md), không còn là repo Git riêng. Đây đúng
 như README cũ (bên dưới) đã tự kết luận: mod **có lợi nhất** để chuyển
 trong số các mod cũ, vì không có ASM hook hay logic patch code nào cả.
@@ -428,7 +428,7 @@ tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL,
 thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
 `from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
 `dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
-`crates/autoregen/README.md`.
+`mods/autoregen/README.md`.
 
 
 ## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
@@ -447,7 +447,7 @@ khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1
 `Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
 không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
 MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
-tiết trong `crates/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
+tiết trong `mods/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `lib.rs`, ngay trước khi chạy tính năng chính, qua `common::diag::log_environment_when_game_ready()` (chờ `CSTaskImp` rồi mới ghi, lúc đó mọi DLL đã nạp xong; lần chờ `CSTaskImp` sau của mod dùng lại kết quả đã cache).
 Không đổi hành vi.
 
 Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
@@ -479,3 +479,8 @@ Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
 "Config reloaded" hiện giữa màn hình sau khi nhấn `ReloadKey`. Dòng log
 `Config reloaded` vẫn ghi. Dùng chung `common::reload::run` (đọc key mỗi lần reload).
 
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

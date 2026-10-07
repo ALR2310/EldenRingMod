@@ -2,7 +2,7 @@
 
 Mod DLL nhân số lượng linh hồn (spirit ash) triệu hồi lên **vượt mức trần
 10 con** mà engine đang áp - khác `sometweaks`'s `Spirit.Summon.Amount`/
-`Multiplier` (`crates/sometweaks/src/spirit/summon_count.rs`), vốn bị kẹp
+`Multiplier` (`mods/sometweaks/src/spirit/summon_count.rs`), vốn bị kẹp
 cứng ở `MAX_SUMMONS = 10`.
 
 **Trạng thái hiện tại (2026-09-27, `0.2.0`, chưa đăng Nexus):**
@@ -66,7 +66,7 @@ tick `FrameBegin` mỗi 500ms, gate bằng
 
 **Bước tiếp:** tuỳ con số `capacity` - dò trong IDA/Ghidra chỗ engine
 tính "band start/length" (bắt đầu từ `band_occupancy`/`kSigGate` của
-`er10x.dll`, xem `crates/sometweaks/README.md` mục 2026-08-25/26), rồi đưa
+`er10x.dll`, xem `mods/sometweaks/README.md` mục 2026-08-25/26), rồi đưa
 logic chain rebuild của `summon_count.rs` lên `shared/` (`common`) để cả
 `sometweaks` lẫn mod này dùng chung thay vì copy.
 
@@ -410,7 +410,7 @@ phía trên nhắc `KeepEnemySlots` đã lỗi thời.
 ## Log in phiên bản game + danh sách DLL đã nạp (2026-09-27)
 
 Đồng bộ với các mod khác sau khi merge `main` (commit `7bf7300`, module
-`common::diag`, chi tiết trong `crates/weightmultiplier/README.md` mục
+`common::diag`, chi tiết trong `mods/weightmultiplier/README.md` mục
 2026-09-26): `lib.rs` gọi `common::diag::log_environment_when_game_ready()`
 ngay trước `chain::run()` (tính năng chính, không bao giờ trả về) - chờ
 `CSTaskImp` rồi ghi 1 dòng `Game: eldenring.exe v<version> ...` và danh
@@ -1154,3 +1154,8 @@ Thêm `ReloadBanner` (`[General]`, mặc định `true`): `false` tắt banner
 "Config reloaded" hiện giữa màn hình sau khi nhấn `ReloadKey`. Dòng log
 `Config reloaded` vẫn ghi. Dùng chung `common::reload::run` (đọc key mỗi lần reload).
 
+## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
+
+Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
+
+Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.

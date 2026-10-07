@@ -31,9 +31,9 @@ changelog). Cấu trúc:
                                  // cho người dùng đọc, KHÔNG được suy ra tên
                                  // thư mục crate từ field này (từng sai thật:
                                  // mod 10549 từng hiển thị "Reduction Weight"
-                                 // trên Nexus nhưng nằm ở crates/weightmultiplier;
+                                 // trên Nexus nhưng nằm ở mods/weightmultiplier;
                                  // nay đã đổi tên thành "Weight Multiplier")
-    "crate": "autoregen",       // tên thư mục thật dưới crates/ - dùng field
+    "crate": "autoregen",       // tên thư mục thật dưới mods/ - dùng field
                                  // này để tìm file, KHÔNG suy đoán từ "name"
     "deploys": [                // LỊCH SỬ deploy - luôn APPEND, không ghi đè.
       {
@@ -72,7 +72,7 @@ không suy đoán từ `name`.
 
 ## Bước 2 - Đối chiếu changelog local ↔ Nexus, chốt version + changelog
 
-1. Đọc `crates/<crate>/DESCRIPTION.bbcode`, tìm phần sau
+1. Đọc `mods/<crate>/DESCRIPTION.bbcode`, tìm phần sau
    `[size=4][b]Changelog[/b][/size]`. Parse **mọi** block theo mẫu:
    ```
    [b]<version>[/b]
@@ -116,7 +116,7 @@ không suy đoán từ `name`.
      timestamp file), rồi liệt kê mọi commit đổi code/ini của crate này kể
      từ đó:
      ```bash
-     git log --oneline <commit>..HEAD -- crates/<crate>/src crates/<crate>/*.ini
+     git log --oneline <commit>..HEAD -- mods/<crate>/src mods/<crate>/*.ini
      ```
      Nếu mảng `deploys` rỗng, hoặc phần tử cuối có `version: "unknown"`
      (chưa xác minh được, xem mục "Mod ID mapping" ở trên) - báo cho người
@@ -153,7 +153,7 @@ không suy đoán từ `name`.
 
 `build-mod.ps1` cần tên PascalCase (`-Mod AutoRegen`), khác với `crate`
 (lowercase, `autoregen`) dùng ở Bước 2. Lấy đúng tên này từ
-`crates/<crate>/Cargo.toml`, mục `[lib] name` - **không** tự viết hoa chữ
+`mods/<crate>/Cargo.toml`, mục `[lib] name` - **không** tự viết hoa chữ
 cái đầu crate slug (không phải lúc nào cũng khớp, VD tên thư mục và tên
 `[lib]` có thể khác nhau về cách viết hoa/cách ly từ).
 
