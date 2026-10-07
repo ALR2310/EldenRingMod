@@ -1,338 +1,58 @@
 # RuneMultiplier
 
-Mod cho Elden Ring: nhân hệ số cấu hình được (`Multiplier` trong ini,
-mặc định `2.0`) lên rune **nhận được** từ mọi nguồn (giết quái, nhặt item)
-— 1 hook duy nhất, patch thẳng vào hàm cộng-rune cấp thấp nhất của game
-(`AddSoul_Call`). Rune **chi tiêu** (lên cấp, mua đồ) không bị ảnh hưởng
-(xem mục 2026-08-19 bên dưới).
+> **v1.0.4** · Nexus mod 10630 · **đã phát hành** (1.0.0 đến 1.0.4), cập nhật cho ER 1.17.1
 
-## 2026-08-19 — Sửa lỗi nhân luôn cả rune chi tiêu; đổi tên key ini
+Mod DLL cho Elden Ring: **nhân hệ số cấu hình được lên số rune nhận được từ mọi
+nguồn** (giết quái, nhặt/dùng item, bán đồ...). Rune **chi tiêu** (lên cấp, mua
+đồ) không bị ảnh hưởng. Chỉ một hook duy nhất, patch thẳng vào hàm cộng rune
+thấp nhất của game (`AddSoul_Call`).
 
-- **Bug**: `AddSoul_Call` là hàm generic "current += amount" dùng chung cho
-  cả cộng rune (kill/item, amount dương) lẫn trừ rune (lên cấp, mua đồ,
-  amount âm) — 2 người dùng Nexus báo cáo hệ số nhân cũng làm tăng giá mua
-  đồ và làm rune còn dư về 0 sau khi lên cấp. Đối chiếu với script "Rune
-  Multiplier" gốc trong CT table Hexinton (`.docs/eldenring_all-in-one_*`)
-  xác nhận bản CE gốc chỉ nhân đúng phép tính phần thưởng giết quái, chưa
-  bao giờ hook `AddSoul_Call` trực tiếp — việc mở rộng sang `AddSoul_Call`
-  (để bắt luôn rune từ item) trong bản C++ port đã vô tình kéo theo cả
-  nhánh trừ rune.
-- **Fix** (`build_stub` trong `src/hook.rs`): stub giờ `test eax,eax; jle`
-  bỏ qua toàn bộ khối nhân Q20 khi `amount <= 0`, chỉ nhân khi dương.
-- **Đổi tên key ini** cho khớp quy ước chung của workspace (`autoregen`/
-  `passiverunes`): `RuneMultiplier` → `Multiplier`, `HotReloadKey` →
-  `ReloadKey` (mặc định đổi từ `F9` sang `F5` theo đúng quy ước
-  `ReloadKey=F5` mà các mod khác dùng), sắp lại vào 2 section
-  `[Settings]`/`[Debug]`. `DebugLog` giữ nguyên tên.
+## Cấu hình (`RuneMultiplier.ini`)
 
-## Bản Rust hiện tại (2026-08-18)
+File mẫu nhúng trong DLL (`include_str!`), là nguồn sự thật duy nhất cho giá trị
+mặc định.
 
-Đã **viết lại hoàn toàn bằng Rust** (`cdylib`), thay cho bản C++ ban đầu -
-sống ở `mods/runemultiplier` trong workspace
-[`EldenRingMod`](../../README.md), không còn là repo Git riêng. Cùng 1 kỹ
-thuật hook (patch 12 byte đầu `AddSoul_Call`, xem RE chi tiết bên dưới -
-vẫn đúng nguyên bản), chỉ đổi cách redirect:
+| Section | Key | Mặc định | Ý nghĩa |
+|---|---|---|---|
+| `[General]` | `ReloadKey` | `F5` | Phím nạp lại ini. Nhận `F1`-`F24`, một ký tự/số, hoặc mã virtual-key dạng hex (`0x2D`) / decimal |
+| `[Settings]` | `Multiplier` | `2.0` | Hệ số nhân lên rune **nhận được**; `1.0` = vanilla, nhỏ hơn 1 để nhận ít đi, số âm để bị trừ rune |
+| `[Logging]` | `LogFile` | `false` | Ghi `RuneMultiplier.log` cạnh DLL (khác phần lớn mod khác, mặc định **tắt**); `false` thì không tạo file. Bật thì log thêm byte gốc tại điểm patch và byte của stub |
 
-- **Bỏ hẳn `CodePatch.cpp`** (tìm vùng nhớ thực thi gần target bằng
-  `VirtualAlloc` quét lùi/tiến theo bước `0x10000`, để `JMP E9 rel32` vừa
-  tầm 32-bit signed). Thay bằng **jump tuyệt đối** cả 2 chiều — đúng kỹ
-  thuật `mov rax, imm64; jmp rax` mà `autoregen`/`sometweaks`'s
-  `attack_hook.rs` đã dùng: patch site ghi `mov rax,<stub>; jmp rax` (12
-  byte, vừa khít không cần NOP đệm), stub tự nó kết thúc bằng
-  `mov r11,<return_addr>; jmp r11`. Vì là jump tuyệt đối, `VirtualAlloc`
-  giờ gọi thẳng không cần địa chỉ gợi ý (`std::ptr::null_mut()`) — stub có
-  thể nằm bất cứ đâu trong không gian địa chỉ 64-bit, không còn ràng buộc
-  khoảng cách.
-- Đọc/ghi ini/log/parse hotkey giờ dùng chung crate [`common`](../../shared)
-  (`common::input::parse_virtual_key` — tách ra từ chính `autoregen`/
-  `sometweaks` khi port mod này, vì cả 3 mod cần y hệt 1 hàm) thay vì code
-  Config/Logger riêng.
-- Vòng lặp theo dõi `ReloadKey` (khi mới port, còn tên `HotReloadKey`)
-  chuyển từ thread `Sleep`+`GetAsyncKeyState` polling mỗi 50ms sang task
-  đăng ký trên `CSTaskGroupIndex::FrameBegin`
-  (`eldenring::util::input::is_key_pressed`, cùng cơ chế debounce cạnh lên
-  `autoregen`/`sometweaks` đã dùng cho `ReloadKey`) — nhất quán với các mod
-  khác trong workspace, dù bản thân việc patch code không bắt buộc phải
-  chạy trên main thread của game.
-- Ini key ban đầu giữ nguyên tên gốc từ bản C++ (`RuneMultiplier`,
-  `HotReloadKey`, `DebugLog`); đã đổi tên `RuneMultiplier`→`Multiplier` và
-  `HotReloadKey`→`ReloadKey` ngày 2026-08-19 để khớp quy ước chung của
-  workspace — xem mục ở đầu file.
+Đổi ini rồi bấm `ReloadKey` là có hiệu lực ngay, kể cả đổi chính `ReloadKey`, vì
+phím được đọc lại mỗi frame. Mod **không** dùng `common::reload`, nên không có
+`ReloadBanner`; kết quả reload chỉ hiện trong log (`Config reloaded`).
 
-Xem `src/hook.rs` cho code hiện tại; `RuneMultiplier.ini` cho toàn bộ key
-cấu hình.
+## Cách hoạt động
 
-## Pin fromsoftware-rs 0.14.0, thêm wait_for_system_init + panic safety cho tick reload (2026-08-26)
+- **Hook (`src/hook.rs`):** tìm `AddSoul_Call` bằng một mẫu AOB neo (duy nhất trên
+  2.6.2.0, 2.7.0.0 và 2.7.1.0) rồi đọc lệnh `call` tại `anchor+0x11`. Ghi đè 12
+  byte đầu của hàm bằng một jump tuyệt đối tới stub tự sinh. Stub nhân `EDX`
+  (số rune cộng thêm) bằng fixed-point Q20 rồi chạy lại đúng 3 lệnh gốc.
+- **Chỉ nhân khi số cộng thêm dương:** nhờ đó khoản trừ (lên cấp, mua đồ) không bị
+  nhân. Sai số tối đa ±1 rune.
+- **Hot reload không patch lại:** stub đọc hệ số qua con trỏ lúc chạy, nên reload
+  chỉ cập nhật một biến.
+- **Hook thất bại thì mod tắt cho phiên đó** (không tìm thấy neo, không giải
+  được `call`, `VirtualAlloc`/`VirtualProtect` lỗi): log ghi lỗi và không patch gì.
+  Khi đó cũng không có reload.
+- **Khởi động:** `DllMain` tạo một thread, nạp/tạo ini, mở log, cài hook, chờ
+  `CSTaskImp`, rồi đăng ký task `FrameBegin` đọc `ReloadKey`. Log ghi phiên bản game
+  và danh sách DLL đã nạp (`common::diag`, không in đường dẫn đầy đủ).
+- Chi tiết kỹ thuật, các hướng đã thử và bỏ, cách kiểm tra tương thích:
+  [docs/addsoul_hook.md](docs/addsoul_hook.md).
 
-Áp dụng lại 3 cải tiến ổn định đã làm cho `sometweaks` (xem README của nó
-cùng ngày) sang crate này:
+Code: [src/hook.rs](src/hook.rs) (toàn bộ logic), [src/lib.rs](src/lib.rs) (entry point).
 
-- **Version pin**: `eldenring`/`fromsoftware-shared` giờ khai báo 1 lần ở
-  workspace `Cargo.toml` gốc, pin về bản crates.io `0.14.0` thay vì tracking
-  git HEAD.
-- **`wait_for_system_init` + retry đúng cách**: `src/hook.rs` trước đây gọi
-  `CSTaskImp::wait_for_instance(Duration::MAX)` **không có vòng lặp retry**
-  cho lỗi `InvalidRva` - nếu trúng đúng race đó, hot-reload bị tắt **vĩnh
-  viễn** cho cả session (chỉ log lỗi rồi `sleep` vô hạn, hook patch code vẫn
-  chạy với config lúc khởi động). Đây là điểm yếu hơn cả `autoregen`/
-  `passiverunes` (2 crate đó đã có vòng lặp retry từ trước, xem mục
-  "Sự cố khi test"/"Sửa 2 bug" tương ứng). Đã thay bằng `wait_for_cs_task()`
-  đúng pattern chuẩn của workspace: `wait_for_system_init_until_ready()`
-  (chờ `CSWindow` hInstance) rồi mới retry `CSTaskImp::wait_for_instance`
-  mỗi 1s thay vì bỏ cuộc.
-- **Panic safety cho tick reload**: thêm `run_recurring_safe()` bọc quanh
-  tick `ReloadKey`/`run_recurring` trong `hook.rs` - chỉ ảnh hưởng đến việc
-  đọc phím reload, **không** liên quan đến đoạn asm đã patch vào
-  `AddSoul_Call` (xem mục "Vì sao không cần try/catch quanh code assembly
-  đã inject" bên dưới - lý do đó vẫn đúng nguyên vẹn, panic safety ở đây chỉ
-  bảo vệ vòng lặp Rust bên ngoài). Cần workspace `Cargo.toml` bỏ
-  `panic = "abort"` ở `[profile.release]` (mặc định về `"unwind"`) thì
-  `catch_unwind` mới có tác dụng ở bản release.
+## Giới hạn
 
-Không đụng ini/hành vi nhân rune, chỉ cải thiện độ ổn định khởi động và
-chống crash của vòng lặp reload.
+- Phụ thuộc mẫu AOB neo: game vá làm đổi bố cục thì mod tự tắt cho phiên đó.
+- Mọi nguồn rune **nhận được** đều bị nhân, không có tuỳ chọn tách riêng từng nguồn.
+- Với `Multiplier` âm, rune nhận được bị **trừ** thay vì cộng.
+- Chỉ dùng ở chế độ offline, tắt EAC.
 
-## Lịch sử dịch ngược & quyết định kỹ thuật (bản C++ gốc, kỹ thuật RE vẫn đúng)
+## Tài liệu liên quan
 
-**Đã test trong game (2026-08-14), hoạt động đúng, không crash** (trên bản
-C++). Bản Rust dùng lại đúng anchor/offset/RE bên dưới, chưa test lại
-riêng trong game.
-
-### Vì sao chỉ còn 1 hook (từng có 2, gây cộng dồn sai)
-
-**Thiết kế ban đầu có 2 hook:**
-1. Hook tại 1 điểm tính riêng cho **enemy-kill reward** (AOB
-   `F3 0F 59 C1 F3 0F 2C F8 48 8B 8B`, khớp với entry `"Rune Multiplier "`
-   trong CT table cộng đồng `eldenring_all-in-one_Hexinton-v6.1_ce7.5.ct`
-   và với 1 mod DLL cộng đồng đã build sẵn — xem lịch sử RE ở cuối file).
-   Test trong game: **enemy-kill nhân đúng**, nhưng **item rune (Golden
-   Rune...) không đổi** — không đi qua điểm tính này.
-2. Để phủ luôn item rune, thêm hook thứ 2 patch thẳng vào `AddSoul_Call`
-   — hàm cộng rune cấp thấp nhất, dùng chung cho **mọi** nguồn (xem RE chi
-   tiết ở dưới).
-
-**Phát hiện khi test cả 2 cùng lúc (2026-08-14, người dùng report):** kill
-enemy 64 rune, đáng lẽ ra `×2 = 128`, nhưng thực tế ra `256` — bị nhân 2
-lần. Nguyên nhân: enemy-kill **cũng đi qua `AddSoul_Call`** (đúng như RE
-dự đoán), nên hook 1 nhân trước, hook 2 nhân tiếp lên kết quả đã nhân —
-cộng dồn sai. **Đã bỏ hoàn toàn hook 1** — không patch điểm đó nữa, chỉ
-còn dùng đúng nó để *định vị* `AddSoul_Call` (đọc `call` instruction tại
-`anchor+0x11`, không cần AOB riêng cho `AddSoul_Call`). Hook 2 (nay là
-hook duy nhất) tự nó đã phủ đúng cả enemy-kill lẫn item rune.
-
-### Cơ chế hook duy nhất — patch thẳng `AddSoul_Call`
-
-**Disassemble `eldenring.exe` thật** (Ghidra headless, không full-analysis
-— quá chậm với file 87MB, chỉ disassemble vùng cần) cho `AddSoul_Call`:
-
-```
-MOV R9D,[RCX+0x6C]        ; R9D = rune hiện tại
-LEA R8D,[R9+RDX*1]        ; sum = current + amount (RDX = amount)
-CMP R8D,0x3B9AC9FF          ; clamp về cap 999,999,999
-...
-MOV [RCX+0x6C],EAX          ; ghi rune mới — điểm cộng rune thật, dùng chung mọi nguồn
-RET
-```
-
-**Xác nhận chéo bất ngờ**: offset `[RCX+0x6C]` khớp **chính xác** với
-`OFFSET_2 = 0x6C` mà `PassiveRunes` (bản C++) đã tìm ra hoàn toàn độc lập
-(qua pointer-chain từ `GameDataMan`) — 2 nỗ lực RE khác nhau, khác thời
-điểm, ra cùng 1 offset cho cùng 1 field `rune_count`. Bản Rust hiện tại
-của `passiverunes` xác nhận offset này gián tiếp qua field
-`GameDataMan::main_player_game_data.rune_count` trong `fromsoftware-rs`.
-
-**Tìm địa chỉ `AddSoul_Call` không cần AOB riêng**: dùng lại AOB của điểm
-enemy-kill cũ (`ANCHOR_PATTERN`, vẫn còn trong code, chỉ để định vị), đọc
-`call` instruction tại `anchor+0x11`, resolve rel32 ra địa chỉ tuyệt đối.
-
-**Cách patch**: ghi đè 12 byte đầu của `AddSoul_Call` (3 instruction:
-`mov r9d,[rcx+0x6c]` + `xor r11d,r11d` + `mov [rsp+0x10],r11d` — không cái
-nào đọc `RDX`/`EDX`) bằng code nhân `EDX` (amount) theo **fixed-point Q20
-integer** (không dùng XMM, vì hàm này bị gọi từ rất nhiều nơi, không nên
-giả định `xmm0` "chết" ở mọi nơi gọi), rồi chạy lại đúng 3 instruction gốc
-(copy trực tiếp từ bộ nhớ game lúc cài hook, không hardcode tay) trước khi
-nhảy về.
-
-### Vì sao không cần try/catch quanh code assembly đã inject
-
-Không thể bọc theo nghĩa thông thường — `try`/`catch` (và cả SEH
-`__try`/`__except`, hay `catch_unwind` bên Rust) hoạt động dựa vào unwind
-qua call-frame có handler table; code assembly ghép thẳng vào giữa 1 hàm
-bằng `jmp` (kỹ thuật splice) không có scaffolding đó. `AutoRegen/AttackHook`
-có dùng `catch_unwind`, nhưng bọc quanh **hàm Rust** nó gọi ra
-(`on_attack_observed`), không phải quanh đoạn asm chèn trực tiếp.
-
-Hook này an toàn không phải vì có try/catch, mà vì **không dereference bất
-kỳ con trỏ game nào** — chỉ đụng thanh ghi CPU (`rax`, `rdx`, `r8`, `r10`,
-`r11`) và đọc 1 biến global tĩnh (`FIXED_Q20`) luôn hợp lệ suốt đời DLL,
-không bao giờ null. Khác hẳn `AttackHook` phải đọc `WorldChrMan`/player
-pointer (có thể null lúc loading/transition, nên mới cần bảo vệ ở đó).
-
-### Đã verify (bản C++)
-
-- **Byte-level encoding**: dump đúng byte multiply-code, import raw vào
-  Ghidra như x86-64 rồi disassemble ngược — khớp 100% ý định, không lỗi
-  encode tay.
-- **Độ chính xác phép tính fixed-point**: test ~100 tổ hợp (amount từ 0
-  đến 999,999,999 × multiplier từ 0 đến 100) so với `round(amount×multiplier)`
-  bằng double — lệch tối đa **±1 rune** ở mọi mức reward thực tế trong
-  game (do `SAR` làm tròn xuống thay vì tròn gần nhất — không đáng kể).
-- **Test trong game (2026-08-14)**: hoạt động đúng, không crash, không
-  còn cộng dồn sai sau khi bỏ hook 1.
-
-## Config
-
-3 key trong `RuneMultiplier.ini` (đổi tên 2026-08-19, xem mục ở đầu file):
-- `Multiplier` (float, section `[Settings]`) — hệ số nhân áp dụng cho rune
-  **nhận được** (kill/item); rune chi tiêu không bị ảnh hưởng. `1.0` =
-  không đổi.
-- `ReloadKey` (mặc định `F5`, section `[Settings]`) — phím kích hoạt reload
-  config. Nhận `F1`-`F24`, 1 ký tự/số (`G`), hoặc **raw virtual-key code**
-  dạng hex (`0x2D`) / decimal (`45`) — xem
-  [danh sách VK code của Microsoft](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes).
-- `DebugLog` (true/false, mặc định `false`, section `[Debug]`) —
-  **`RuneMultiplier.log` chỉ được tạo khi giá trị này là `true`**. Bật thì
-  có thêm hex dump byte gốc tại điểm patch và byte của stub tự sinh. Đổi
-  qua hotkey reload lúc đang chạy cũng có tác dụng.
-
-## Hot reload — sửa ini rồi bấm phím, không cần khởi động lại game
-
-Hot reload **không cần patch lại hook** — stub đã cài luôn đọc
-`FIXED_Q20` qua con trỏ tại thời điểm chạy, nên chỉ cần cập nhật giá trị
-biến đó (`init_multiplier` chạy lại) là đủ, không đụng gì đến vùng nhớ đã
-patch. Đổi `ReloadKey` cần khởi động lại (phím chỉ đọc 1 lần lúc cài
-hook trong bản C++; bản Rust đọc lại config mỗi tick nên **có thể đổi
-`ReloadKey` mà không cần khởi động lại** — khác biệt nhỏ so với bản
-C++, do dùng chung cơ chế tick với `autoregen`/`sometweaks` thay vì đọc 1
-lần lúc cài hook).
-
-## Chưa test (bản Rust)
-
-- Test thật trong game: enemy-kill, item rune, hot-reload/hotkey.
-- Pattern/offset dịch ngược từ 1 bản game cụ thể — nếu game đã vá sau đó,
-  cần dò lại `ANCHOR_PATTERN` bằng Cheat Engine/Ghidra như quy trình cũ.
-
-## Nguồn RE tham khảo ban đầu (hook 1, đã bỏ patch nhưng vẫn dùng để định vị)
-
-1. **CT table cộng đồng** (`eldenring_all-in-one_Hexinton-v6.1_ce7.5.ct`),
-   entry `"Rune Multiplier "` (không mã hoá — khác phần lớn entry khác
-   trong table đó là tính năng trả phí bị `decodeFunction` che):
-
-   ```
-   aobscanmodule(rune_multiplier,eldenring.exe,f3 0f 59 c1 f3 0f 2c f8 48 8b 8b)
-   newmem:
-     movss xmm0, [rn_mult]
-   code:
-     mulss xmm0,xmm1
-     cvttss2si edi,xmm0
-   rn_mult:
-    dd (float)2
-   // ORIGINAL CODE - INJECTION POINT: eldenring.exe+630CB3
-   ```
-
-2. **1 mod DLL cộng đồng đã build sẵn** (tên gốc `法环多倍卢恩.dll`). Hàm
-   `Load` của nó AOB-scan đúng cùng byte pattern, patch 8 byte gốc thành
-   `jmp` tới stub tự viết — cùng kỹ thuật, khác tác giả.
-
-Cả 2 nguồn đều **thay thế hẳn `xmm0`** bằng hằng số multiplier trước khi
-nhân với `xmm1` tại điểm này — cách patch cũ (đã bỏ) của mod này từng cải
-tiến so với cả 2 (giữ nguyên `mulss xmm0,xmm1` gốc rồi nhân thêm hệ số
-riêng lên kết quả), nhưng vấn đề cộng dồn với hook `AddSoul_Call` khiến
-toàn bộ điểm patch này bị loại bỏ — chỉ AOB còn giá trị để định vị.
-
-## Đổi `[Debug]`/`DebugLog` thành `[Logging]`/`LogFile` (2026-09-14)
-
-Đồng bộ tên section/key logging với các mod khác trong repo (`AutoRegen`,
-`SomeTweaks`, `PassiveRunes`, `RiseArcher`) - `[Logging]`/`LogFile` giờ là
-quy ước chung cho toàn bộ mod trong workspace này. Không đổi hành vi: key
-này vẫn gate việc **có tạo file log hay không** (khác `AutoRegen`/
-`SomeTweaks` - `RuneMultiplier.log` chỉ được tạo khi bật, xem `lib.rs`), chỉ
-đổi tên. `config::migrate()` tự đẩy `DebugLog` cũ vào `[Legacy]` ở lần chạy
-đầu sau khi cập nhật DLL.
-
-## `LogFile` giờ do `common::logger` tự gate - bỏ điều kiện riêng quanh `logger::init` (2026-09-23)
-
-Mod này vốn đã đúng hành vi "`LogFile=false` thì không tạo file" (tự bọc
-`logger::init` trong `if config::get_bool("LogFile", false)`), nhưng phần
-lớn mod khác trong workspace thì không - `logger::init` gọi vô điều kiện nên
-file log luôn được tạo, `LogFile` chỉ gate log chi tiết. Người dùng phát
-hiện qua PassiveRunes và xác nhận hành vi đúng phải là như mod này: muốn có
-log sẵn thì để mặc định `LogFile=true` khi deploy.
-
-Sửa tập trung trong `shared/src/logger.rs`: `init` chỉ ghi nhớ đường dẫn,
-file được tạo (truncate) ở dòng log đầu tiên khi `LogFile=true`, và
-`LogFile` được đọc lại mỗi lần ghi - nên bật/tắt bằng `ReloadKey` có hiệu
-lực ngay. Vì vậy bỏ điều kiện riêng quanh `logger::init` trong `lib.rs` và đoạn re-init sau reload trong `hook.rs` (tham số `dir` của `hook::run` bỏ luôn) - giờ gọi thẳng như mọi mod khác. Mô tả key trong ini đổi thành
-"Write RuneMultiplier.log next to the DLL (for troubleshooting). Off = no log
-file". Không đổi hành vi với người dùng.
-
-
-## Đường dẫn DLL có ký tự không phải ASCII làm mod bỏ qua ini - sửa `common::dll_dir` (2026-09-24)
-
-Bug phát hiện qua AutoRegen (người dùng ME3, thư mục profile tên tiếng
-Trung): `common::dll_dir()` dùng `GetModuleFileNameA` (code page ANSI) rồi
-giải mã như UTF-8, nên đường dẫn có ký tự không phải ASCII (tiếng Trung,
-tiếng Việt có dấu...) bị hỏng, không tìm thấy ini/log cạnh DLL, và mod âm
-thầm chạy với cấu hình mặc định. Đã đổi sang `GetModuleFileNameW` +
-`from_utf16_lossy`, buffer tự tăng cho đường dẫn dài. Mod này dùng chung
-`dll_dir` nên cũng được sửa. Chi tiết xem mục cùng ngày trong
-`mods/autoregen/README.md`.
-
-
-## Dòng lỗi bị gắn nhãn `[INFO ] ERROR: ...` - chuyển sang `logger::error` (2026-09-26)
-
-Cùng lỗi phát hiện ở WeightMultiplier: `hook.rs` vẫn gọi
-`logger::log("ERROR: ...")` (viết trước khi `common::logger` có các cấp độ),
-nên log in ra `[INFO ] ERROR: ...`. Các dòng anchor không tìm thấy, không
-resolve được `AddSoul_Call`, `VirtualAlloc`/`VirtualProtect` thất bại và
-"disabled for this session" giờ dùng `logger::error` (bỏ chữ "ERROR:" trong
-message). Không đổi hành vi.
-
-
-## Nhãn cấp độ log bỏ khoảng trắng thừa: `[INFO ]` → `[INFO]` (2026-09-26)
-
-`common::logger` trước đây căn cột level cho đủ 5 ký tự, nên
-mọi dòng INFO/WARN in ra `[INFO ]`/`[WARN ]`. Mục đích là để cột nội dung
-thẳng hàng, nhưng khoảng trắng bên trong dấu ngoặc trông như lỗi gõ, nên đã
-bỏ: giờ in đúng `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`. Sửa 1 chỗ trong
-`shared/src/logger.rs`, áp dụng cho mọi mod. Không đổi hành vi.
-
-
-## Log in phiên bản game + danh sách DLL đã nạp (2026-09-26)
-
-Để log gửi kèm báo lỗi tự trả lời được "khác phiên bản game?" và "có mod nào
-khác đang chạy cùng?", mod giờ ghi thêm vào log (khi `LogFile` bật) 1 dòng
-`Game: eldenring.exe v<version> base=0x.. size=0x.. ts=0x..` và danh sách mọi DLL
-không nằm trong thư mục Windows (tên, version, base, size), kiểu header của
-MapForGoblins. Code ở module mới `common::diag` (`shared/src/diag.rs`, chi
-tiết trong `mods/weightmultiplier/README.md` cùng ngày). Chỗ gọi: `hook::run`, ngay sau `wait_for_cs_task()` (bản riêng của mod này). Nếu cài hook thất bại thì ghi luôn tại đó, vì nhánh lỗi này return trước khi tới `CSTaskImp`.
-Không đổi hành vi.
-
-Giữ quyền riêng tư để người dùng yên tâm dán log công khai (bình luận
-Nexus): danh sách bỏ qua chính exe (đã có ở dòng `Game:`), các DLL đi kèm
-game (`bink2w64`, `amd_ags_x64`, `oo2core_6_win64`, `EOSSDK-Win64-Shipping`,
-cả `steam_api64` - bản bị thay thế sẽ lộ là bản crack, không nên bắt người
-dùng khai ra chỉ để được hỗ trợ; `OnlineFix64` cũng ẩn vì lý do này) và các DLL do Steam client tự chèn vào
-(`steamclient64`, `tier0_s64`, `vstdlib_s64`, `gameoverlayrenderer64`);
-tiêu đề ghi `Loaded modules (<hiện>/<tổng>):`. DLL trong thư mục game
-in theo đường dẫn tương đối (`modengine2\bin\lua.dll` - nhìn là biết thuộc
-loader nào); DLL ngoài thư mục game chỉ in tên file, không bao giờ in đường
-dẫn đầy đủ (có thể chứa tên tài khoản Windows, `C:\Users\<tên>\...`).
-
-## Version thật trong thuộc tính file DLL (2026-10-05)
-
-Trước đây DLL không có version resource nên Properties → Details trống và
-dòng "Loaded modules" trong log (`common::diag`) hiện `v0.0.0.0`; `version`
-trong `Cargo.toml` không vào DLL (`cdylib` của Rust không tự nhúng). Thêm
-`build.rs` (crate `winresource`, cần `rc.exe` của Windows SDK) nhúng
-File/Product version lấy từ `CARGO_PKG_VERSION`, cộng `ProductName`,
-`FileDescription`, `InternalName`, `OriginalFilename` khai báo trong
-`[package.metadata.winresource]` của `Cargo.toml`. Hệ quả: version trong
-`Cargo.toml` (phải khớp Nexus, xem bump version cùng changelog) giờ chính
-là version hiện trong Properties và trong log.
-
-## Đổi tên thư mục `crates/` thành `mods/` (2026-10-07)
-
-Tái tổ chức workspace: thư mục chứa các mod đổi từ `crates/` sang `mods/` (tên chung chung, không gắn với Rust - sau này 1 mod có thể chỉ là dự án Smithbox, không có `Cargo.toml`). Đường dẫn của mod này giờ là `mods/<tên>`; `path = ../../shared` trong `Cargo.toml` giữ nguyên vì độ sâu thư mục không đổi. Hành vi runtime không đổi.
-
-Các đường dẫn `crates/<mod>/...` trỏ tới file của chính repo này ở phần trên đã được cập nhật thành `mods/...`; riêng các đường dẫn `crates/eldenring/...` là của repo `fromsoftware-rs`, và dòng đổi tên `crates/teleporttest` là lịch sử nên giữ nguyên.
+- [CHANGELOG.md](CHANGELOG.md): ghi chú phát hành cho người dùng.
+- [HISTORY.md](HISTORY.md): dòng thời gian phát triển.
+- [docs/addsoul_hook.md](docs/addsoul_hook.md): hook `AddSoul_Call`, các hướng đã bỏ, tương thích.
+- [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus.
