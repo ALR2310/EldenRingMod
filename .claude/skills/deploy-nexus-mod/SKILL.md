@@ -53,8 +53,9 @@ có thể sai, đặc biệt entry nào version ghi `"unknown"` (VD `risearcher`
 API Nexus không trả về dữ liệu changelog nào cho mod này) thì coi là
 **chưa xác minh**, hỏi lại người dùng thay vì tin tuyệt đối.
 
-`sometweaks` **chưa có trên Nexus** nên không có entry - không đưa vào
-danh sách chọn ở Bước 1, không tự đoán ID nếu người dùng nhắc tới nó.
+`sometweaks` (chưa đăng lên Nexus) và `windowresize` (quyết định 2026-10-07:
+không đăng, dùng nội bộ) **không có trên Nexus** nên không có entry - không
+đưa vào danh sách chọn ở Bước 1, không tự đoán ID nếu người dùng nhắc tới.
 
 `game_domain` luôn là `eldenring`. API key ở biến `NEXUS_API_KEY` trong `.env`
 (đã gitignore, chỉ dùng nội bộ). Nếu `manifest.json` có vẻ lỗi thời (VD version không khớp

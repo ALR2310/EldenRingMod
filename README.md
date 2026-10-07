@@ -26,7 +26,7 @@ EldenRingMod/
 │   └── windowresize/     # WindowResize: kéo viền đổi kích thước cửa sổ Windowed nhỏ hơn mức mặc định
 ├── shared/          # crate `common` dùng chung: config/logger/memscan/dll_dir, KHÔNG phụ thuộc eldenring-rs
 ├── scripts/         # công cụ chạy được: build-mod.ps1 (build 1 mod → builds/<mod>/), ida/ (IDAPython qua run.ps1), ghidra/ (script tham khảo)
-├── docs/            # tư liệu dùng chung: nexus-page.bbcode, logo/thumbnail prompt, nexus-openapi.yaml
+├── docs/            # tư liệu dùng chung: nexus_page.bbcode, logo/thumbnail prompt, nexus-openapi.yaml
 ├── dumps/           # dữ liệu dịch ngược, git-ignored (database IDA ở eldenring/<ver>/, ~25 phút/bản nếu mất), ngoại lệ seamless-diff/ được commit
 └── tmp/             # repo/DLL tải về, file tạm nghiên cứu (git-ignored, xoá được bất kỳ lúc nào)
 ```

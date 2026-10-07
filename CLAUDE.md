@@ -43,7 +43,8 @@ key, sửa bug về hành vi, đổi cấu trúc code/thư mục):
 
 Mod chưa được tách (README vẫn là nhật ký dài theo ngày) thì giữ kiểu cũ
 cho tới khi tách: thêm 1 mục có ngày vào README của mod đó. Đã tách xong: `dropmultiplier`.
-`CHANGELOG.md` đã có cho mọi mod (trừ `sometweaks`) và áp dụng cho cả mod chưa tách.
+`CHANGELOG.md` có cho mọi mod đăng Nexus (không có ở `sometweaks` và
+`windowresize`: không đăng) và áp dụng cho cả mod chưa tách.
 
 Không cần hỏi lại người dùng trước khi làm việc này - tự làm ngay sau khi
 code đã ổn định, coi đây là 1 bước không thể thiếu của việc "xong việc",
@@ -96,7 +97,7 @@ Mod ID theo từng mod trong workspace này (game domain luôn là `eldenring`):
 - `fasterrevival` → 11160 (Faster Revival)
 - `spiritmultiplier` → 11168 (Spirit Multiplier)
 - `speedmultiplier` → 11173 (Speed Multiplier)
-- `windowresize` → **chưa có, chưa đăng lên Nexus**
+- `windowresize` → **không đăng lên Nexus, dùng nội bộ (quyết định 2026-10-07)**
 
 Key API cá nhân của người dùng lưu ở biến `NEXUS_API_KEY` trong `.env` ở
 gốc repo (mẫu: `.env.example`; chỉ dùng nội bộ cho quy trình phát hành,
