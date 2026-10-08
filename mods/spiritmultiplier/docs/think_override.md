@@ -10,7 +10,7 @@ File `SpiritThink.ini` cạnh DLL, chỉ đọc nếu tồn tại. Mỗi dòng `
 
 - Hàng đích: mọi `npcThinkParamId` / `npcThinkParamId_ridden` của `BuddyParam`, chọn theo index (không qua bảng tra runtime).
 - Lần đầu chụp nguyên 228 byte của mỗi hàng, mỗi lần áp bắt đầu từ bản chụp rồi ghi các field trong file (cùng mẫu baseline với `ghost_color.rs`).
-- Bảng field (`src/think_fields.rs`) sinh từ `NPC_THINK_PARAM_ST` của fromsoftware-rs (85 field số, không có cờ bit); test `offsets_match_struct` đối chiếu offset với setter của thư viện.
+- Bảng field (`src/think_fields.rs`) sinh từ `NPC_THINK_PARAM_ST` của fromsoftware-rs (85 field số + 12 cờ bit đơn (`enableNaviFlg_*`, `isNoAvoidHugeEnemy`...; giá trị 0/1)); test `offsets_match_struct` đối chiếu offset với setter của thư viện.
 
 ## Dữ liệu để thử (từ Age of Spirit, regulation.bin của họ so với gốc, dòng Lone Wolf)
 
@@ -23,3 +23,8 @@ File `SpiritThink.ini` cạnh DLL, chỉ đọc nếu tồn tại. Mỗi dòng `
 | searchTarget_LV1/2_forgetTime | 5.0 | 1 |
 
 Tooltip Smithbox của TeamAttackEffectivity nói "tăng thì ít người tấn công cùng lúc", ngược với mô tả của tác giả Age of Spirit; chưa biết bên nào đúng, cần test.
+
+## Nhóm Navigation và Retreat (Age of Spirit)
+
+- `enableNaviFlg_Ladder/Hole/InSideWall/Lava/Edge_Ordinary` = 1 (gốc 0): quyền đi qua thang, hố, tường navmesh, dung nham, mép vực khi tìm đường. Theo đoán: giúp spirit bám theo qua mép cao thay vì kẹt; Lava = 1 có thể cho spirit đi vào dung nham. Có thể liên quan đến chuyện rơi/lạc map (TODO).
+- Retreat: `maxBackhomeDist`/`backhomeDist` 30 (gốc 9999/9979), `backhomeBattleDist` 60 (gốc 10), `BackHome_LookTargetTime/Dist` 15, `backToHomeStuckAct` 1 (gốc 0), `BackHomeLifeOnHitEneWal` 0.1 (gốc 5.0). Theo đoán: "home" là chỗ người chơi; gốc spirit đuổi địch gần như vô hạn, còn 30 m thì bị kéo về khi đi quá xa. Giá trị cũ của `Warp` (đã gỡ) gần giống bộ này.

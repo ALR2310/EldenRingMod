@@ -21,7 +21,8 @@
 //! pattern as `ghost_color.rs`).
 //!
 //! The field table in `think_fields.rs` was generated from
-//! `NPC_THINK_PARAM_ST` (fromsoftware-rs); bit-field flags are not in it.
+//! `NPC_THINK_PARAM_ST` (fromsoftware-rs): scalar fields and single-bit flags
+//! (`enableNaviFlg_*`, `isNoAvoidHugeEnemy`, ...; value 0 or 1).
 
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
@@ -48,6 +49,8 @@ pub enum Kind {
     U16,
     I32,
     F32,
+    /// One bit (0-based) of the byte at the offset; value 0 or 1.
+    Bit(u8),
 }
 
 /// One validated line of the file: `(field name, byte offset, type, value)`.
@@ -87,7 +90,7 @@ fn parse(content: &str) -> Vec<Override> {
                 .take(5)
                 .collect();
             logger::error(&format!(
-                "ThinkOverride: unknown field '{key}' (bit flags are not supported){}",
+                "ThinkOverride: unknown field '{key}'{}",
                 if close.is_empty() { String::new() } else { format!(", similar: {close:?}") }
             ));
             continue;
@@ -101,6 +104,7 @@ fn parse(content: &str) -> Vec<Override> {
             Kind::U16 => (0.0, u16::MAX as f64),
             Kind::I32 => (i32::MIN as f64, i32::MAX as f64),
             Kind::F32 => (f32::MIN as f64, f32::MAX as f64),
+            Kind::Bit(_) => (0.0, 1.0),
         };
         if !value.is_finite() || value < lo || value > hi {
             logger::error(&format!("ThinkOverride: '{key}': {value} is out of range ({lo} .. {hi})."));
@@ -126,6 +130,10 @@ unsafe fn write(row: *mut u8, o: &Override) {
             Kind::U16 => (at as *mut u16).write_unaligned(o.value.round() as u16),
             Kind::I32 => (at as *mut i32).write_unaligned(o.value.round() as i32),
             Kind::F32 => (at as *mut f32).write_unaligned(o.value as f32),
+            Kind::Bit(bit) => {
+                let byte = at.read() & !(1 << bit);
+                at.write(byte | ((o.value.round() as u8) << bit));
+            }
         }
     }
 }
@@ -299,5 +307,23 @@ mod tests {
         assert_eq!(row.team_attack_effectivity(), 100);
         assert_eq!(row.is_guard_act(), 1);
         assert_eq!(row.search_eye_dist(), 15);
+    }
+
+    /// Bit flags: only the named bit changes, neighbours are kept.
+    #[test]
+    fn bit_flags() {
+        let mut row: NPC_THINK_PARAM_ST = unsafe { std::mem::zeroed() };
+        row.set_enable_navi_flg_edge(true);
+        row.set_enable_navi_flg_door(true);
+        let parsed = parse("enableNaviFlg_Lava=1
+enableNaviFlg_Edge_Ordinary=1
+enableNaviFlg_Door=0
+enableNaviFlg_Ladder=2");
+        assert_eq!(parsed.len(), 3);
+        for o in &parsed {
+            unsafe { write(&mut row as *mut _ as *mut u8, o) };
+        }
+        assert!(row.enable_navi_flg_edge() && row.enable_navi_flg_lava() && row.enable_navi_flg_edge_ordinary());
+        assert!(!row.enable_navi_flg_door() && !row.enable_navi_flg_ladder());
     }
 }
