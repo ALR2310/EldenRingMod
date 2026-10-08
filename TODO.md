@@ -16,7 +16,7 @@ Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`, `docs/warp_research.md`
 
 ## AutoRegen
 
-- [ ] `Regen.PerHit.ExcludeAow=true` vẫn hồi FP khi dùng Unsheathe (Brokensword7, 2026-10-04): nghi latch `LAST_ATTACK_WAS_SKILL` đổi khi bấm `R1`/`R2` giữa Ash 2 bước; cần log xác nhận (`regen.rs::update_last_attack_input`)
+- [ ] `Regen.PerHit.ExcludeAow=true` vẫn hồi FP khi dùng Unsheathe (Brokensword7, 2026-10-04): nghi latch `LAST_ATTACK_WAS_SKILL` đổi khi bấm `R1`/`R2` giữa Ash 2 bước; cần log xác nhận (`regen.rs::update_last_attack_input`; chi tiết `mods/autoregen/docs/per_hit.md`)
 
 ## SpeedMultiplier
 
@@ -39,7 +39,6 @@ Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`, `docs/warp_research.md`
 - [ ] `ReloadKey` lọt sang instance game khác: `common::reload` và autoregen nên dùng `common::input::is_key_pressed` (xem `mods/soulsteleport/docs/position_exchange.md`)
 - [ ] `risearcher` (`weapon.rs`, `bullet.rs`), `infiniteailment` (`status_effect.rs`): chuyển sang `common::params::for_each_row_mut` (xem `mods/dropmultiplier/docs/convergence_panic.md`)
 - [ ] `ReloadBanner` cho `weightmultiplier` - cần quyết định (phải bỏ thiết kế không dùng task game)
-- [ ] Tách README theo khuôn mới: `autoregen`
 - [ ] Dọn tham chiếu `.docs/...` lỗi thời (~47 dòng / 15 file)
 - [ ] `mods/risearcher/project.json` chứa đường dẫn máy: git-ignore hoặc đổi thành file mẫu
 
