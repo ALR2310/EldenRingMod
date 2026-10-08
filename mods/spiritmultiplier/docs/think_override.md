@@ -28,3 +28,9 @@ Tooltip Smithbox của TeamAttackEffectivity nói "tăng thì ít người tấn
 
 - `enableNaviFlg_Ladder/Hole/InSideWall/Lava/Edge_Ordinary` = 1 (gốc 0): quyền đi qua thang, hố, tường navmesh, dung nham, mép vực khi tìm đường. Theo đoán: giúp spirit bám theo qua mép cao thay vì kẹt; Lava = 1 có thể cho spirit đi vào dung nham. Có thể liên quan đến chuyện rơi/lạc map (TODO).
 - Retreat: `maxBackhomeDist`/`backhomeDist` 30 (gốc 9999/9979), `backhomeBattleDist` 60 (gốc 10), `BackHome_LookTargetTime/Dist` 15, `backToHomeStuckAct` 1 (gốc 0), `BackHomeLifeOnHitEneWal` 0.1 (gốc 5.0). Theo đoán: "home" là chỗ người chơi; gốc spirit đuổi địch gần như vô hạn, còn 30 m thì bị kéo về khi đi quá xa. Giá trị cũ của `Warp` (đã gỡ) gần giống bộ này.
+
+## Phân tích bảng NpcThinkParam của Age of Spirit (200 dòng, export 2026-10-09)
+
+- Gần như mọi field là hằng số cho cả 200 dòng (BattleStartDist 15, tầm nhìn, nhóm Navigation, Retreat...). Chỉ vài field khác nhau giữa các dòng: nhóm `goalAction_*`, `TeamAttackEffectivity` (100 ở 179 dòng; 0/30/50/60/80 ở số ít, thường là healer/phụ trợ), `useFall_onNormalCaution` (0 hoặc 2, chia đôi), `actTypeOnFailedPath`, `eye_BeginDist`.
+- `goalAction_*` (ToCaution / ToCautionImportant / ToSearchLv1 / ToSearchLv2 / ToDisappear): 116 dòng cận chiến = 3/3/3/3/3 (chạy tới nguồn). 41 dòng pháp sư/cung thủ (Noble Sorcerer, Rennala, Page, Oracle Envoy, các Archer, cả Spirit Jellyfish) = 2/3/1/1/2: tiến lại gần / chỉ nhìn, không lao vào. Còn lại là biến thể nhỏ (healer có ToDisappear 0, hiệp sĩ lửa...). Nên đặt 3 cho tất cả sẽ làm pháp sư chạy vào cận chiến.
+- Vì vậy `SpiritThink.ini` có thêm phần `[Row id, id, ...]`: áp lên đúng dòng NpcThinkParam có ID đó, sau các dòng chung. File ini mẫu sinh sẵn 12 phần Row từ bảng này.

@@ -66,14 +66,57 @@ fn normalize(name: &str) -> String {
     name.chars().filter(|c| *c != '_').map(|c| c.to_ascii_lowercase()).collect()
 }
 
+/// The file: `global` lines apply to every spirit row; each `[Row id, id...]`
+/// section applies on top of that to the rows with those IDs.
+#[derive(Default)]
+struct Config {
+    global: Vec<Override>,
+    rows: Vec<(Vec<u32>, Vec<Override>)>,
+}
+
+impl Config {
+    fn count(&self) -> usize {
+        self.global.len() + self.rows.iter().map(|r| r.1.len()).sum::<usize>()
+    }
+
+    fn describe(&self) -> String {
+        let list = |v: &[Override]| v.iter().map(|o| format!("{}={}", o.name, o.value)).collect::<Vec<_>>().join(", ");
+        let mut text = format!("[{}]", list(&self.global));
+        for (ids, overrides) in &self.rows {
+            text.push_str(&format!(" + {} row id(s): [{}]", ids.len(), list(overrides)));
+        }
+        text
+    }
+}
+
+/// `[Row 1, 2, 3]` -> the IDs. `None` if the header is not a Row section.
+fn parse_row_header(line: &str) -> Option<Vec<u32>> {
+    let inner = line.strip_prefix('[')?.strip_suffix(']')?.trim();
+    let rest = inner.get(..3).filter(|w| w.eq_ignore_ascii_case("row"))?;
+    let ids = inner[rest.len()..].split([',', ' ']).filter(|t| !t.is_empty());
+    Some(ids.filter_map(|t| t.parse().ok()).collect())
+}
+
 /// Parses the file's text. Bad lines are logged and skipped.
-fn parse(content: &str) -> Vec<Override> {
+fn parse(content: &str) -> Config {
     let by_name: HashMap<String, &(&'static str, usize, Kind)> =
         FIELDS.iter().map(|f| (normalize(f.0), f)).collect();
-    let mut out: Vec<Override> = Vec::new();
+    let mut config = Config::default();
+    // Which list the next lines go to: None = global, Some(i) = rows[i].
+    let mut section: Option<usize> = None;
     for line in content.lines() {
         let line = line.trim();
-        if line.is_empty() || line.starts_with(['#', ';', '[']) {
+        if line.is_empty() || line.starts_with(['#', ';']) {
+            continue;
+        }
+        if line.starts_with('[') {
+            section = match parse_row_header(line) {
+                Some(ids) => {
+                    config.rows.push((ids, Vec::new()));
+                    Some(config.rows.len() - 1)
+                }
+                None => None,
+            };
             continue;
         }
         let Some((key, value)) = line.split_once('=') else {
@@ -111,10 +154,14 @@ fn parse(content: &str) -> Vec<Override> {
             continue;
         }
         // The last line for a field wins.
-        out.retain(|o| o.name != name);
-        out.push(Override { name, offset, kind, value });
+        let list = match section {
+            Some(i) => &mut config.rows[i].1,
+            None => &mut config.global,
+        };
+        list.retain(|o| o.name != name);
+        list.push(Override { name, offset, kind, value });
     }
-    out
+    config
 }
 
 /// Writes `o` into the row at `row`.
@@ -138,9 +185,11 @@ unsafe fn write(row: *mut u8, o: &Override) {
     }
 }
 
-/// `(NpcThinkParam row index, original bytes)` for every row spirits use, or
-/// `None` if the params couldn't be read safely.
-fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, Vec<u8>)>> {
+/// One spirit row: `(NpcThinkParam row index, row ID, original bytes)`.
+type Snapshot = (usize, u32, Vec<u8>);
+
+/// Every row spirits use, or `None` if the params couldn't be read safely.
+fn capture(repo: &mut SoloParamRepository) -> Option<Vec<Snapshot>> {
     for check in [common::params::check::<BuddyParam>(repo), common::params::check::<NpcThinkParam>(repo)] {
         if let Err(err) = check {
             logger::error(&format!("ThinkOverride: {err} - not touching params."));
@@ -151,7 +200,7 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, Vec<u8>)>> {
         logger::error("ThinkOverride: param row IDs could not be read safely - not touching params.");
         return None;
     };
-    let index: HashMap<u32, usize> = ids.into_iter().enumerate().map(|(i, id)| (id, i)).collect();
+    let index: HashMap<u32, usize> = ids.iter().copied().enumerate().map(|(i, id)| (id, i)).collect();
 
     let mut wanted: Vec<usize> = Vec::new();
     let mut missing = 0;
@@ -173,7 +222,7 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, Vec<u8>)>> {
     for i in wanted {
         let row = repo.get_row_by_index::<NpcThinkParam>(i)?;
         let bytes = unsafe { std::slice::from_raw_parts(row as *const _ as *const u8, ROW_SIZE) };
-        rows.push((i, bytes.to_vec()));
+        rows.push((i, ids[i], bytes.to_vec()));
     }
     logger::log(&format!(
         "ThinkOverride: {} NpcThinkParam row(s) used by spirits ({missing} BuddyParam id(s) without a row).",
@@ -182,17 +231,23 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Vec<(usize, Vec<u8>)>> {
     Some(rows)
 }
 
-/// Restores every row from its snapshot, then writes `overrides`.
-fn apply(repo: &mut SoloParamRepository, rows: &[(usize, Vec<u8>)], overrides: &[Override]) {
-    for (i, original) in rows {
+/// Restores every row from its snapshot, then writes the global overrides
+/// and the sections that name the row's ID.
+fn apply(repo: &mut SoloParamRepository, rows: &[Snapshot], config: &Config) {
+    for (i, id, original) in rows {
         let Some(row) = repo.get_row_by_index_mut::<NpcThinkParam>(*i) else {
             continue;
         };
         let ptr = row as *mut _ as *mut u8;
         unsafe {
             std::ptr::copy_nonoverlapping(original.as_ptr(), ptr, ROW_SIZE);
-            for o in overrides {
+            for o in &config.global {
                 write(ptr, o);
+            }
+            for (_, overrides) in config.rows.iter().filter(|(ids, _)| ids.contains(id)) {
+                for o in overrides {
+                    write(ptr, o);
+                }
             }
         }
     }
@@ -204,7 +259,7 @@ pub fn run(dir: String) {
 
     let mut elapsed_ms: f64 = 0.0;
     // None = not captured yet; Some(None) = capture failed, stay off.
-    let mut rows: Option<Option<Vec<(usize, Vec<u8>)>>> = None;
+    let mut rows: Option<Option<Vec<Snapshot>>> = None;
     // Modified time of the file when last applied (None = file absent).
     let mut applied: Option<Option<SystemTime>> = None;
 
@@ -237,19 +292,19 @@ pub fn run(dir: String) {
                 return;
             };
 
-            let overrides = match modified {
+            let config = match modified {
                 Some(_) => match std::fs::read_to_string(&path) {
                     Ok(content) => parse(&content),
                     // Locked while being saved: try again next tick.
                     Err(_) => return,
                 },
-                None => Vec::new(),
+                None => Config::default(),
             };
-            apply(repo, rows, &overrides);
-            let list: Vec<String> = overrides.iter().map(|o| format!("{}={}", o.name, o.value)).collect();
+            apply(repo, rows, &config);
             logger::log(&format!(
-                "ThinkOverride: {} field(s) {list:?} written to {} row(s). Re-summon spirits for it to take effect.",
-                overrides.len(),
+                "ThinkOverride: {} field(s) {} written to {} row(s). Re-summon spirits for it to take effect.",
+                config.count(),
+                config.describe(),
                 rows.len()
             ));
             applied = Some(modified);
@@ -298,15 +353,31 @@ mod tests {
     #[test]
     fn write_roundtrip_and_names() {
         let parsed = parse("; c\nTeamAttackEffectivity = 100\nisGuard_Act=1\nbogus=3\nBattleStartDist=70000\nsearchEye_dist=15");
-        let names: Vec<_> = parsed.iter().map(|o| o.name).collect();
+        let names: Vec<_> = parsed.global.iter().map(|o| o.name).collect();
         assert_eq!(names, ["team_attack_effectivity", "is_guard_act", "search_eye_dist"]);
         let mut row: NPC_THINK_PARAM_ST = unsafe { std::mem::zeroed() };
-        for o in &parsed {
+        for o in &parsed.global {
             unsafe { write(&mut row as *mut _ as *mut u8, o) };
         }
         assert_eq!(row.team_attack_effectivity(), 100);
         assert_eq!(row.is_guard_act(), 1);
         assert_eq!(row.search_eye_dist(), 15);
+    }
+
+    #[test]
+    fn row_sections() {
+        let parsed = parse("goalAction_ToCaution=3
+[Row 143002000, 141800000]
+goalAction_ToCaution=2
+BattleStartDist=9
+[All]
+eye_dist=7
+");
+        assert_eq!(parsed.global.len(), 2);
+        assert_eq!(parsed.rows.len(), 1);
+        assert_eq!(parsed.rows[0].0, [143002000, 141800000]);
+        assert_eq!(parsed.rows[0].1.len(), 2);
+        assert!(parse_row_header("[Rows 1]").is_none() || parse_row_header("[ROW 5]") == Some(vec![5]));
     }
 
     /// Bit flags: only the named bit changes, neighbours are kept.
@@ -319,8 +390,8 @@ mod tests {
 enableNaviFlg_Edge_Ordinary=1
 enableNaviFlg_Door=0
 enableNaviFlg_Ladder=2");
-        assert_eq!(parsed.len(), 3);
-        for o in &parsed {
+        assert_eq!(parsed.global.len(), 3);
+        for o in &parsed.global {
             unsafe { write(&mut row as *mut _ as *mut u8, o) };
         }
         assert!(row.enable_navi_flg_edge() && row.enable_navi_flg_lava() && row.enable_navi_flg_edge_ordinary());
