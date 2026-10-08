@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+- Fixed re-summoning a dead spirit taking two button presses while another spirit is still alive.
+
 ## [1.1.4] - 2026-10-01
 
 - Fixed the game failing to launch with Seamless Co-op.

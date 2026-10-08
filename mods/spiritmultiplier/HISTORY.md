@@ -26,3 +26,4 @@ lịch sử git của `README.md`.
 | 2026-10-05 | Version thật trong thuộc tính file DLL (`build.rs` + `winresource`); thêm key `ReloadBanner` | |
 | 2026-10-07 | Đổi thư mục `crates/` thành `mods/`; đường dẫn script/dump dịch ngược đổi chỗ (`.docs/` thành `tmp/`, script IDA ở `scripts/ida/`) | |
 | 2026-10-08 | Tách README thành README + HISTORY + docs/; các vấn đề còn mở (Reforged Fury, Seamless mất màu ma, warp) ghi ở `docs/open_issues.md` | [docs](docs/open_issues.md) |
+| 2026-10-08 | `MultiSpirit`: spirit đã chết vẫn nằm trong `groups` nên bấm lại Ash của nó (khi Ash khác còn sống) bị coi là "đang out" và chỉ thu hồi; nay kiểm tra HP chr_ins. Đã test in-game (2026-10-08): đúng | |

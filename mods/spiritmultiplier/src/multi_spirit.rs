@@ -183,8 +183,17 @@ fn ash_alive(manager: &SummonBuddyManager, speffect: i32) -> Option<bool> {
     Some(manager.groups.iter().any(|pair| {
         pair.second
             .iter()
-            .any(|g| !g.disappear_requested && !g.is_remote && ids.contains(&g.buddy_param_id))
+            .any(|g| group_alive(g) && !g.is_remote && ids.contains(&g.buddy_param_id))
     }))
+}
+
+/// A `groups` entry that is neither leaving nor dead. A killed spirit keeps
+/// its entry for a while (until the game cleans it up), so without the HP
+/// check re-using the Ash of a dead spirit - while another Ash still has
+/// live ones - counted as "already out" and only sent it back; the next press
+/// summoned it (user report, 2026-10-08, Noble Sorcerer + Jellyfish).
+fn group_alive(group: &eldenring::cs::SummonBuddyGroup) -> bool {
+    !group.disappear_requested && unsafe { group.chr_ins.as_ref() }.modules.data.hp > 0
 }
 
 /// Called from the item-cost stubs (patch 7) when `GetBuddyState` said 2
