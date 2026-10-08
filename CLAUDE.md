@@ -54,6 +54,21 @@ Không cần hỏi lại người dùng trước khi làm việc này - tự là
 code đã ổn định, coi đây là 1 bước không thể thiếu của việc "xong việc",
 giống như build/test.
 
+## Viết `TODO.md` (gốc repo) gọn
+
+`TODO.md` chỉ trả lời "còn gì phải làm", không phải nơi ghi phân tích:
+
+- Chỉ liệt kê việc **còn mở**, chia theo mod. Việc xong thì **xoá luôn**
+  (không tick `[x]` rồi để lại; lịch sử đã có ở `HISTORY.md`).
+- Mỗi việc **1 dòng** (~150 ký tự): việc gì + nguồn báo (người dùng, ngày) nếu
+  có. Không bullet con. Lý do, bằng chứng, hướng đã thử, RVA/số liệu thì viết
+  vào `mods/<mod>/docs/<chủ đề>.md` (mod chưa có `docs/` thì tạo) rồi link từ
+  dòng TODO hoặc từ tiêu đề mod.
+- Việc đã chốt không làm thì ghi 1 dòng ở mục "Đã dừng" để khỏi đề xuất lại.
+- Khi gộp/xoá mục có chi tiết chưa nằm ở đâu khác, chuyển chi tiết sang
+  `docs/` trước, không xoá mất.
+- Cần ưu tiên thì thêm nhãn ngắn (`[bug]`, `[research]`, `[chờ phản hồi]`).
+
 ## Cập nhật `.vscode/tasks.json` khi thêm / xoá / đổi tên mod
 
 Mỗi mod trong `mods/` có 1 task build riêng trong `.vscode/tasks.json`
