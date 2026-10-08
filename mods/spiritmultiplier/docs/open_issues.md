@@ -17,7 +17,3 @@ Cơ chế Reforged (CHANGELOG.txt của ERR): bấm lại Ash khi spirit đang �
 - Nguyên nhân: Seamless hook đầu `sub_1403F0C20` (2.7.1.0) = hàm "PhantomParam của ChrIns" (override +0x540 → vfx +0x44 → mặc định theo chr type). Tìm bằng diff code game trong RAM vs `eldenring.exe` (363 chỗ chỉ có ở Seamless). Seamless còn hook `sub_1403F1C90` (get team).
 - Đặt `phantom_param_override = 200` trên spirit: không có tác dụng (hook bỏ qua cả override).
 - Hướng còn lại: đổi rel32 của lệnh `E9` Seamless đặt ở đầu `sub_1403F0C20` sang stub của mình - spirit (vfx +0x44 >= 0, trong summon_buddy_chr_set) trả id đó, còn lại nhảy tiếp vào hook Seamless; chỉ cài sau khi Seamless đã hook xong (byte đầu = E9).
-
-## Spirit dịch chuyển tới người chơi khi bị bỏ lại
-
-Hoãn từ trước 1.0.0; chỉ chỉnh `buddyWarp_*` không có tác dụng.

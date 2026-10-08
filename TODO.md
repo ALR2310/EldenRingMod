@@ -6,7 +6,7 @@ Quy ước đầy đủ: `CLAUDE.md`, mục "Viết `TODO.md` gọn".
 
 ## SpiritMultiplier
 
-Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`
+Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`, `docs/warp_research.md`
 
 - [ ] Reforged: spirit gọi ra mặc định ở trạng thái đỏ (Fury) thay vì trắng
 - [ ] Reforged + MultiSpirit: kích Fury riêng cho từng Ash (hiện Fury 1 nhóm thì mọi Ash đều xám)
@@ -39,7 +39,7 @@ Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`
 - [ ] `ReloadKey` lọt sang instance game khác: `common::reload` và autoregen nên dùng `common::input::is_key_pressed` (xem `mods/soulsteleport/docs/position_exchange.md`)
 - [ ] `risearcher` (`weapon.rs`, `bullet.rs`), `infiniteailment` (`status_effect.rs`): chuyển sang `common::params::for_each_row_mut` (xem `mods/dropmultiplier/docs/convergence_panic.md`)
 - [ ] `ReloadBanner` cho `weightmultiplier` - cần quyết định (phải bỏ thiết kế không dùng task game)
-- [ ] Tách README theo khuôn mới: `spiritmultiplier`, `autoregen`
+- [ ] Tách README theo khuôn mới: `autoregen`
 - [ ] Dọn tham chiếu `.docs/...` lỗi thời (~47 dòng / 15 file)
 - [ ] `mods/risearcher/project.json` chứa đường dẫn máy: git-ignore hoặc đổi thành file mẫu
 
