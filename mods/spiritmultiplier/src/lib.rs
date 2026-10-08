@@ -9,6 +9,7 @@ mod ghost_color;
 mod multi_spirit;
 mod probe;
 mod regen;
+mod think_override;
 
 use common::{config, dll_dir, logger};
 
@@ -59,6 +60,8 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
         std::thread::spawn(ghost_color::run);
         std::thread::spawn(regen::run);
         std::thread::spawn(multi_spirit::run);
+        let think_dir = dir.clone();
+        std::thread::spawn(move || think_override::run(think_dir));
         std::thread::spawn(buddy_stone::run);
 
         common::diag::log_environment_when_game_ready();
