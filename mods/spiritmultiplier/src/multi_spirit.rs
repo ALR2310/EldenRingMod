@@ -53,14 +53,20 @@
 //!    -1) == 2` (vanilla: using an Ash with a spirit out only sends it back).
 //!    Both calls ([COST_CALL_SITES]) ask [cost_state] instead: free only if
 //!    the pressed Ash itself has live spirits. The goods row is the
-//!    function's `[rbp-0x38]`; an Ash's `refId_default` (+0) is its trigger
+//!    function's `[rbp-0x38]`; an Ash's `refId_default` (+4) is its trigger
 //!    SpEffect.
+//! 8. "Can I afford it" in `CanUseItem`: two more `GetBuddyState(mgr,
+//!    goodsId) == 2` checks ([CANUSE_COST_SITES]) zero the HP / FP cost the
+//!    check requires when the pressed Ash is the one out. With `CloneSpirit`
+//!    that press summons, so they ask [cost_state] too: free only when the
+//!    press sends the Ash back (user report, 2026-10-09: a clone could be
+//!    summoned with too little FP/HP).
 //!
 //! All stubs read one byte ([ENABLED]) that the tick below keeps in sync
 //! with the ini, so F5 switches the behavior live without re-patching.
 
 
-use std::sync::atomic::{AtomicI32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicU32, AtomicU8, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use eldenring::cs::{CSTaskGroupIndex, SummonBuddyManager};
@@ -99,6 +105,16 @@ const COST_CALL_SITES: [(&str, usize); 2] = [
     ("48 8B C8 41 8B D5 E8 ?? ?? ?? ?? 83 F8 02 41 0F 44 FC F7 DF 89 BB B4 00 00 00", 6),
 ];
 
+/// The 2 `call GetBuddyState(mgr, goodsId)` in `CanUseItem` that zero the
+/// HP (0x14069018A) and FP (0x14069022D) cost the "can I afford it" check
+/// requires when the pressed Ash is the one out (vanilla: that press only
+/// sends it back): (pattern, offset of the 5-byte `call`). Both unique in
+/// 2.7.1.0. The goods row is the caller's `[rsp+0x50]`.
+const CANUSE_COST_SITES: [(&str, usize); 2] = [
+    ("E8 ?? ?? ?? ?? 83 F8 02 B8 00 00 00 00 0F 44 D8 89 5C 24 5C", 0),
+    ("E8 ?? ?? ?? ?? 83 F8 02 41 0F 44 DE 89 5C 24 60", 0),
+];
+
 /// `cmp byte [r15+0x28],0; jz ..; mov rcx,r15; call DisappearAll; cmp
 /// dword [r15+0x20],0; mov byte [r15+0x28],0` in `sub_1404B92B0`
 /// (0x1404B957D in 2.7.1.0): the dismiss-request branch. The `call` is at
@@ -115,6 +131,13 @@ static DISAPPEAR_ALL: AtomicUsize = AtomicUsize::new(0);
 
 /// 1 = multi-spirit on. Read by every stub.
 static ENABLED: AtomicU8 = AtomicU8::new(0);
+
+/// 1 = `CloneSpirit` on: re-using an Ash that is already out summons it
+/// again while the spirits out leave room under [MAX_SPIRITS]; past that the
+/// press sends that Ash back (vanilla re-use behavior).
+static CLONE: AtomicU8 = AtomicU8::new(0);
+/// `MaxSpirits` (the band's size), as `band::install` clamps it.
+static MAX_SPIRITS: AtomicU32 = AtomicU32::new(0);
 
 const TICK_INTERVAL_MS: f64 = 1000.0;
 const SCAN_RETRY_INTERVAL: Duration = Duration::from_millis(500);
@@ -168,23 +191,34 @@ fn buddy_ids(manager: &SummonBuddyManager, speffect: i32) -> Vec<i32> {
         .unwrap_or_default()
 }
 
-/// Whether the Ash with this trigger SpEffect has live spirits of the
-/// local player (`groups` entries not already leaving, not remote), or
-/// `None` if the SpEffect summons nothing - not a Spirit Ash at all, e.g.
-/// ELDEN RING Reforged's Spirit-Severing Blade, which sends spirits back
-/// through the same path. Callers keep vanilla behavior for those (until
-/// 2026-10-01 they were treated as "a different Ash, summon it", so the
-/// Blade summoned nothing and sent nothing back).
-fn ash_alive(manager: &SummonBuddyManager, speffect: i32) -> Option<bool> {
+/// Not-an-Ash note (kept from the old `ash_alive`): `None` below means the
+/// SpEffect summons nothing - not a Spirit Ash at all, e.g. ELDEN RING
+/// Reforged's Spirit-Severing Blade, which sends spirits back through the same
+/// path. Callers keep vanilla behavior for those (until 2026-10-01 they were
+/// treated as "a different Ash, summon it", so the Blade summoned nothing and
+/// sent nothing back). Live = `groups` entries not already leaving, not dead,
+/// not remote.
+/// What pressing an Ash that already has live spirits does: `Some(true)` =
+/// send it back, `Some(false)` = summon it again (`CloneSpirit` on and one
+/// more cast still fits under `MaxSpirits`, or it has none out), `None` =
+/// not a Spirit Ash.
+fn dismisses_on_reuse(manager: &SummonBuddyManager, speffect: i32) -> Option<bool> {
     let ids = buddy_ids(manager, speffect);
     if ids.is_empty() {
         return None;
     }
-    Some(manager.groups.iter().any(|pair| {
-        pair.second
-            .iter()
-            .any(|g| group_alive(g) && !g.is_remote && ids.contains(&g.buddy_param_id))
-    }))
+    let (mut live, mut total) = (0usize, 0usize);
+    for g in manager.groups.iter().flat_map(|pair| pair.second.iter()) {
+        if group_alive(g) && !g.is_remote {
+            total += 1;
+            live += ids.contains(&g.buddy_param_id) as usize;
+        }
+    }
+    if live == 0 {
+        return Some(false);
+    }
+    let room = total + ids.len() <= MAX_SPIRITS.load(Ordering::Relaxed) as usize;
+    Some(CLONE.load(Ordering::Relaxed) == 0 || !room)
 }
 
 /// A `groups` entry that is neither leaving nor dead. A killed spirit keeps
@@ -199,17 +233,31 @@ fn group_alive(group: &eldenring::cs::SummonBuddyGroup) -> bool {
 /// Called from the item-cost stubs (patch 7) when `GetBuddyState` said 2
 /// (spirits out): 2 = the pressed Ash is out, so this use sends it back -
 /// free, like vanilla; 0 = a different Ash, charge its normal cost.
-/// `goods_row` = the item's EquipParamGoods row (`refId_default` at +0).
+/// `goods_row` = the item's EquipParamGoods row (`refId_default` at +4).
 unsafe extern "system" fn cost_state(manager: *mut SummonBuddyManager, goods_row: *const i32) -> u32 {
     if goods_row.is_null() {
         return 2;
     }
-    let result = std::panic::catch_unwind(|| ash_alive(unsafe { &*manager }, unsafe { goods_row.read_unaligned() }));
-    match result {
+    // `refId_default` is at +4 (the row starts with the disableParam bit byte
+    // + 3 reserved bytes); read at +0 it was always 0 = "not an Ash", so
+    // every use after the first came out free (user report, 2026-10-09).
+    let speffect = unsafe { goods_row.add(1).read_unaligned() };
+    let result = std::panic::catch_unwind(|| dismisses_on_reuse(unsafe { &*manager }, speffect));
+    let state = match result {
         Ok(Some(false)) => 0,
-        // The pressed Ash is out, not an Ash at all, or a panic: vanilla.
+        // The press sends it back, not an Ash at all, or a panic: vanilla.
         Ok(Some(true)) | Ok(None) | Err(_) => 2,
+    };
+    // Diagnostics (2026-10-09, clone summons reported free): log each change.
+    static LAST: AtomicI32 = AtomicI32::new(i32::MIN);
+    let key = speffect.wrapping_mul(4).wrapping_add(state as i32);
+    if LAST.swap(key, Ordering::Relaxed) != key {
+        logger::log(&format!(
+            "MultiSpirit: cost check for SpEffect {speffect}: {} ({result:?}).",
+            if state == 0 { "charged" } else { "free" }
+        ));
     }
+    state
 }
 
 /// Called from the DoSummon stub (patch 1) when `GetBuddyState` said 2
@@ -221,7 +269,7 @@ unsafe extern "system" fn cost_state(manager: *mut SummonBuddyManager, goods_row
 unsafe extern "system" fn decide_state(manager: *mut SummonBuddyManager, speffect: i32) -> u32 {
     let result = std::panic::catch_unwind(|| {
         let manager = unsafe { &mut *manager };
-        match ash_alive(manager, speffect) {
+        match dismisses_on_reuse(manager, speffect) {
             // Not a Spirit Ash: vanilla dismiss-all, no target.
             None => return 2,
             Some(true) => {
@@ -350,6 +398,33 @@ fn build_cost_stub(enabled: u64, get_buddy_state: u64, cost: u64) -> Vec<u8> {
     let je_end = push_enabled_check(&mut c, enabled); // feature off: vanilla free
     c.extend_from_slice(&[0x48, 0x8B, 0x4C, 0x24, 0x20]); // mov rcx, [rsp+0x20]
     c.extend_from_slice(&[0x48, 0x8B, 0x55, 0xC8]); // mov rdx, [rbp-0x38] (goods row)
+    c.extend_from_slice(&[0x48, 0xB8]); // mov rax, cost_state
+    c.extend_from_slice(&cost.to_le_bytes());
+    c.extend_from_slice(&[0xFF, 0xD0]); // call rax -> eax = 2 or 0
+    let end = c.len();
+    c.extend_from_slice(&[0x48, 0x83, 0xC4, 0x38]); // add rsp, 0x38
+    c.push(0xC3); // ret
+    c[jne_end + 1] = rel8(jne_end + 2, end);
+    c[je_end + 1] = rel8(je_end + 2, end);
+    c
+}
+
+/// Stub for patch 8, the destination of one `call GetBuddyState(mgr,
+/// goodsId)` in `CanUseItem` that zeroes a cost when the answer is 2: on 2,
+/// ask [cost_state] (2 = this press sends the Ash back, cost not required;
+/// 0 = it summons, so the HP/FP must be affordable). The goods row is the
+/// caller's `[rsp+0x50]` = `[rsp+0x38+8+0x50]` here.
+fn build_canuse_cost_stub(enabled: u64, get_buddy_state: u64, cost: u64) -> Vec<u8> {
+    let mut c: Vec<u8> = Vec::with_capacity(112);
+    c.extend_from_slice(&[0x48, 0x83, 0xEC, 0x38]); // sub rsp, 0x38
+    c.extend_from_slice(&[0x48, 0x89, 0x4C, 0x24, 0x20]); // mov [rsp+0x20], rcx
+    push_call(&mut c, get_buddy_state);
+    c.extend_from_slice(&[0x83, 0xF8, 0x02]); // cmp eax, 2
+    let jne_end = c.len();
+    c.extend_from_slice(&[0x75, 0]); // jne end
+    let je_end = push_enabled_check(&mut c, enabled); // feature off: keep 2
+    c.extend_from_slice(&[0x48, 0x8B, 0x4C, 0x24, 0x20]); // mov rcx, [rsp+0x20]
+    c.extend_from_slice(&[0x48, 0x8B, 0x94, 0x24, 0x90, 0x00, 0x00, 0x00]); // mov rdx, [rsp+0x90] (goods row)
     c.extend_from_slice(&[0x48, 0xB8]); // mov rax, cost_state
     c.extend_from_slice(&cost.to_le_bytes());
     c.extend_from_slice(&[0xFF, 0xD0]); // call rax -> eax = 2 or 0
@@ -490,12 +565,24 @@ fn install_all() -> bool {
         && COST_CALL_SITES.iter().enumerate().all(|(i, (pattern, offset))| {
             install(&format!("item cost site {i}"), pattern, *offset, |t| build_cost_stub(enabled, t, cost)).is_some()
         })
+        && CANUSE_COST_SITES.iter().enumerate().all(|(i, (pattern, offset))| {
+            install(&format!("CanUseItem cost site {i}"), pattern, *offset, |t| build_canuse_cost_stub(enabled, t, cost))
+                .is_some()
+        })
+}
+
+/// `MaxSpirits` from the ini, clamped like `band::install` does.
+fn max_spirits() -> u32 {
+    (config::get_int("MaxSpirits", crate::band::DEFAULT_MAX_SPIRITS as i32).max(0) as u32)
+        .clamp(crate::band::DEFAULT_MAX_SPIRITS, crate::band::MAX_MAX_SPIRITS)
 }
 
 /// Installs every patch once, then keeps [ENABLED] in sync with the ini.
 /// Never returns.
 pub fn run() {
     ENABLED.store(config::get_bool("MultiSpirit", true) as u8, Ordering::Relaxed);
+    CLONE.store(config::get_bool("CloneSpirit", false) as u8, Ordering::Relaxed);
+    MAX_SPIRITS.store(max_spirits(), Ordering::Relaxed);
     if !install_all() {
         logger::error("MultiSpirit: not (fully) installed - summoning another Ash may still send the current spirits back.");
         return;
@@ -516,6 +603,11 @@ pub fn run() {
             elapsed_ms = 0.0;
             let on = config::get_bool("MultiSpirit", true);
             ENABLED.store(on as u8, Ordering::Relaxed);
+            let clone = config::get_bool("CloneSpirit", false) as u8;
+            if CLONE.swap(clone, Ordering::Relaxed) != clone {
+                logger::log(&format!("CloneSpirit={}.", clone == 1));
+            }
+            MAX_SPIRITS.store(max_spirits(), Ordering::Relaxed);
             if last != Some(on) {
                 logger::log(&format!("MultiSpirit={on}."));
                 last = Some(on);
@@ -543,6 +635,7 @@ mod tests {
         println!("UI_STUB={}", hex(&build_ui_call_stub(en, gbs)));
         println!("CANUSE_STUB={}", hex(&build_canuse_stub(en, gbs)));
         println!("COST_STUB={}", hex(&build_cost_stub(en, gbs, f)));
+        println!("CANUSE_COST_STUB={}", hex(&build_canuse_cost_stub(en, gbs, f)));
         println!("DISAPPEAR_STUB={}", hex(&build_disappear_stub(f, 0x1404B8160)));
     }
 }

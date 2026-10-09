@@ -35,3 +35,13 @@ Viết lại (không copy) từ phân tích Solid Uncapper 2.3.3 (MojoW):
 ## Xung đột
 
 Solid Uncapper (Multi Spirit / Max Spirits Out) và bất kỳ mod nào patch các hàm `SummonBuddyManager` cùng chỗ - không dùng chung; mô tả Nexus có ghi Notes.
+
+## CloneSpirit: gọi thêm cùng một Ash (thử nghiệm 2026-10-09)
+
+**Status 2026-10-09: hoạt động, đã test in-game (gọi nhiều bản sao, chi phí FP/HP và kiểm tra đủ mana). `true`/`false`, mặc định `false`.** Đề xuất của almasakmal123 (Nexus): gọi cùng một Ash nhiều lần (vd. Mimic Tear mỗi con một bộ trang bị), quá giới hạn thì cho về.
+
+`CloneSpirit=true` (cần `MultiSpirit`; bật/tắt, mặc định false): `dismisses_on_reuse` trong `multi_spirit.rs` thay cho kiểm tra "Ash đã out thì cho về". Ash chưa có spirit sống: gọi như thường. Đã có: nếu tổng spirit sống (của người chơi) cộng số spirit một lần cast (độ dài chain) vẫn không vượt `MaxSpirits` thì `decide_state` trả 0 (gọi thêm, vẫn tính phí FP/HP vì `cost_state` trả 0); vượt thì như cũ (cho về cả Ash đó). `Update` đã bỏ `call` thu hồi nhóm cũ khi MultiSpirit bật, nên nhóm mới được nối vào cùng danh sách `groups` (khoá theo chủ, không theo Ash: `sub_1404B86D0`).
+
+Điều đã kiểm chứng khi test: game cho spawn lần 2 cùng Ash (nhóm được nối vào `groups`). Điều còn chưa rõ: game có chặn spawn lần 2 của cùng BuddyParam/slot không; `active_summon_speffect_id` giống nhau có làm `Update` coi là cast trùng không; Mimic Tear sao chép trang bị lúc xuất hiện nên mỗi con có thể khác bộ. Giới hạn: `MaxSpirits` (band) là trần dùng để quyết định gọi thêm hay cho về; còn `ActiveLimit`, chr set 80.
+
+Cùng ngày: `CanUseItem` còn 2 chỗ `GetBuddyState(mgr, goodsId) == 2` (`0x14069018A` HP, `0x14069022D` FP) đặt chi phí bắt buộc về 0 khi Ash được bấm chính là Ash đang out, nên với `CloneSpirit` bấm lại Ash đó vẫn gọi được dù không đủ FP/HP. Patch 8 cho 2 chỗ này hỏi `cost_state` (miễn phí chỉ khi lần bấm sẽ cho về). Hàng goods là `[rsp+0x50]` của hàm gọi. Đã test in-game: đúng.

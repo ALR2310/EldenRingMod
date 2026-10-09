@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+- Added an option to summon extra copies of a spirit you already have out, instead of sending it back.
+- Fixed spirit ashes costing FP and HP only on the first summon while others were out.
 - Fixed the once-per-rest summoning limit not applying when summoning anywhere was on and the no-rest option was off.
 - Fixed re-summoning a dead spirit taking two button presses while another spirit is still alive.
 
