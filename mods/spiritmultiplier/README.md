@@ -13,7 +13,7 @@ mà không cần khởi động lại game (trừ `MaxSpirits`).
 Cấu hình trong `SpiritMultiplier.ini` cạnh DLL (tự tạo nếu thiếu; key mới được thêm vào file có sẵn mà không ghi đè giá trị đã chỉnh). Có thể chỉnh:
 
 - số spirit mỗi Ash: nhân hệ số hoặc đặt số cố định, và trần `MaxSpirits`;
-- bật/tắt `MultiSpirit`, `NoRestResummon`, `SummonAnywhere`, màu ma (`GhostColor`), tốc độ hồi máu (`Regen`);
+- bật/tắt `MultiSpirit`, `NoRestResummon`, `SummonAnywhere`, màu ma (`GhostColor`), cách hồi máu (`RegenMode`, `RegenValue`);
 - phím nạp lại cấu hình và việc hiện banner sau khi nạp;
 - ghi log và các key chẩn đoán (`SlotProbe`, `EnemyProbe`, `ActiveCharacterLimit` - không nên đụng).
 
@@ -48,7 +48,7 @@ Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`S
 - **GhostColor** (`src/ghost_color.rs`): tắt ghi đè PhantomParam trên các
   `SpEffectVfx` chỉ spirit dùng (hoạt động cả với Reforged):
   [docs/ghost_color.md](docs/ghost_color.md).
-- **Regen** (`src/regen.rs`): mỗi giây hồi % HP tối đa cho spirit và Torrent.
+- **Regen** (`src/regen.rs`): mỗi giây hồi máu cho spirit và Torrent: số HP cố định, % HP tối đa, hoặc % HP đã mất.
 - **Hot reload không cộng dồn:** giá trị param gốc được chụp một lần, mọi lần
   áp/reload tính lại từ bản chụp.
 - **Tương thích Seamless Co-op:** mọi patch code chỉ đổi đích `call` sẵn có

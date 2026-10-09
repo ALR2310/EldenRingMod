@@ -9,6 +9,7 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 - Added options to improve spirit awareness and combat AI.
 - Added options to teleport spirits to you more often.
 - Added an option to summon extra copies of a spirit instead of sending it back.
+- Added spirit HP regeneration options by flat HP and percent of missing HP.
 - Fixed extra spirit summons not costing FP or HP.
 - Fixed turning off no-rest summoning not working.
 - Fixed re-summoning a dead spirit needing two presses.

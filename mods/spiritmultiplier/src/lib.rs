@@ -31,7 +31,7 @@ pub unsafe extern "C" fn DllMain(hmodule: u64, reason: u32) -> bool {
     std::thread::spawn(move || {
         let dir = dll_dir(hmodule);
         let ini_path = format!("{dir}\\SpiritMultiplier.ini");
-        let migrated = config::load_or_create_default(&ini_path, DEFAULT_INI);
+        let migrated = config::load_or_create_default_with_renames(&ini_path, DEFAULT_INI, &[("Regen", "RegenValue")]);
 
         // [Logging] LogFile gates the log file entirely - see common::logger.
         logger::init(&dir, "SpiritMultiplier.log");
