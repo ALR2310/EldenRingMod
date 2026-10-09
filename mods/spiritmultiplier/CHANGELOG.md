@@ -6,12 +6,12 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
-- Added options that improve spirit behavior: they notice enemies from farther away, start fighting sooner and attack together, and keep up with you better.
-- Added options to make spirits teleport back to you sooner, including when you simply outrun them.
-- Added an option to summon extra copies of a spirit you already have out, instead of sending it back.
-- Fixed spirit ashes costing FP and HP only on the first summon while others were out.
-- Fixed the once-per-rest summoning limit not applying when summoning anywhere was on and the no-rest option was off.
-- Fixed re-summoning a dead spirit taking two button presses while another spirit is still alive.
+- Added options to improve spirit awareness and combat AI.
+- Added options to teleport spirits to you more often.
+- Added an option to summon extra copies of a spirit instead of sending it back.
+- Fixed extra spirit summons not costing FP or HP.
+- Fixed turning off no-rest summoning not working.
+- Fixed re-summoning a dead spirit needing two presses.
 
 ## [1.1.4] - 2026-10-01
 
