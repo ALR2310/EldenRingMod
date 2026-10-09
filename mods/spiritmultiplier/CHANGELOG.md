@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-09
+
 - Added options to improve spirit awareness and combat AI.
 - Added options to teleport spirits to you more often.
 - Added an option to summon extra copies of a spirit instead of sending it back.
