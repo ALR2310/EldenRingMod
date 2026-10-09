@@ -37,4 +37,8 @@ Tooltip Smithbox của TeamAttackEffectivity nói "tăng thì ít người tấn
 
 ## Sát thương rơi (thử 2026-10-09)
 
-`NpcParam.fallDamageDump` (u8): 0 ở mọi `[Spirit Summon]`, 100 ở dummy/Bonfire/Maliketh/Gurranq, 90 ở rồng và Giant Crow, nên có vẻ là % giảm sát thương rơi. `SpiritParam.ini` ghi field NpcParam (theo tên Smithbox) lên các dòng NpcParam mà BuddyParam trỏ tới. Hướng dự phòng: SpEffect có `fall_damage_rate` (f32), hoặc xem thêm `HitMtrlParam.disable_fall_damage` (theo chất liệu nền, không dùng riêng cho spirit được). Chết do rơi quá cao / ra khỏi map có thể là kiểm tra viết cứng trong code, param chưa chắc cứu được.
+**Kết quả: `NpcParam.fallDamageDump = 100` không giúp spirit sống sót khi rơi (người dùng thử trong Convergence, cùng ngày). Bỏ hướng này.**
+
+`NpcParam.fallDamageDump` (u8) là 0 ở mọi `[Spirit Summon]`, 100 ở dummy/Bonfire/Maliketh/Gurranq, 90 ở rồng và Giant Crow; ta đoán là % giảm sát thương rơi nhưng spirit vẫn chết với 100 (có thể field này không áp dụng cho spirit, hoặc cú rơi đó là chết ngay viết cứng trong code). Phần `hp=1` để làm tín hiệu rõ hơn chưa từng được bật trong lần test này (dòng bị comment).
+
+Hướng còn lại: SpEffect có `fall_damage_rate` (f32); `SpiritParam.ini` có thể gắn nó vào slot `spEffectID0..31` của NpcParam spirit mà không cần code. Khi module chạy lần đầu nó ghi log các SpEffect có `fallDamageRate` khác 1.0 (dòng `SpEffect fallDamageRate=...`) để chọn ID. `HitMtrlParam.disable_fall_damage` là theo chất liệu nền nên không dùng riêng cho spirit được. Rơi ra khỏi map vẫn thuộc việc warp đang hoãn.

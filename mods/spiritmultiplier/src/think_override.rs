@@ -34,7 +34,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, NpcThinkParam, SoloParam, SoloParamRepository};
+use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, NpcThinkParam, SoloParam, SoloParamRepository, SpEffectParam};
 use eldenring::param::{BUDDY_PARAM_ST, NPC_PARAM_ST, NPC_THINK_PARAM_ST};
 use fromsoftware_shared::FromStatic;
 
@@ -297,7 +297,36 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Snapshots> {
         think.len(),
         npc.len()
     ));
+    log_fall_effects(repo);
     Some(Snapshots { think, npc })
+}
+
+/// Research log (2026-10-09, spirit fall damage): the SpEffects whose
+/// `fallDamageRate` is not 1.0 (a Cat Talisman-like effect would show up
+/// here), grouped by value, with a few IDs each.
+fn log_fall_effects(repo: &mut SoloParamRepository) {
+    if common::params::check::<SpEffectParam>(repo).is_err() {
+        return;
+    }
+    let Some(ids) = common::params::row_ids::<SpEffectParam>(repo) else {
+        return;
+    };
+    let mut by_rate: Vec<(f32, Vec<u32>)> = Vec::new();
+    common::params::for_each_row_mut::<SpEffectParam>(repo, |i, row| {
+        let rate = row.fall_damage_rate();
+        if (rate - 1.0).abs() < 1e-6 {
+            return;
+        }
+        match by_rate.iter_mut().find(|(r, _)| *r == rate) {
+            Some((_, v)) => v.push(ids[i]),
+            None => by_rate.push((rate, vec![ids[i]])),
+        }
+    });
+    by_rate.sort_by(|a, b| a.0.total_cmp(&b.0));
+    for (rate, v) in by_rate {
+        let sample: Vec<_> = v.iter().take(40).collect();
+        logger::log(&format!("ThinkOverride: SpEffect fallDamageRate={rate}: {} row(s) {sample:?}", v.len()));
+    }
 }
 
 /// Puts every `P` row back from its snapshot, then lets `write_over` write
