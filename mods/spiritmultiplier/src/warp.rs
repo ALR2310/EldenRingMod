@@ -44,7 +44,7 @@ use std::time::Duration;
 use eldenring::cs::{CSTaskGroupIndex, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
-use common::{config, logger, memscan};
+use common::{codepatch, config, logger, memscan};
 
 const TICK_INTERVAL_MS: f64 = 1000.0;
 /// How often `WarpWhenFar` looks at the entries. Walking them checks every
@@ -64,6 +64,66 @@ const FLAGS_AOB: &str = "8B 43 60 8B C8 83 E1 07 83 F9 07 75 0D A8 08 74 09 A8 5
 /// byte (+0x30 from the map node's value, +48 from the node) and the isnil
 /// byte (+0x19 = 25).
 const STAGE_AOB: &str = "80 7B 30 00 74 ?? 80 7B 19 00 0F 85 ?? ?? ?? ?? 48 8B 43 10 80 78 19 00";
+
+/// `cmp qword [r15+0E8h],0; jz ..; call sub_1404B7710; test al,al; jnz ..;
+/// mov rdx,[rdi+8]; mov rcx,[r15+0E8h]; call sub_1404C0DD0` at the end of
+/// `sub_1404BAEA0` (0x1404BB91B, unique): right after a spirit's chr is
+/// created, the game registers it with the warp manager. The `call` to the
+/// register function is at +30.
+const REGISTER_AOB: &str =
+    "49 83 BF E8 00 00 00 00 74 ?? E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 57 08 49 8B 8F E8 00 00 00 E8 ?? ?? ?? ??";
+const REGISTER_CALL_OFFSET: usize = 30;
+
+/// `cmp qword [rcx+0E8h],0; mov rdi,rdx; mov rsi,rcx; jz ..; call
+/// sub_1404B7710; test al,al; jnz ..; mov rdx,[rdi+8]; mov rcx,[rsi+0E8h];
+/// call sub_1404C26F0` in `sub_1404BBAA0` (0x1404BBAAA, unique): when a
+/// spirit leaves its group the game removes its warp entry. The `call` to the
+/// unregister function is at +36.
+const UNREGISTER_AOB: &str =
+    "48 83 B9 E8 00 00 00 00 48 8B FA 48 8B F1 74 ?? E8 ?? ?? ?? ?? 84 C0 75 ?? 48 8B 57 08 48 8B 8E E8 00 00 00 E8 ?? ?? ?? ??";
+const UNREGISTER_CALL_OFFSET: usize = 36;
+
+/// `lea rdx,[rsp+70h]; mov rcx,[r15+0E8h]; call sub_1404C2890; nop; mov
+/// [rsp+70h],rbx; mov [rsp+70h],rdi` in `SummonBuddyManager::Update`
+/// (0x1404B8B6D, unique): the per-frame warp manager update (flags, stage
+/// 0 -> 1, the stage 1 -> 2 -> 3 move). The `call` is at +12.
+const UPDATE_AOB: &str = "48 8D 54 24 70 49 8B 8F E8 00 00 00 E8 ?? ?? ?? ?? 90 48 89 5C 24 70 48 89 7C 24 70";
+const UPDATE_CALL_OFFSET: usize = 12;
+
+/// The time argument of the update: the engine's `FD4Time` (vftable, then
+/// the frame time in seconds at +8); the warp code only reads the float.
+#[repr(C)]
+struct FrameTime {
+    vftable: usize,
+    seconds: f32,
+    pad: u32,
+}
+
+type UpdateFn = unsafe extern "system" fn(manager: usize, time: *const FrameTime) -> i64;
+
+/// `sub_1404C0DD0(warp_manager, field_ins_handle)`: adds an entry for the
+/// handle (stage 0) unless there is one. `sub_1404C26F0` (same signature)
+/// removes it.
+type RegisterFn = unsafe extern "system" fn(manager: usize, handle: u64) -> i64;
+
+/// Both game functions, resolved from the call sites above.
+#[derive(Clone, Copy)]
+struct Registry {
+    register: RegisterFn,
+    unregister: RegisterFn,
+    update: UpdateFn,
+}
+
+/// Whether Seamless Co-op (`ersc.dll`) is loaded.
+fn seamless_loaded() -> bool {
+    common::diag::loaded_modules().iter().any(|m| m.name.eq_ignore_ascii_case("ersc.dll"))
+}
+
+/// The target of the `call` at `offset` in the first match of `pattern`.
+fn call_target(pattern: &str, offset: usize) -> Option<usize> {
+    let at = memscan::wait_for_pattern_in_module(pattern, Duration::from_millis(500), Duration::from_secs(30))?;
+    codepatch::rel32_target(unsafe { at.add(offset) }).map(|target| target as usize)
+}
 
 unsafe extern "system" {
     fn IsBadReadPtr(ptr: *const u8, size: usize) -> i32;
@@ -160,9 +220,115 @@ fn local_handles(world_chr_man: &WorldChrMan) -> Vec<u64> {
         .groups
         .iter()
         .flat_map(|pair| pair.second.iter())
-        .filter(|g| !g.is_remote && !g.disappear_requested)
+        .filter(|g| !g.is_remote && crate::multi_spirit::group_alive(g))
         .map(|g| unsafe { (&g.chr_ins.as_ref().field_ins_handle as *const _ as *const u64).read_unaligned() })
         .collect()
+}
+
+/// Registers with the warp manager every spirit of the local player that has
+/// no entry. The game does it when it creates the spirit's chr, but with
+/// Seamless Co-op the spirits are created by Seamless's own code, which skips
+/// that call: no entry, so the engine never warps them (log 2026-10-09, the
+/// same ini with and without Seamless: `entries: none` with 3 spirits out).
+/// Does nothing when every spirit already has its entry (vanilla).
+///
+/// `ours` = the handles registered here: when such a spirit is gone (dead,
+/// sent back, despawned) its entry is removed again, as the game would have
+/// done - the update looks the chr up by handle and must not find a stale
+/// entry.
+unsafe fn register_missing(a1: usize, world_chr_man: &WorldChrMan, registry: Registry, ours: &mut Vec<u64>) {
+    let mut have: Vec<u64> = Vec::new();
+    unsafe { for_each_node(a1, |node| have.push(rd(node, 32))) };
+    let local = local_handles(world_chr_man);
+    for &handle in &local {
+        if !have.contains(&handle) {
+            unsafe { (registry.register)(a1, handle) };
+            ours.push(handle);
+            logger::log(&format!("Warp: registered spirit {handle:#x} with the warp manager."));
+        }
+    }
+    ours.retain(|handle| {
+        if local.contains(handle) {
+            return true;
+        }
+        if have.contains(handle) {
+            unsafe { (registry.unregister)(a1, *handle) };
+            logger::log(&format!("Warp: removed spirit {handle:#x} from the warp manager."));
+        }
+        false
+    });
+}
+
+/// Distance to the player of each live spirit of the local player, by handle.
+fn local_distances(world_chr_man: &WorldChrMan) -> Vec<(u64, f32)> {
+    let Some(player) = world_chr_man.main_player.as_ref() else {
+        return Vec::new();
+    };
+    let at = player.chr_ins.modules.physics.position;
+    world_chr_man
+        .summon_buddy_manager
+        .groups
+        .iter()
+        .flat_map(|pair| pair.second.iter())
+        .filter(|g| !g.is_remote && crate::multi_spirit::group_alive(g))
+        .map(|g| {
+            let chr = unsafe { g.chr_ins.as_ref() };
+            let handle = unsafe { (&chr.field_ins_handle as *const _ as *const u64).read_unaligned() };
+            let p = chr.modules.physics.position;
+            let (dx, dy, dz) = (p.0 - at.0, p.1 - at.1, p.2 - at.2);
+            (handle, (dx * dx + dy * dy + dz * dz).sqrt())
+        })
+        .collect()
+}
+
+/// How long a spirit must stay farther than the warp distance (the engine's
+/// own "far" flag uses the same 1.5 s).
+const FAR_SECONDS: f32 = 1.5;
+
+/// For the spirits registered by this module (`ours`): the engine's own
+/// conditions are not met for them (log 2026-10-09 with Seamless: every flag
+/// stayed 0, even far away), so the distance is measured here and a spirit
+/// that stays farther than the manager's warp distance for [FAR_SECONDS] gets
+/// its stage set to 1 (RequestWarp). `far_for` = seconds each has been far.
+unsafe fn request_far_ours(
+    a1: usize,
+    world_chr_man: &WorldChrMan,
+    ours: &[u64],
+    far_for: &mut std::collections::HashMap<u64, f32>,
+    dt: f32,
+) {
+    let limit = world_chr_man.summon_buddy_manager.warp_manager.trigger_dist_to_player;
+    let mut due: Vec<(u64, f32)> = Vec::new();
+    far_for.retain(|handle, _| ours.contains(handle));
+    for (handle, dist) in local_distances(world_chr_man) {
+        if !ours.contains(&handle) {
+            continue;
+        }
+        if dist >= limit {
+            let time = far_for.entry(handle).or_insert(0.0);
+            *time += dt;
+            if *time >= FAR_SECONDS {
+                due.push((handle, dist));
+            }
+        } else {
+            far_for.remove(&handle);
+        }
+    }
+    if due.is_empty() {
+        return;
+    }
+    unsafe {
+        for_each_node(a1, |node| {
+            let key: u64 = rd(node, 32);
+            if let Some(&(_, dist)) = due.iter().find(|(handle, _)| *handle == key) {
+                if rd::<u8>(node, 48) == 0 {
+                    ((node + 48) as *mut u8).write(1);
+                    far_for.remove(&key);
+                    logger::log(&format!("Warp: spirit {key:#x} is {dist:.0} m away: warp requested."));
+                }
+            }
+        });
+    }
 }
 
 /// `WarpWhenFar`: sets the stage of an idle spirit (stage 0) of the local
@@ -272,6 +438,35 @@ pub fn run() {
         return;
     }
     let cs_task = common::task::wait_for_cs_task();
+    // Only with Seamless Co-op: the game registers vanilla spirits itself (and
+    // not on purpose in the arena), so there is nothing to fix without it.
+    // Checked after `CSTaskImp` exists, when every mod loader has loaded its DLLs.
+    let registry = if seamless_loaded() {
+        match (
+            call_target(REGISTER_AOB, REGISTER_CALL_OFFSET),
+            call_target(UNREGISTER_AOB, UNREGISTER_CALL_OFFSET),
+            call_target(UPDATE_AOB, UPDATE_CALL_OFFSET),
+        ) {
+            (Some(register), Some(unregister), Some(update)) => {
+                logger::log("Warp: Seamless Co-op found - its spirits are registered for warping here.");
+                Some(unsafe {
+                    Registry {
+                        register: std::mem::transmute::<usize, RegisterFn>(register),
+                        unregister: std::mem::transmute::<usize, RegisterFn>(unregister),
+                        update: std::mem::transmute::<usize, UpdateFn>(update),
+                    }
+                })
+            }
+            _ => {
+                logger::error("Warp: the game's spirit registration was not found - Seamless spirits will not warp.");
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let mut ours: Vec<u64> = Vec::new();
+    let mut far_for: std::collections::HashMap<u64, f32> = std::collections::HashMap::new();
     let mut elapsed_ms: f64 = TICK_INTERVAL_MS;
     let mut request_ms: f64 = 0.0;
     let mut last = String::new();
@@ -301,6 +496,15 @@ pub fn run() {
 
             let frame_ms = (data.delta_time.time as f64) * 1000.0;
 
+            // The engine does not run the warp update for the spirits this
+            // module registered (Seamless: every flag stayed 0 and a requested
+            // warp stayed at stage 1, log 2026-10-09), so run it here, once a
+            // frame, as `SummonBuddyManager::Update` would.
+            if let (Some(registry), false) = (registry, ours.is_empty()) {
+                let time = FrameTime { vftable: 0, seconds: data.delta_time.time, pad: 0 };
+                unsafe { (registry.update)(a1, &time) };
+            }
+
             // Once a second: ini values, thresholds, diagnostics.
             elapsed_ms += frame_ms;
             if elapsed_ms >= TICK_INTERVAL_MS {
@@ -322,7 +526,14 @@ pub fn run() {
             // Ten times a second: a warp request should not wait a whole second.
             request_ms += frame_ms;
             if request_ms >= REQUEST_INTERVAL_MS {
+                let dt = (request_ms / 1000.0) as f32;
                 request_ms = 0.0;
+                // Often, so a spirit that just left is dropped before the engine's
+                // update looks for its chr again.
+                if let Some(registry) = registry {
+                    unsafe { register_missing(a1, world_chr_man, registry, &mut ours) };
+                    unsafe { request_far_ours(a1, world_chr_man, &ours, &mut far_for, dt) };
+                }
                 if when_far {
                     unsafe { request_warps(a1, world_chr_man) };
                 }

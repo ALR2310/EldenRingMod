@@ -226,7 +226,7 @@ fn dismisses_on_reuse(manager: &SummonBuddyManager, speffect: i32) -> Option<boo
 /// check re-using the Ash of a dead spirit - while another Ash still has
 /// live ones - counted as "already out" and only sent it back; the next press
 /// summoned it (user report, 2026-10-08, Noble Sorcerer + Jellyfish).
-fn group_alive(group: &eldenring::cs::SummonBuddyGroup) -> bool {
+pub(crate) fn group_alive(group: &eldenring::cs::SummonBuddyGroup) -> bool {
     !group.disappear_requested && unsafe { group.chr_ins.as_ref() }.modules.data.hp > 0
 }
 

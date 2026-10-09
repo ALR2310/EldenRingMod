@@ -27,3 +27,14 @@
 ## Điều chưa làm
 
 Cả nhóm thường dịch chuyển cùng lúc (cùng bị xa); chưa tách từng spirit. Lần thử cũ (chỉ hạ ngưỡng khi chưa có công cụ xem trạng thái) kết luận sai là không có tác dụng.
+
+## Seamless Co-op (2026-10-09, báo cáo Nexus: spirit không dịch chuyển)
+
+Cùng ini, cùng DLL, cùng khu vực: vanilla có 3 mục trong danh sách dịch chuyển ngay khi triệu hồi; Seamless `entries: none` suốt phiên. Nguyên nhân (từ `dumps/seamless-diff/` + IDA):
+
+- Game đăng ký spirit với warp manager ở cuối `sub_1404BAEA0` (tạo chr của spirit, gọi `sub_1404C0DD0(warp_manager, handle)`; huỷ ở `sub_1404BBAA0` qua `sub_1404C26F0`). Seamless chuyển hướng lời gọi tới `sub_1404BAEA0` (`0x1404B7E0E`) và hook đầu `DoSummon`, `sub_1404B92B0`: spirit của Seamless không bao giờ được đăng ký.
+- Chỉ đăng ký thì chưa đủ: cờ vẫn 0 và stage yêu cầu kẹt ở 1, tức hàm cập nhật dịch chuyển (`sub_1404C2890`, gọi từ `SummonBuddyManager::Update` ở `0x1404B8B79`) cũng không chạy cho các spirit này.
+
+Cách mod xử lý (`warp.rs`): mỗi 0,1 s đăng ký các spirit sống của người chơi này chưa có mục (và gỡ mục của spirit đã đi, chỉ những mục mod đã đăng ký); nếu có mục do mod đăng ký thì mỗi frame tự gọi `sub_1404C2890` với một `FrameTime` giả (chỉ đọc số giây ở +8); đo khoảng cách tới người chơi và đặt stage = 1 khi xa hơn ngưỡng liên tục 1,5 s. Sau đó engine tự chạy cờ và stage 1 → 2 → 3 → 0 (log: spirit hiện tới chỗ người chơi). Vanilla không đổi: game tự đăng ký nên mod không có mục nào của riêng nó.
+
+Solo khi `ersc.dll` đã nạp (kiểm tra sau khi `CSTaskImp` có, lúc mọi DLL đã nạp): vanilla không đổi hành vi, vì game tự đăng ký spirit (và cố ý không đăng ký trong đấu trường).

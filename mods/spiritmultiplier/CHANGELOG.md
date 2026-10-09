@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+- Fixed spirits not teleporting to you in Seamless Co-op.
+
 ## [1.2.0] - 2026-10-09
 
 - Added options to improve spirit awareness and combat AI.
