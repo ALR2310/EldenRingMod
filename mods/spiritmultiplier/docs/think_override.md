@@ -42,3 +42,15 @@ Tooltip Smithbox của TeamAttackEffectivity nói "tăng thì ít người tấn
 `NpcParam.fallDamageDump` (u8) là 0 ở mọi `[Spirit Summon]`, 100 ở dummy/Bonfire/Maliketh/Gurranq, 90 ở rồng và Giant Crow; ta đoán là % giảm sát thương rơi nhưng spirit vẫn chết với 100 (có thể field này không áp dụng cho spirit, hoặc cú rơi đó là chết ngay viết cứng trong code). Phần `hp=1` để làm tín hiệu rõ hơn chưa từng được bật trong lần test này (dòng bị comment).
 
 Hướng còn lại: SpEffect có `fall_damage_rate` (f32); `SpiritParam.ini` có thể gắn nó vào slot `spEffectID0..31` của NpcParam spirit mà không cần code. Khi module chạy lần đầu nó ghi log các SpEffect có `fallDamageRate` khác 1.0 (dòng `SpEffect fallDamageRate=...`) để chọn ID. `HitMtrlParam.disable_fall_damage` là theo chất liệu nền nên không dùng riêng cho spirit được. Rơi ra khỏi map vẫn thuộc việc warp đang hoãn.
+
+## Bộ giá trị tích hợp: ImproveSenses / ImproveAggression / ImproveFollow (2026-10-09)
+
+**Status 2026-10-09: viết xong, mặc định `true`; từng giá trị đã thử trong game (bật cả bộ, hành vi spirit được cải thiện), chưa tách từng nhóm để biết nhóm nào quyết định.**
+
+Ba key ini bật/tắt (hot reload bằng F5) nạp sẵn các field của Age of Spirit vào `NpcThinkParam` của spirit (`SENSES`, `AGGRESSION`, `FOLLOW` trong `think_override.rs`):
+
+- `ImproveSenses`: tầm nhìn / khứu giác / thính giác, thời gian nhớ mục tiêu, tầm nhìn khi chiến đấu.
+- `ImproveAggression`: `TeamAttackEffectivity`, `BattleStartDist`, kêu gọi đồng đội (Platoon), `isGuard_Act`, `thinkAttr_doAdmirer`, nhảy.
+- `ImproveFollow`: quay về chỗ chủ khi xa hơn ~30 m (gốc 9999), quyền đi thang / hố / tường navmesh / mép vực. Bỏ Lava có chủ ý.
+
+Mỗi mục có chế độ: `Max` chỉ nâng giá trị gốc lên, `Min` chỉ hạ xuống, `Set` luôn ghi, để không làm hỏng các mod đã chỉnh sẵn các field này (vd. Age of Spirit đặt giá trị riêng cho healer). Các bộ được ghi trước, `SpiritThinkParam.ini` / `SpiritParam.ini` ghi sau nên thắng. Không đưa vào bộ: `isBuddyAI`, `disableDark` (gốc đã là 1), `enableNaviFlg_Lava`, nhóm `goalAction_*` (người dùng quyết định bỏ), `fallDamageDump` (không có tác dụng).

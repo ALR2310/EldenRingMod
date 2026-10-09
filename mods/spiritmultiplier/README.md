@@ -31,6 +31,14 @@ Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`S
 - **Kẻ địch không biến mất** (`src/activate_limit.rs`): game chỉ activate tối
   đa 60 nhân vật, spirit chiếm suất của kẻ địch; mod nâng giới hạn đúng bằng
   số spirit đang có: [docs/activate_limit.md](docs/activate_limit.md).
+- **Cải thiện AI spirit** (`src/think_override.rs`): 3 key bật/tắt nạp sẵn
+  các field `NpcThinkParam` (giác quan, hung hăng, bám theo) theo kiểu chỉ
+  nâng/chỉ hạ, cùng hai file tuỳ chọn để tự chỉnh từng field:
+  [docs/think_override.md](docs/think_override.md).
+- **Dịch chuyển spirit** (`src/warp.rs`): hạ các ngưỡng dịch chuyển của game
+  (khoảng cách, thời gian khuất tầm nhìn, thời gian kẹt) và tuỳ chọn yêu cầu
+  dịch chuyển cả khi spirit chỉ ở xa, nhưng chỉ cho spirit của người chơi này:
+  [docs/warp_research.md](docs/warp_research.md).
 - **MultiSpirit** (`src/multi_spirit.rs`): bỏ luật "1 nhóm spirit" của
   `SummonBuddyManager` (DoSummon/Update/CanUseItem/UI), cho về từng Ash khi
   bấm lại, Ash gọi thêm vẫn tốn FP/HP: [docs/multi_spirit.md](docs/multi_spirit.md).
@@ -57,7 +65,7 @@ Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`S
 - Không dùng chung với mod khác sửa việc triệu hồi spirit (vd. phần spirit của Solid Uncapper): cùng patch các hàm `SummonBuddyManager`.
 - ELDEN RING Reforged: spirit gọi ra mặc định ở trạng thái đỏ (Fury) và `MultiSpirit` chỉ cho 1 nhóm vào Fury; `NoRestResummon` không gỡ được luật của Reforged sau Spirit-Severing Blade.
 - Seamless Co-op: spirit mất màu ma, trông như kẻ địch thường (chưa sửa).
-- Spirit chưa dịch chuyển về người chơi khi bị bỏ lại (đã thử, chưa làm được).
+- Dịch chuyển spirit về người chơi (`Warp*`, `WarpWhenFar`) là thử nghiệm (`WarpWhenFar` mặc định tắt); chỉ chạy trên bản exe mod nhận ra được (mã dịch chuyển của game phải đúng cấu trúc đã phân tích).
 - Chỉ dùng ở chế độ offline hoặc Seamless Co-op, tắt EAC.
 
 ## Tài liệu liên quan
@@ -70,6 +78,6 @@ Tên key, giá trị mặc định và ý nghĩa nằm ở chú thích trong [`S
 - [docs/summon_anywhere.md](docs/summon_anywhere.md): NoRestResummon, SummonAnywhere.
 - [docs/ghost_color.md](docs/ghost_color.md): màu ma, cờ hành vi spirit.
 - [docs/seamless_conflict.md](docs/seamless_conflict.md): xung đột Seamless, quy tắc đổi đích `call`.
-- [docs/warp_research.md](docs/warp_research.md): nghiên cứu dịch chuyển spirit (hoãn).
+- [docs/warp_research.md](docs/warp_research.md): cơ chế dịch chuyển spirit về người chơi và cách mod đẩy nó.
 - [docs/open_issues.md](docs/open_issues.md): vấn đề còn mở (Reforged, Seamless).
 - [nexus_page.bbcode](nexus_page.bbcode): mô tả trang Nexus.

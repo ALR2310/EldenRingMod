@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+- Added options that improve spirit behavior: they notice enemies from farther away, start fighting sooner and attack together, and keep up with you better.
+- Added options to make spirits teleport back to you sooner, including when you simply outrun them.
 - Added an option to summon extra copies of a spirit you already have out, instead of sending it back.
 - Fixed spirit ashes costing FP and HP only on the first summon while others were out.
 - Fixed the once-per-rest summoning limit not applying when summoning anywhere was on and the no-rest option was off.

@@ -1,10 +1,18 @@
-//! `SpiritThinkParam.ini` and `SpiritParam.ini` (optional, experimental, hot
-//! reload without F5): set any scalar field / bit flag of the rows spirits use
-//! - the `NpcThinkParam` ones (the AI: aggressiveness, sight, battle start
-//! distance, ...) and the `NpcParam` ones - so tweaks can be tried in-game
-//! without rebuilding the DLL.
+//! Spirit AI tweaks, on the `NpcThinkParam` rows spirits use (the AI:
+//! aggressiveness, sight, battle start distance, ...). Hot reload, no F5 for
+//! the files below:
 //!
-//! The files live next to the DLL and are only read if they exist. One
+//! - `ImproveSenses` / `ImproveAggression` / `ImproveFollow` (ini keys,
+//!   default `true`): built-in bundles of those fields, see [SENSES],
+//!   [AGGRESSION] and [FOLLOW]. Values were taken from the Age of Spirit
+//!   mod's regulation (its spirits notice enemies from farther away, engage
+//!   together and keep up with the player) and tried in game 2026-10-09.
+//! - `SpiritThinkParam.ini` and `SpiritParam.ini` (optional, experimental):
+//!   set any scalar field / bit flag of the `NpcThinkParam` / `NpcParam` rows
+//!   spirits use, so tweaks can be tried in-game without rebuilding the DLL.
+//!   They are written after the bundles and win over them.
+//!
+//! The files live next to the DLL, are never created and are only read if they exist. One
 //! `Name=value` per line, `;`/`#` comments. `Name` is the
 //! field name as in Smithbox's parentheses (`TeamAttackEffectivity`,
 //! `BattleStartDist`, `isGuard_Act`) or the Rust one
@@ -32,13 +40,14 @@
 //! (`enableNaviFlg_*`, `isNoAvoidHugeEnemy`, ...; value 0 or 1).
 
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use std::time::{Duration, SystemTime};
 
-use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, NpcThinkParam, SoloParam, SoloParamRepository, SpEffectParam};
+use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, NpcThinkParam, SoloParam, SoloParamRepository};
 use eldenring::param::{BUDDY_PARAM_ST, NPC_PARAM_ST, NPC_THINK_PARAM_ST};
 use fromsoftware_shared::FromStatic;
 
-use common::logger;
+use common::{config, logger};
 
 mod think_fields {
     include!("think_fields.rs");
@@ -47,8 +56,6 @@ mod npc_fields {
     include!("npc_fields.rs");
 }
 use think_fields::{FIELDS, ROW_SIZE};
-
-type Table = &'static [(&'static str, usize, Kind)];
 
 const THINK_FILE: &str = "SpiritThinkParam.ini";
 const NPC_FILE: &str = "SpiritParam.ini";
@@ -70,12 +77,108 @@ pub enum Kind {
     Bit(u8),
 }
 
-/// One validated line of the file: `(field name, byte offset, type, value)`.
+/// How an override combines with the row's own (original) value: a bundle
+/// must not undo what another mod's regulation already did, so it only moves a
+/// value in the improving direction.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Mode {
+    /// Always write the value (every line of the files).
+    Set,
+    /// Write the value if it is larger than the original.
+    Max,
+    /// Write the value if it is smaller than the original.
+    Min,
+}
+
+/// One validated line of the file, or one bundle entry: field name, byte
+/// offset, type, value and how it combines with the original value.
 struct Override {
     name: &'static str,
     offset: usize,
     kind: Kind,
     value: f64,
+    mode: Mode,
+}
+
+use Mode::{Max, Min, Set};
+
+/// `ImproveSenses`: spirits notice enemies from farther away and remember
+/// them longer - sight, smell and hearing ranges / memory, and the wider
+/// vision used while fighting. (Name, value, mode.)
+const SENSES: &[(&str, f64, Mode)] = &[
+    ("searchEye_dist", 15.0, Max),
+    ("eye_dist", 15.0, Max),
+    ("searchEye_angX", 180.0, Max),
+    ("searchEye_angY", 180.0, Max),
+    ("SightTargetForgetTime", 3.0, Max),
+    ("nose_dist", 5.0, Max),
+    ("searchTargetLv1ForgetTime", 5.0, Max),
+    ("searchTargetLv2ForgetTime", 5.0, Max),
+    ("MemoryTargetForgetTime", 5.0, Max),
+    ("ear_dist", 5.0, Max),
+    ("SoundTargetForgetTime", 5.0, Max),
+    ("isUpdateBattleSight", 1.0, Max),
+    ("battleEye_updateDist", 60.0, Max),
+    ("battleEye_updateAngX", 180.0, Max),
+    ("battleEye_updateAngY", 180.0, Max),
+];
+
+/// `ImproveAggression`: spirits start fighting from farther away, attack
+/// together instead of circling, guard, and call for help.
+const AGGRESSION: &[(&str, f64, Mode)] = &[
+    ("TeamAttackEffectivity", 100.0, Max),
+    ("BattleStartDist", 15.0, Max),
+    ("callHelp_CallValidMinDistTarget", 5.0, Set),
+    ("callHelp_CallValidRange", 15.0, Max),
+    ("platoonReplyAddRandomTime", 2.0, Set),
+    ("isGuard_Act", 1.0, Max),
+    ("thinkAttr_doAdmirer", 1.0, Max),
+    ("enableJumpMove", 2.0, Max),
+    ("enableJumpMove_onBattle", 2.0, Max),
+];
+
+/// `ImproveFollow`: spirits return to the player beyond ~30 m instead of
+/// chasing anywhere (vanilla 9999 m) and may take ladders, holes, navmesh
+/// walls and ledges to keep up (lava is left out on purpose).
+const FOLLOW: &[(&str, f64, Mode)] = &[
+    ("maxBackhomeDist", 30.0, Min),
+    ("backhomeDist", 30.0, Min),
+    ("backhomeBattleDist", 60.0, Max),
+    ("BackHome_LookTargetTime", 15.0, Max),
+    ("BackHome_LookTargetDist", 15.0, Max),
+    ("BackHomeLifeOnHitEneWal", 0.1, Min),
+    ("backToHomeStuckAct", 1.0, Set),
+    ("enableNaviFlg_Ladder", 1.0, Max),
+    ("enableNaviFlg_Hole", 1.0, Max),
+    ("enableNaviFlg_InSideWall", 1.0, Max),
+    ("enableNaviFlg_Edge_Ordinary", 1.0, Max),
+];
+
+/// The bundles the ini keys switch on, as `(key, entries)`.
+const BUNDLES: [(&str, &[(&str, f64, Mode)]); 3] =
+    [("ImproveSenses", SENSES), ("ImproveAggression", AGGRESSION), ("ImproveFollow", FOLLOW)];
+
+/// `NpcThinkParam` field table by normalized name.
+static THINK_INDEX: LazyLock<HashMap<String, &'static (&'static str, usize, Kind)>> =
+    LazyLock::new(|| FIELDS.iter().map(|f| (normalize(f.0), f)).collect());
+
+/// The overrides of the bundles whose ini key is on (default on), as a bit
+/// set (for change detection) and the list, in bundle order.
+fn bundle_overrides() -> (u8, Vec<Override>) {
+    let mut bits = 0u8;
+    let mut out = Vec::new();
+    for (i, (key, entries)) in BUNDLES.iter().enumerate() {
+        if !config::get_bool(key, true) {
+            continue;
+        }
+        bits |= 1 << i;
+        for &(name, value, mode) in entries.iter() {
+            if let Some(&&(name, offset, kind)) = THINK_INDEX.get(&normalize(name)) {
+                out.push(Override { name, offset, kind, value, mode });
+            }
+        }
+    }
+    (bits, out)
 }
 
 /// Lowercase without `_`, so `isGuard_Act` and `is_guard_act` match.
@@ -130,11 +233,9 @@ fn parse_row_header(line: &str) -> Option<Vec<u32>> {
 /// `npc` = the content of `SpiritParam.ini` (NpcParam fields, no sections),
 /// else `SpiritThinkParam.ini` (NpcThinkParam fields).
 fn parse(content: &str, npc: bool) -> Config {
-    let by_name = |table: Table| -> HashMap<String, &'static (&'static str, usize, Kind)> {
-        table.iter().map(|f| (normalize(f.0), f)).collect()
-    };
-    let think_names = by_name(FIELDS);
-    let npc_names = by_name(npc_fields::FIELDS);
+    let think_names = &*THINK_INDEX;
+    let npc_names: HashMap<String, &'static (&'static str, usize, Kind)> =
+        npc_fields::FIELDS.iter().map(|f| (normalize(f.0), f)).collect();
     let mut config = Config::default();
     let mut section = Section::Global;
     for line in content.lines() {
@@ -160,7 +261,7 @@ fn parse(content: &str, npc: bool) -> Config {
             continue;
         };
         let (key, value) = (key.trim(), value.trim());
-        let (names, table) = if npc { (&npc_names, npc_fields::FIELDS) } else { (&think_names, FIELDS) };
+        let (names, table) = if npc { (&npc_names, npc_fields::FIELDS) } else { (think_names, FIELDS) };
         let Some(&&(name, offset, kind)) = names.get(&normalize(key)) else {
             let wanted = normalize(key);
             let close: Vec<&str> = table
@@ -200,7 +301,7 @@ fn parse(content: &str, npc: bool) -> Config {
             Section::Global => &mut config.global,
         };
         list.retain(|o| o.name != name);
-        list.push(Override { name, offset, kind, value });
+        list.push(Override { name, offset, kind, value, mode: Set });
     }
     config
 }
@@ -212,6 +313,12 @@ fn parse(content: &str, npc: bool) -> Config {
 unsafe fn write(row: *mut u8, o: &Override) {
     unsafe {
         let at = row.add(o.offset);
+        if o.mode != Set {
+            let current = read(at, o.kind);
+            if (o.mode == Max && current >= o.value) || (o.mode == Min && current <= o.value) {
+                return;
+            }
+        }
         match o.kind {
             Kind::U8 => at.write(o.value.round() as u8),
             Kind::I8 => at.write(o.value.round() as i8 as u8),
@@ -224,6 +331,25 @@ unsafe fn write(row: *mut u8, o: &Override) {
                 let byte = at.read() & !(1 << bit);
                 at.write(byte | ((o.value.round() as u8) << bit));
             }
+        }
+    }
+}
+
+/// The value of the field of type `kind` at `at`.
+///
+/// # Safety
+/// `at` must point to a field of that type inside a row.
+unsafe fn read(at: *const u8, kind: Kind) -> f64 {
+    unsafe {
+        match kind {
+            Kind::U8 => at.read() as f64,
+            Kind::I8 => at.read() as i8 as f64,
+            Kind::U16 => (at as *const u16).read_unaligned() as f64,
+            Kind::I16 => (at as *const i16).read_unaligned() as f64,
+            Kind::U32 => (at as *const u32).read_unaligned() as f64,
+            Kind::I32 => (at as *const i32).read_unaligned() as f64,
+            Kind::F32 => (at as *const f32).read_unaligned() as f64,
+            Kind::Bit(bit) => ((at.read() >> bit) & 1) as f64,
         }
     }
 }
@@ -297,36 +423,7 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Snapshots> {
         think.len(),
         npc.len()
     ));
-    log_fall_effects(repo);
     Some(Snapshots { think, npc })
-}
-
-/// Research log (2026-10-09, spirit fall damage): the SpEffects whose
-/// `fallDamageRate` is not 1.0 (a Cat Talisman-like effect would show up
-/// here), grouped by value, with a few IDs each.
-fn log_fall_effects(repo: &mut SoloParamRepository) {
-    if common::params::check::<SpEffectParam>(repo).is_err() {
-        return;
-    }
-    let Some(ids) = common::params::row_ids::<SpEffectParam>(repo) else {
-        return;
-    };
-    let mut by_rate: Vec<(f32, Vec<u32>)> = Vec::new();
-    common::params::for_each_row_mut::<SpEffectParam>(repo, |i, row| {
-        let rate = row.fall_damage_rate();
-        if (rate - 1.0).abs() < 1e-6 {
-            return;
-        }
-        match by_rate.iter_mut().find(|(r, _)| *r == rate) {
-            Some((_, v)) => v.push(ids[i]),
-            None => by_rate.push((rate, vec![ids[i]])),
-        }
-    });
-    by_rate.sort_by(|a, b| a.0.total_cmp(&b.0));
-    for (rate, v) in by_rate {
-        let sample: Vec<_> = v.iter().take(40).collect();
-        logger::log(&format!("ThinkOverride: SpEffect fallDamageRate={rate}: {} row(s) {sample:?}", v.len()));
-    }
 }
 
 /// Puts every `P` row back from its snapshot, then lets `write_over` write
@@ -347,12 +444,12 @@ fn restore<P: SoloParam>(
     }
 }
 
-/// Restores every row from its snapshot, then writes the overrides: global
-/// and `[Row ...]` ones onto the NpcThinkParam rows, `[NpcParam]` ones onto
+/// Restores every row from its snapshot, then writes the overrides: the
+/// bundles, the global and `[Row ...]` ones onto the NpcThinkParam rows, `[NpcParam]` ones onto
 /// the NpcParam rows.
-fn apply(repo: &mut SoloParamRepository, rows: &Snapshots, config: &Config) {
+fn apply(repo: &mut SoloParamRepository, rows: &Snapshots, bundles: &[Override], config: &Config) {
     restore::<NpcThinkParam>(repo, &rows.think, ROW_SIZE, |ptr, id| unsafe {
-        for o in &config.global {
+        for o in bundles.iter().chain(&config.global) {
             write(ptr, o);
         }
         for (_, overrides) in config.rows.iter().filter(|(ids, _)| ids.contains(&id)) {
@@ -376,8 +473,9 @@ pub fn run(dir: String) {
     let mut elapsed_ms: f64 = 0.0;
     // None = not captured yet; Some(None) = capture failed, stay off.
     let mut rows: Option<Option<Snapshots>> = None;
-    // Modified time of the file when last applied (None = file absent).
-    let mut applied: Option<(Option<SystemTime>, Option<SystemTime>)> = None;
+    // What was last applied: the files' modified times (None = absent) and the
+    // set of bundles on.
+    let mut applied: Option<(Option<SystemTime>, Option<SystemTime>, u8)> = None;
 
     let _handle = common::task::run_recurring_safe(
         cs_task,
@@ -391,12 +489,14 @@ pub fn run(dir: String) {
             elapsed_ms = 0.0;
 
             let modified_of = |path: &str| std::fs::metadata(path).and_then(|m| m.modified()).ok();
-            let modified = (modified_of(&think_path), modified_of(&npc_path));
-            // Nothing to do (and nothing touched) until a file first exists.
-            if applied.is_none() && modified == (None, None) {
+            let (bits, bundles) = bundle_overrides();
+            let signature = (modified_of(&think_path), modified_of(&npc_path), bits);
+            if applied == Some(signature) {
                 return;
             }
-            if applied == Some(modified) {
+            // Nothing wanted and nothing applied before: leave the params alone.
+            if applied.is_none() && signature == (None, None, 0) {
+                applied = Some(signature);
                 return;
             }
             if common::player::main_player_chr_ins_ptr().is_none() {
@@ -418,20 +518,21 @@ pub fn run(dir: String) {
                 std::fs::read_to_string(path).ok().map(|content| parse(&content, npc))
             };
             let (Some(mut config), Some(npc_config)) = (
-                read(&think_path, modified.0.is_some(), false),
-                read(&npc_path, modified.1.is_some(), true),
+                read(&think_path, signature.0.is_some(), false),
+                read(&npc_path, signature.1.is_some(), true),
             ) else {
                 return;
             };
             config.npc = npc_config.npc;
-            apply(repo, rows, &config);
+            apply(repo, rows, &bundles, &config);
+            let names: Vec<&str> = BUNDLES.iter().enumerate().filter(|(i, _)| bits & (1 << i) != 0).map(|(_, b)| b.0).collect();
             logger::log(&format!(
-                "ThinkOverride: {} field(s) {} written to {} row(s). Re-summon spirits for it to take effect.",
+                "ThinkOverride: {names:?} + {} file field(s) {} written to {} row(s). Re-summon spirits for it to take effect.",
                 config.count(),
                 config.describe(),
                 rows.think.len() + rows.npc.len()
             ));
-            applied = Some(modified);
+            applied = Some(signature);
         },
     );
 
@@ -506,6 +607,53 @@ mod tests {
         write_all(&mut row as *mut _ as *mut u8, &parsed.npc);
         assert_eq!(row.fall_damage_dump(), 100);
         assert_eq!(row.hp(), 5);
+    }
+
+    /// Every bundle entry names a real field, and its value fits the type.
+    #[test]
+    fn bundles_resolve() {
+        for (key, entries) in BUNDLES {
+            for &(name, value, _) in entries {
+                let Some(&&(_, _, kind)) = THINK_INDEX.get(&normalize(name)) else {
+                    panic!("{key}: unknown field {name}");
+                };
+                let max = match kind {
+                    Kind::U8 => 255.0,
+                    Kind::U16 => 65535.0,
+                    Kind::Bit(_) => 1.0,
+                    _ => f64::MAX,
+                };
+                assert!(value >= 0.0 && value <= max, "{key}: {name}={value} out of range");
+            }
+        }
+    }
+
+    /// `Max` / `Min` only move a value in their direction; `Set` always writes.
+    #[test]
+    fn modes() {
+        let mut row: NPC_THINK_PARAM_ST = unsafe { std::mem::zeroed() };
+        let ptr = &mut row as *mut _ as *mut u8;
+        let o = |name: &'static str, value: f64, mode: Mode| {
+            let &&(name, offset, kind) = THINK_INDEX.get(&normalize(name)).unwrap();
+            Override { name, offset, kind, value, mode }
+        };
+        row.set_battle_start_dist(40);
+        row.set_max_backhome_dist(9999);
+        row.set_team_attack_effectivity(30);
+        row.set_enable_navi_flg_ladder(true);
+        unsafe {
+            write(ptr, &o("BattleStartDist", 15.0, Max)); // 40 stays
+            write(ptr, &o("maxBackhomeDist", 30.0, Min)); // 9999 -> 30
+            write(ptr, &o("TeamAttackEffectivity", 100.0, Max)); // 30 -> 100
+            write(ptr, &o("enableNaviFlg_Ladder", 1.0, Max)); // stays 1
+            write(ptr, &o("enableNaviFlg_Hole", 1.0, Max)); // 0 -> 1
+            write(ptr, &o("nose_dist", 7.0, Set));
+        }
+        assert_eq!(row.battle_start_dist(), 40);
+        assert_eq!(row.max_backhome_dist(), 30);
+        assert_eq!(row.team_attack_effectivity(), 100);
+        assert!(row.enable_navi_flg_ladder() && row.enable_navi_flg_hole());
+        assert_eq!(row.nose_dist(), 7);
     }
 
     #[test]

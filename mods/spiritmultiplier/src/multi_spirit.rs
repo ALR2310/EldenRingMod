@@ -243,21 +243,11 @@ unsafe extern "system" fn cost_state(manager: *mut SummonBuddyManager, goods_row
     // every use after the first came out free (user report, 2026-10-09).
     let speffect = unsafe { goods_row.add(1).read_unaligned() };
     let result = std::panic::catch_unwind(|| dismisses_on_reuse(unsafe { &*manager }, speffect));
-    let state = match result {
+    match result {
         Ok(Some(false)) => 0,
         // The press sends it back, not an Ash at all, or a panic: vanilla.
         Ok(Some(true)) | Ok(None) | Err(_) => 2,
-    };
-    // Diagnostics (2026-10-09, clone summons reported free): log each change.
-    static LAST: AtomicI32 = AtomicI32::new(i32::MIN);
-    let key = speffect.wrapping_mul(4).wrapping_add(state as i32);
-    if LAST.swap(key, Ordering::Relaxed) != key {
-        logger::log(&format!(
-            "MultiSpirit: cost check for SpEffect {speffect}: {} ({result:?}).",
-            if state == 0 { "charged" } else { "free" }
-        ));
     }
-    state
 }
 
 /// Called from the DoSummon stub (patch 1) when `GetBuddyState` said 2
