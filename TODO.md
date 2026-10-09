@@ -14,7 +14,7 @@ Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`, `docs/warp_research.md`
 - [ ] Seamless Co-op: spirit mất màu ma (tạm dừng 2026-10-02)
 - [ ] Spirit dịch chuyển tới người chơi khi bị bỏ lại (hoãn)
 - [ ] Cho triệu hồi cùng 1 Ash nhiều lần, tối đa X con, quá X thì con cũ nhất biến mất (almasakmal123, 2026-10-08)
-- [ ] [research] Spirit cỡ lớn (mod Elden Lord Army of Summons) đứng im đến khi địch lại gần người chơi; muốn chủ động tấn công (almasakmal123, 2026-10-08); thử bằng `SpiritThink.ini`, xem `mods/spiritmultiplier/docs/think_override.md`
+- [ ] [research] Spirit cỡ lớn (mod Elden Lord Army of Summons) đứng im đến khi địch lại gần người chơi; muốn chủ động tấn công (almasakmal123, 2026-10-08); thử bằng `SpiritThinkParam.ini`, xem `mods/spiritmultiplier/docs/think_override.md`
 - [ ] Spirit không bị sát thương khi rơi từ chỗ cao (almasakmal123, 2026-10-08); phần đưa về chỗ người chơi khi rơi khỏi map gộp vào warp hoãn ở trên
 
 ## AutoRegen

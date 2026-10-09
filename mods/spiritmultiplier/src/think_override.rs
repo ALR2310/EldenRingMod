@@ -1,10 +1,11 @@
-//! `SpiritThink.ini` (optional, experimental, hot reload without F5): sets
-//! any scalar field of the `NpcThinkParam` rows spirits use (the AI
-//! parameters: aggressiveness, sight, battle start distance, ...), so AI
-//! tweaks can be tried in-game without rebuilding the DLL.
+//! `SpiritThinkParam.ini` and `SpiritParam.ini` (optional, experimental, hot
+//! reload without F5): set any scalar field / bit flag of the rows spirits use
+//! - the `NpcThinkParam` ones (the AI: aggressiveness, sight, battle start
+//! distance, ...) and the `NpcParam` ones - so tweaks can be tried in-game
+//! without rebuilding the DLL.
 //!
-//! The file lives next to the DLL and is only read if it exists. One
-//! `Name=value` per line, `;`/`#` comments, sections ignored. `Name` is the
+//! The files live next to the DLL and are only read if they exist. One
+//! `Name=value` per line, `;`/`#` comments. `Name` is the
 //! field name as in Smithbox's parentheses (`TeamAttackEffectivity`,
 //! `BattleStartDist`, `isGuard_Act`) or the Rust one
 //! (`team_attack_effectivity`) - case and underscores are ignored when
@@ -15,11 +16,11 @@
 //! `BuddyParam` (the rows a spirit spawns with). Rows are addressed by index
 //! (`common::params`), never through the runtime lookup table.
 //!
-//! A `[NpcParam]` section switches to the `NpcParam` rows of the same spirits
-//! (`npcParamId` / `npcParamId_ridden`; fields as in Smithbox, e.g.
-//! `fallDamageDump`) - same snapshot / restore logic. A `[Row id, ...]`
-//! section applies to the listed `NpcThinkParam` row IDs only; any other
-//! section header goes back to the global `NpcThinkParam` lines.
+//! `SpiritParam.ini` (NpcParam: fields as in Smithbox, e.g. `fallDamageDump`)
+//! hits the `NpcParam` rows of the same spirits (`npcParamId` /
+//! `npcParamId_ridden`). In `SpiritThinkParam.ini` a `[Row id, ...]` section
+//! applies to the listed `NpcThinkParam` row IDs only; any other section header
+//! goes back to the global lines. Same snapshot / restore logic for both.
 //!
 //! The first time it runs, each target row's bytes are saved; every later
 //! apply starts from that snapshot and writes the listed fields, so a line
@@ -49,7 +50,8 @@ use think_fields::{FIELDS, ROW_SIZE};
 
 type Table = &'static [(&'static str, usize, Kind)];
 
-const FILE_NAME: &str = "SpiritThink.ini";
+const THINK_FILE: &str = "SpiritThinkParam.ini";
+const NPC_FILE: &str = "SpiritParam.ini";
 const TICK_INTERVAL_MS: f64 = 1000.0;
 
 const _: () = assert!(size_of::<NPC_THINK_PARAM_ST>() == ROW_SIZE);
@@ -87,16 +89,15 @@ fn normalize(name: &str) -> String {
 struct Config {
     global: Vec<Override>,
     rows: Vec<(Vec<u32>, Vec<Override>)>,
-    /// `[NpcParam]` section: applies to the spirits' NpcParam rows.
+    /// `SpiritParam.ini`: applies to the spirits' NpcParam rows.
     npc: Vec<Override>,
 }
 
-/// Where the next `Name=value` lines go.
+/// Where the next `Name=value` lines go (in `SpiritThinkParam.ini`).
 #[derive(Clone, Copy)]
 enum Section {
     Global,
     Row(usize),
-    Npc,
 }
 
 impl Config {
@@ -126,7 +127,9 @@ fn parse_row_header(line: &str) -> Option<Vec<u32>> {
 }
 
 /// Parses the file's text. Bad lines are logged and skipped.
-fn parse(content: &str) -> Config {
+/// `npc` = the content of `SpiritParam.ini` (NpcParam fields, no sections),
+/// else `SpiritThinkParam.ini` (NpcThinkParam fields).
+fn parse(content: &str, npc: bool) -> Config {
     let by_name = |table: Table| -> HashMap<String, &'static (&'static str, usize, Kind)> {
         table.iter().map(|f| (normalize(f.0), f)).collect()
     };
@@ -139,13 +142,15 @@ fn parse(content: &str) -> Config {
         if line.is_empty() || line.starts_with(['#', ';']) {
             continue;
         }
+        if line.starts_with('[') && npc {
+            continue;
+        }
         if line.starts_with('[') {
             section = match parse_row_header(line) {
                 Some(ids) => {
                     config.rows.push((ids, Vec::new()));
                     Section::Row(config.rows.len() - 1)
                 }
-                None if line.trim_matches(['[', ']', ' ']).eq_ignore_ascii_case("npcparam") => Section::Npc,
                 None => Section::Global,
             };
             continue;
@@ -155,10 +160,7 @@ fn parse(content: &str) -> Config {
             continue;
         };
         let (key, value) = (key.trim(), value.trim());
-        let (names, table) = match section {
-            Section::Npc => (&npc_names, npc_fields::FIELDS),
-            _ => (&think_names, FIELDS),
-        };
+        let (names, table) = if npc { (&npc_names, npc_fields::FIELDS) } else { (&think_names, FIELDS) };
         let Some(&&(name, offset, kind)) = names.get(&normalize(key)) else {
             let wanted = normalize(key);
             let close: Vec<&str> = table
@@ -193,8 +195,8 @@ fn parse(content: &str) -> Config {
         }
         // The last line for a field wins.
         let list = match section {
+            _ if npc => &mut config.npc,
             Section::Row(i) => &mut config.rows[i].1,
-            Section::Npc => &mut config.npc,
             Section::Global => &mut config.global,
         };
         list.retain(|o| o.name != name);
@@ -338,14 +340,15 @@ fn apply(repo: &mut SoloParamRepository, rows: &Snapshots, config: &Config) {
 }
 
 pub fn run(dir: String) {
-    let path = format!("{dir}\\{FILE_NAME}");
+    let think_path = format!("{dir}\\{THINK_FILE}");
+    let npc_path = format!("{dir}\\{NPC_FILE}");
     let cs_task = common::task::wait_for_cs_task();
 
     let mut elapsed_ms: f64 = 0.0;
     // None = not captured yet; Some(None) = capture failed, stay off.
     let mut rows: Option<Option<Snapshots>> = None;
     // Modified time of the file when last applied (None = file absent).
-    let mut applied: Option<Option<SystemTime>> = None;
+    let mut applied: Option<(Option<SystemTime>, Option<SystemTime>)> = None;
 
     let _handle = common::task::run_recurring_safe(
         cs_task,
@@ -358,9 +361,10 @@ pub fn run(dir: String) {
             }
             elapsed_ms = 0.0;
 
-            let modified = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-            // Nothing to do (and nothing touched) until the file first exists.
-            if applied.is_none() && modified.is_none() {
+            let modified_of = |path: &str| std::fs::metadata(path).and_then(|m| m.modified()).ok();
+            let modified = (modified_of(&think_path), modified_of(&npc_path));
+            // Nothing to do (and nothing touched) until a file first exists.
+            if applied.is_none() && modified == (None, None) {
                 return;
             }
             if applied == Some(modified) {
@@ -376,14 +380,21 @@ pub fn run(dir: String) {
                 return;
             };
 
-            let config = match modified {
-                Some(_) => match std::fs::read_to_string(&path) {
-                    Ok(content) => parse(&content),
-                    // Locked while being saved: try again next tick.
-                    Err(_) => return,
-                },
-                None => Config::default(),
+            // A missing file = no overrides; one locked while being saved:
+            // try again next tick.
+            let read = |path: &str, exists: bool, npc: bool| -> Option<Config> {
+                if !exists {
+                    return Some(Config::default());
+                }
+                std::fs::read_to_string(path).ok().map(|content| parse(&content, npc))
             };
+            let (Some(mut config), Some(npc_config)) = (
+                read(&think_path, modified.0.is_some(), false),
+                read(&npc_path, modified.1.is_some(), true),
+            ) else {
+                return;
+            };
+            config.npc = npc_config.npc;
             apply(repo, rows, &config);
             logger::log(&format!(
                 "ThinkOverride: {} field(s) {} written to {} row(s). Re-summon spirits for it to take effect.",
@@ -434,54 +445,50 @@ mod tests {
         }
     }
 
+    fn write_all(row: *mut u8, overrides: &[Override]) {
+        for o in overrides {
+            unsafe { write(row, o) };
+        }
+    }
+
     #[test]
     fn write_roundtrip_and_names() {
-        let parsed = parse("; c\nTeamAttackEffectivity = 100\nisGuard_Act=1\nbogus=3\nBattleStartDist=70000\nsearchEye_dist=15");
+        let parsed = parse(
+            "; c\nTeamAttackEffectivity = 100\nisGuard_Act=1\nbogus=3\nBattleStartDist=70000\nsearchEye_dist=15",
+            false,
+        );
         let names: Vec<_> = parsed.global.iter().map(|o| o.name).collect();
         assert_eq!(names, ["team_attack_effectivity", "is_guard_act", "search_eye_dist"]);
         let mut row: NPC_THINK_PARAM_ST = unsafe { std::mem::zeroed() };
-        for o in &parsed.global {
-            unsafe { write(&mut row as *mut _ as *mut u8, o) };
-        }
+        write_all(&mut row as *mut _ as *mut u8, &parsed.global);
         assert_eq!(row.team_attack_effectivity(), 100);
         assert_eq!(row.is_guard_act(), 1);
         assert_eq!(row.search_eye_dist(), 15);
     }
 
+    /// `SpiritParam.ini`: NpcParam names; section headers are ignored.
     #[test]
-    fn npc_section() {
-        let parsed = parse("eye_dist=7
-[NpcParam]
-fallDamageDump=100
-hp=5
-bogusfield=1
-[Other]
-nose_dist=3");
-        assert_eq!(parsed.global.len(), 2);
+    fn npc_file() {
+        let parsed = parse("[Whatever]\nfallDamageDump=100\nhp=5\nbogusfield=1\neye_dist=7", true);
+        assert!(parsed.global.is_empty());
         let names: Vec<_> = parsed.npc.iter().map(|o| o.name).collect();
         assert_eq!(names, ["fall_damage_dump", "hp"]);
         let mut row: NPC_PARAM_ST = unsafe { std::mem::zeroed() };
-        for o in &parsed.npc {
-            unsafe { write(&mut row as *mut _ as *mut u8, o) };
-        }
+        write_all(&mut row as *mut _ as *mut u8, &parsed.npc);
         assert_eq!(row.fall_damage_dump(), 100);
         assert_eq!(row.hp(), 5);
     }
 
     #[test]
     fn row_sections() {
-        let parsed = parse("goalAction_ToCaution=3
-[Row 143002000, 141800000]
-goalAction_ToCaution=2
-BattleStartDist=9
-[All]
-eye_dist=7
-");
+        let parsed = parse(
+            "goalAction_ToCaution=3\n[Row 143002000, 141800000]\ngoalAction_ToCaution=2\nBattleStartDist=9\n[All]\neye_dist=7\n",
+            false,
+        );
         assert_eq!(parsed.global.len(), 2);
         assert_eq!(parsed.rows.len(), 1);
         assert_eq!(parsed.rows[0].0, [143002000, 141800000]);
         assert_eq!(parsed.rows[0].1.len(), 2);
-        assert!(parse_row_header("[Rows 1]").is_none() || parse_row_header("[ROW 5]") == Some(vec![5]));
     }
 
     /// Bit flags: only the named bit changes, neighbours are kept.
@@ -490,14 +497,12 @@ eye_dist=7
         let mut row: NPC_THINK_PARAM_ST = unsafe { std::mem::zeroed() };
         row.set_enable_navi_flg_edge(true);
         row.set_enable_navi_flg_door(true);
-        let parsed = parse("enableNaviFlg_Lava=1
-enableNaviFlg_Edge_Ordinary=1
-enableNaviFlg_Door=0
-enableNaviFlg_Ladder=2");
+        let parsed = parse(
+            "enableNaviFlg_Lava=1\nenableNaviFlg_Edge_Ordinary=1\nenableNaviFlg_Door=0\nenableNaviFlg_Ladder=2",
+            false,
+        );
         assert_eq!(parsed.global.len(), 3);
-        for o in &parsed.global {
-            unsafe { write(&mut row as *mut _ as *mut u8, o) };
-        }
+        write_all(&mut row as *mut _ as *mut u8, &parsed.global);
         assert!(row.enable_navi_flg_edge() && row.enable_navi_flg_lava() && row.enable_navi_flg_edge_ordinary());
         assert!(!row.enable_navi_flg_door() && !row.enable_navi_flg_ladder());
     }

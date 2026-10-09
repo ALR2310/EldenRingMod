@@ -1,10 +1,10 @@
-# SpiritThink.ini: chỉnh AI spirit khi đang chơi (thử nghiệm)
+# SpiritThinkParam.ini / SpiritParam.ini: chỉnh param spirit khi đang chơi (thử nghiệm)
 
 **Status 2026-10-08: đã viết, đang test in-game. Chưa có trong ini mặc định và chưa nói trong CHANGELOG (công cụ để nghiên cứu độ hung hăng của spirit).**
 
 ## Cách dùng
 
-File `SpiritThink.ini` cạnh DLL, chỉ đọc nếu tồn tại. Mỗi dòng `Tên=giá trị`; tên như trong ngoặc của Smithbox (`TeamAttackEffectivity`, `isGuard_Act`) hoặc tên Rust (`team_attack_effectivity`), không phân biệt hoa thường và dấu `_`. Lưu file lúc đang chơi: tối đa 1 giây sau mod áp lại (không cần F5), rồi triệu hồi lại spirit. Bỏ dòng hoặc xoá file thì về giá trị gốc của game.
+File `SpiritThinkParam.ini` (AI) và `SpiritParam.ini` (NpcParam) cạnh DLL, chỉ đọc nếu tồn tại. Mỗi dòng `Tên=giá trị`; tên như trong ngoặc của Smithbox (`TeamAttackEffectivity`, `isGuard_Act`) hoặc tên Rust (`team_attack_effectivity`), không phân biệt hoa thường và dấu `_`. Lưu file lúc đang chơi: tối đa 1 giây sau mod áp lại (không cần F5), rồi triệu hồi lại spirit. Bỏ dòng hoặc xoá file thì về giá trị gốc của game.
 
 ## Cách hoạt động
 
@@ -33,8 +33,8 @@ Tooltip Smithbox của TeamAttackEffectivity nói "tăng thì ít người tấn
 
 - Gần như mọi field là hằng số cho cả 200 dòng (BattleStartDist 15, tầm nhìn, nhóm Navigation, Retreat...). Chỉ vài field khác nhau giữa các dòng: nhóm `goalAction_*`, `TeamAttackEffectivity` (100 ở 179 dòng; 0/30/50/60/80 ở số ít, thường là healer/phụ trợ), `useFall_onNormalCaution` (0 hoặc 2, chia đôi), `actTypeOnFailedPath`, `eye_BeginDist`.
 - `goalAction_*` (ToCaution / ToCautionImportant / ToSearchLv1 / ToSearchLv2 / ToDisappear): 116 dòng cận chiến = 3/3/3/3/3 (chạy tới nguồn). 41 dòng pháp sư/cung thủ (Noble Sorcerer, Rennala, Page, Oracle Envoy, các Archer, cả Spirit Jellyfish) = 2/3/1/1/2: tiến lại gần / chỉ nhìn, không lao vào. Còn lại là biến thể nhỏ (healer có ToDisappear 0, hiệp sĩ lửa...). Nên đặt 3 cho tất cả sẽ làm pháp sư chạy vào cận chiến.
-- Vì vậy `SpiritThink.ini` có thêm phần `[Row id, id, ...]`: áp lên đúng dòng NpcThinkParam có ID đó, sau các dòng chung. File ini mẫu sinh sẵn 12 phần Row từ bảng này.
+- Vì vậy `SpiritThinkParam.ini` có thêm phần `[Row id, id, ...]`: áp lên đúng dòng NpcThinkParam có ID đó, sau các dòng chung. File ini mẫu sinh sẵn 12 phần Row từ bảng này.
 
 ## Sát thương rơi (thử 2026-10-09)
 
-`NpcParam.fallDamageDump` (u8): 0 ở mọi `[Spirit Summon]`, 100 ở dummy/Bonfire/Maliketh/Gurranq, 90 ở rồng và Giant Crow, nên có vẻ là % giảm sát thương rơi. Phần `[NpcParam]` của `SpiritThink.ini` ghi field NpcParam (theo tên Smithbox) lên các dòng NpcParam mà BuddyParam trỏ tới. Hướng dự phòng: SpEffect có `fall_damage_rate` (f32), hoặc xem thêm `HitMtrlParam.disable_fall_damage` (theo chất liệu nền, không dùng riêng cho spirit được). Chết do rơi quá cao / ra khỏi map có thể là kiểm tra viết cứng trong code, param chưa chắc cứu được.
+`NpcParam.fallDamageDump` (u8): 0 ở mọi `[Spirit Summon]`, 100 ở dummy/Bonfire/Maliketh/Gurranq, 90 ở rồng và Giant Crow, nên có vẻ là % giảm sát thương rơi. File `SpiritThinkParam.ini` (AI) và `SpiritParam.ini` (NpcParam) ghi field NpcParam (theo tên Smithbox) lên các dòng NpcParam mà BuddyParam trỏ tới. Hướng dự phòng: SpEffect có `fall_damage_rate` (f32), hoặc xem thêm `HitMtrlParam.disable_fall_damage` (theo chất liệu nền, không dùng riêng cho spirit được). Chết do rơi quá cao / ra khỏi map có thể là kiểm tra viết cứng trong code, param chưa chắc cứu được.
