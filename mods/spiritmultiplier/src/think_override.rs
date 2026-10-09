@@ -15,6 +15,12 @@
 //! `BuddyParam` (the rows a spirit spawns with). Rows are addressed by index
 //! (`common::params`), never through the runtime lookup table.
 //!
+//! A `[NpcParam]` section switches to the `NpcParam` rows of the same spirits
+//! (`npcParamId` / `npcParamId_ridden`; fields as in Smithbox, e.g.
+//! `fallDamageDump`) - same snapshot / restore logic. A `[Row id, ...]`
+//! section applies to the listed `NpcThinkParam` row IDs only; any other
+//! section header goes back to the global `NpcThinkParam` lines.
+//!
 //! The first time it runs, each target row's bytes are saved; every later
 //! apply starts from that snapshot and writes the listed fields, so a line
 //! removed from the file goes back to the game's value (same baseline
@@ -27,8 +33,8 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcThinkParam, SoloParamRepository};
-use eldenring::param::NPC_THINK_PARAM_ST;
+use eldenring::cs::{BuddyParam, CSTaskGroupIndex, NpcParam, NpcThinkParam, SoloParam, SoloParamRepository};
+use eldenring::param::{BUDDY_PARAM_ST, NPC_PARAM_ST, NPC_THINK_PARAM_ST};
 use fromsoftware_shared::FromStatic;
 
 use common::logger;
@@ -36,17 +42,26 @@ use common::logger;
 mod think_fields {
     include!("think_fields.rs");
 }
+mod npc_fields {
+    include!("npc_fields.rs");
+}
 use think_fields::{FIELDS, ROW_SIZE};
+
+type Table = &'static [(&'static str, usize, Kind)];
 
 const FILE_NAME: &str = "SpiritThink.ini";
 const TICK_INTERVAL_MS: f64 = 1000.0;
 
 const _: () = assert!(size_of::<NPC_THINK_PARAM_ST>() == ROW_SIZE);
+const _: () = assert!(size_of::<NPC_PARAM_ST>() == npc_fields::ROW_SIZE);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
     U8,
+    I8,
     U16,
+    I16,
+    U32,
     I32,
     F32,
     /// One bit (0-based) of the byte at the offset; value 0 or 1.
@@ -72,16 +87,29 @@ fn normalize(name: &str) -> String {
 struct Config {
     global: Vec<Override>,
     rows: Vec<(Vec<u32>, Vec<Override>)>,
+    /// `[NpcParam]` section: applies to the spirits' NpcParam rows.
+    npc: Vec<Override>,
+}
+
+/// Where the next `Name=value` lines go.
+#[derive(Clone, Copy)]
+enum Section {
+    Global,
+    Row(usize),
+    Npc,
 }
 
 impl Config {
     fn count(&self) -> usize {
-        self.global.len() + self.rows.iter().map(|r| r.1.len()).sum::<usize>()
+        self.global.len() + self.npc.len() + self.rows.iter().map(|r| r.1.len()).sum::<usize>()
     }
 
     fn describe(&self) -> String {
         let list = |v: &[Override]| v.iter().map(|o| format!("{}={}", o.name, o.value)).collect::<Vec<_>>().join(", ");
         let mut text = format!("[{}]", list(&self.global));
+        if !self.npc.is_empty() {
+            text.push_str(&format!(" + NpcParam [{}]", list(&self.npc)));
+        }
         for (ids, overrides) in &self.rows {
             text.push_str(&format!(" + {} row id(s): [{}]", ids.len(), list(overrides)));
         }
@@ -99,11 +127,13 @@ fn parse_row_header(line: &str) -> Option<Vec<u32>> {
 
 /// Parses the file's text. Bad lines are logged and skipped.
 fn parse(content: &str) -> Config {
-    let by_name: HashMap<String, &(&'static str, usize, Kind)> =
-        FIELDS.iter().map(|f| (normalize(f.0), f)).collect();
+    let by_name = |table: Table| -> HashMap<String, &'static (&'static str, usize, Kind)> {
+        table.iter().map(|f| (normalize(f.0), f)).collect()
+    };
+    let think_names = by_name(FIELDS);
+    let npc_names = by_name(npc_fields::FIELDS);
     let mut config = Config::default();
-    // Which list the next lines go to: None = global, Some(i) = rows[i].
-    let mut section: Option<usize> = None;
+    let mut section = Section::Global;
     for line in content.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with(['#', ';']) {
@@ -113,9 +143,10 @@ fn parse(content: &str) -> Config {
             section = match parse_row_header(line) {
                 Some(ids) => {
                     config.rows.push((ids, Vec::new()));
-                    Some(config.rows.len() - 1)
+                    Section::Row(config.rows.len() - 1)
                 }
-                None => None,
+                None if line.trim_matches(['[', ']', ' ']).eq_ignore_ascii_case("npcparam") => Section::Npc,
+                None => Section::Global,
             };
             continue;
         }
@@ -124,9 +155,13 @@ fn parse(content: &str) -> Config {
             continue;
         };
         let (key, value) = (key.trim(), value.trim());
-        let Some(&&(name, offset, kind)) = by_name.get(&normalize(key)) else {
+        let (names, table) = match section {
+            Section::Npc => (&npc_names, npc_fields::FIELDS),
+            _ => (&think_names, FIELDS),
+        };
+        let Some(&&(name, offset, kind)) = names.get(&normalize(key)) else {
             let wanted = normalize(key);
-            let close: Vec<&str> = FIELDS
+            let close: Vec<&str> = table
                 .iter()
                 .map(|f| f.0)
                 .filter(|n| normalize(n).contains(&wanted) || wanted.contains(&normalize(n)))
@@ -144,7 +179,10 @@ fn parse(content: &str) -> Config {
         };
         let (lo, hi) = match kind {
             Kind::U8 => (0.0, u8::MAX as f64),
+            Kind::I8 => (i8::MIN as f64, i8::MAX as f64),
             Kind::U16 => (0.0, u16::MAX as f64),
+            Kind::I16 => (i16::MIN as f64, i16::MAX as f64),
+            Kind::U32 => (0.0, u32::MAX as f64),
             Kind::I32 => (i32::MIN as f64, i32::MAX as f64),
             Kind::F32 => (f32::MIN as f64, f32::MAX as f64),
             Kind::Bit(_) => (0.0, 1.0),
@@ -155,8 +193,9 @@ fn parse(content: &str) -> Config {
         }
         // The last line for a field wins.
         let list = match section {
-            Some(i) => &mut config.rows[i].1,
-            None => &mut config.global,
+            Section::Row(i) => &mut config.rows[i].1,
+            Section::Npc => &mut config.npc,
+            Section::Global => &mut config.global,
         };
         list.retain(|o| o.name != name);
         list.push(Override { name, offset, kind, value });
@@ -167,14 +206,16 @@ fn parse(content: &str) -> Config {
 /// Writes `o` into the row at `row`.
 ///
 /// # Safety
-/// `row` must point to a whole `NPC_THINK_PARAM_ST` (`ROW_SIZE` bytes).
+/// `row` must point to a whole row of the table `o` came from.
 unsafe fn write(row: *mut u8, o: &Override) {
-    debug_assert!(o.offset + 4 <= ROW_SIZE || o.kind != Kind::I32);
     unsafe {
         let at = row.add(o.offset);
         match o.kind {
             Kind::U8 => at.write(o.value.round() as u8),
+            Kind::I8 => at.write(o.value.round() as i8 as u8),
             Kind::U16 => (at as *mut u16).write_unaligned(o.value.round() as u16),
+            Kind::I16 => (at as *mut i16).write_unaligned(o.value.round() as i16),
+            Kind::U32 => (at as *mut u32).write_unaligned(o.value.round() as u32),
             Kind::I32 => (at as *mut i32).write_unaligned(o.value.round() as i32),
             Kind::F32 => (at as *mut f32).write_unaligned(o.value as f32),
             Kind::Bit(bit) => {
@@ -185,19 +226,24 @@ unsafe fn write(row: *mut u8, o: &Override) {
     }
 }
 
-/// One spirit row: `(NpcThinkParam row index, row ID, original bytes)`.
+/// One spirit row: `(row index, row ID, original bytes)`.
 type Snapshot = (usize, u32, Vec<u8>);
 
-/// Every row spirits use, or `None` if the params couldn't be read safely.
-fn capture(repo: &mut SoloParamRepository) -> Option<Vec<Snapshot>> {
-    for check in [common::params::check::<BuddyParam>(repo), common::params::check::<NpcThinkParam>(repo)] {
-        if let Err(err) = check {
-            logger::error(&format!("ThinkOverride: {err} - not touching params."));
-            return None;
-        }
-    }
-    let Some(ids) = common::params::row_ids::<NpcThinkParam>(repo) else {
-        logger::error("ThinkOverride: param row IDs could not be read safely - not touching params.");
+/// The rows spirits use, per param.
+struct Snapshots {
+    think: Vec<Snapshot>,
+    npc: Vec<Snapshot>,
+}
+
+/// Snapshots the `P` rows whose IDs `ids_of` takes from each `BuddyParam`
+/// row (`row_size` bytes each). Second value: how many IDs had no row.
+fn snapshot_rows<P: SoloParam>(
+    repo: &mut SoloParamRepository,
+    row_size: usize,
+    ids_of: impl Fn(&BUDDY_PARAM_ST) -> [i32; 2],
+) -> Option<(Vec<Snapshot>, usize)> {
+    let Some(ids) = common::params::row_ids::<P>(repo) else {
+        logger::error(&format!("ThinkOverride: {} row IDs could not be read safely.", P::NAME));
         return None;
     };
     let index: HashMap<u32, usize> = ids.iter().copied().enumerate().map(|(i, id)| (id, i)).collect();
@@ -205,7 +251,7 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Vec<Snapshot>> {
     let mut wanted: Vec<usize> = Vec::new();
     let mut missing = 0;
     common::params::for_each_row_mut::<BuddyParam>(repo, |_, row| {
-        for id in [row.npc_think_param_id(), row.npc_think_param_id_ridden()] {
+        for id in ids_of(row) {
             if id <= 0 {
                 continue;
             }
@@ -220,37 +266,75 @@ fn capture(repo: &mut SoloParamRepository) -> Option<Vec<Snapshot>> {
 
     let mut rows = Vec::with_capacity(wanted.len());
     for i in wanted {
-        let row = repo.get_row_by_index::<NpcThinkParam>(i)?;
-        let bytes = unsafe { std::slice::from_raw_parts(row as *const _ as *const u8, ROW_SIZE) };
+        let row = repo.get_row_by_index::<P>(i)?;
+        let bytes = unsafe { std::slice::from_raw_parts(row as *const _ as *const u8, row_size) };
         rows.push((i, ids[i], bytes.to_vec()));
     }
-    logger::log(&format!(
-        "ThinkOverride: {} NpcThinkParam row(s) used by spirits ({missing} BuddyParam id(s) without a row).",
-        rows.len()
-    ));
-    Some(rows)
+    Some((rows, missing))
 }
 
-/// Restores every row from its snapshot, then writes the global overrides
-/// and the sections that name the row's ID.
-fn apply(repo: &mut SoloParamRepository, rows: &[Snapshot], config: &Config) {
+/// Every row spirits use, or `None` if the params couldn't be read safely.
+fn capture(repo: &mut SoloParamRepository) -> Option<Snapshots> {
+    for check in [
+        common::params::check::<BuddyParam>(repo),
+        common::params::check::<NpcThinkParam>(repo),
+        common::params::check::<NpcParam>(repo),
+    ] {
+        if let Err(err) = check {
+            logger::error(&format!("ThinkOverride: {err} - not touching params."));
+            return None;
+        }
+    }
+    let (think, missing_think) = snapshot_rows::<NpcThinkParam>(repo, ROW_SIZE, |r| {
+        [r.npc_think_param_id(), r.npc_think_param_id_ridden()]
+    })?;
+    let (npc, missing_npc) =
+        snapshot_rows::<NpcParam>(repo, npc_fields::ROW_SIZE, |r| [r.npc_param_id(), r.npc_param_id_ridden()])?;
+    logger::log(&format!(
+        "ThinkOverride: {} NpcThinkParam row(s) ({missing_think} id(s) without a row) and {} NpcParam row(s) ({missing_npc} without a row) used by spirits.",
+        think.len(),
+        npc.len()
+    ));
+    Some(Snapshots { think, npc })
+}
+
+/// Puts every `P` row back from its snapshot, then lets `write_over` write
+/// onto it (given the row ID).
+fn restore<P: SoloParam>(
+    repo: &mut SoloParamRepository,
+    rows: &[Snapshot],
+    row_size: usize,
+    write_over: impl Fn(*mut u8, u32),
+) {
     for (i, id, original) in rows {
-        let Some(row) = repo.get_row_by_index_mut::<NpcThinkParam>(*i) else {
+        let Some(row) = repo.get_row_by_index_mut::<P>(*i) else {
             continue;
         };
         let ptr = row as *mut _ as *mut u8;
-        unsafe {
-            std::ptr::copy_nonoverlapping(original.as_ptr(), ptr, ROW_SIZE);
-            for o in &config.global {
+        unsafe { std::ptr::copy_nonoverlapping(original.as_ptr(), ptr, row_size) };
+        write_over(ptr, *id);
+    }
+}
+
+/// Restores every row from its snapshot, then writes the overrides: global
+/// and `[Row ...]` ones onto the NpcThinkParam rows, `[NpcParam]` ones onto
+/// the NpcParam rows.
+fn apply(repo: &mut SoloParamRepository, rows: &Snapshots, config: &Config) {
+    restore::<NpcThinkParam>(repo, &rows.think, ROW_SIZE, |ptr, id| unsafe {
+        for o in &config.global {
+            write(ptr, o);
+        }
+        for (_, overrides) in config.rows.iter().filter(|(ids, _)| ids.contains(&id)) {
+            for o in overrides {
                 write(ptr, o);
             }
-            for (_, overrides) in config.rows.iter().filter(|(ids, _)| ids.contains(id)) {
-                for o in overrides {
-                    write(ptr, o);
-                }
-            }
         }
-    }
+    });
+    restore::<NpcParam>(repo, &rows.npc, npc_fields::ROW_SIZE, |ptr, _| unsafe {
+        for o in &config.npc {
+            write(ptr, o);
+        }
+    });
 }
 
 pub fn run(dir: String) {
@@ -259,7 +343,7 @@ pub fn run(dir: String) {
 
     let mut elapsed_ms: f64 = 0.0;
     // None = not captured yet; Some(None) = capture failed, stay off.
-    let mut rows: Option<Option<Vec<Snapshot>>> = None;
+    let mut rows: Option<Option<Snapshots>> = None;
     // Modified time of the file when last applied (None = file absent).
     let mut applied: Option<Option<SystemTime>> = None;
 
@@ -305,7 +389,7 @@ pub fn run(dir: String) {
                 "ThinkOverride: {} field(s) {} written to {} row(s). Re-summon spirits for it to take effect.",
                 config.count(),
                 config.describe(),
-                rows.len()
+                rows.think.len() + rows.npc.len()
             ));
             applied = Some(modified);
         },
@@ -362,6 +446,26 @@ mod tests {
         assert_eq!(row.team_attack_effectivity(), 100);
         assert_eq!(row.is_guard_act(), 1);
         assert_eq!(row.search_eye_dist(), 15);
+    }
+
+    #[test]
+    fn npc_section() {
+        let parsed = parse("eye_dist=7
+[NpcParam]
+fallDamageDump=100
+hp=5
+bogusfield=1
+[Other]
+nose_dist=3");
+        assert_eq!(parsed.global.len(), 2);
+        let names: Vec<_> = parsed.npc.iter().map(|o| o.name).collect();
+        assert_eq!(names, ["fall_damage_dump", "hp"]);
+        let mut row: NPC_PARAM_ST = unsafe { std::mem::zeroed() };
+        for o in &parsed.npc {
+            unsafe { write(&mut row as *mut _ as *mut u8, o) };
+        }
+        assert_eq!(row.fall_damage_dump(), 100);
+        assert_eq!(row.hp(), 5);
     }
 
     #[test]
