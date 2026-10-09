@@ -4,10 +4,12 @@ A DLL mod that lets you summon more spirits from every Spirit Ash, giving you a 
 [list]
 [*]Summon more spirits per Ash: a multiplier (default x2) or a fixed number.[/*]
 [*]Works with every Spirit Ash, including ones added by other mods.[/*]
-[*]Summon several different Spirit Ashes at once.[/*]
+[*]Summon several different Spirit Ashes at once, or extra copies of the same one.[/*]
 [*]Re-summon spirits without resting at a Site of Grace.[/*]
 [*]Summon spirits outside summoning pool areas.[/*]
-[*]Spirits slowly regenerate health, 0.75% of their max HP per second by default.[/*]
+[*]Spirits regenerate HP over time, with options for a fixed amount, a percent of max HP or a percent of missing HP.[/*]
+[*]Improved spirit combat behavior, such as seeing farther and working together better.[/*]
+[*]Improved spirit movement: they follow you better and teleport to you more often.[/*]
 [*]Removes the ghost color from spirits so they look like normal characters.[/*]
 [*]Works in [url=https://www.nexusmods.com/eldenring/mods/510]Seamless Co-op[/url]: each player gets their own spirits, as long as everyone has the mod installed.[/*]
 [*]Hotkey to reload the ini without restarting the game.[/*]
@@ -35,7 +37,7 @@ Any DLL mod loader works, e.g. [url=https://www.nexusmods.com/eldenring/mods/117
 [*]Download this mod, then create a folder to hold it and its INI file - for example, inside your game folder create a [b]natives[/b] folder.[/*]
 [*]Open [b]config_eldenring.toml[/b] and edit [b]external_dlls = [ ][/b] to add the DLL, e.g.:
 [code]external_dlls = [
-    "natives\\SpiritMultiplier.dll",
+    "natives\\SpiritMultiplier.dll",
 ][/code]
 [/*]
 [*]Launch the game using Mod Engine 2's launcher, [b]modengine2_launcher.exe[/b].[/*]
