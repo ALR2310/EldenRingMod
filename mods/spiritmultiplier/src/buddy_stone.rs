@@ -56,14 +56,22 @@
 //!    Spiritcaller (no Spirit Ring, Ash + Spirit-Severing Blade greyed out
 //!    while spirits were out) - found by toggling each part in game.
 //!
+//! 4. With `NoRestResummon=false` the vanilla lock must survive Anywhere:
+//!    vanilla greys the Ash out after a recall/death until a rest because the
+//!    summoned flag turns the pool's stateInfo 373 off, and the stub in 1.
+//!    would hide that. While no spirit is out and the current stone's
+//!    original `summonedEventFlagId` is raised, [ANYWHERE] is set to 0 so the
+//!    stubs pass the game's own answers through (greyed, like vanilla).
+//!
 //! All three only redirect an existing `call` / `jmp`
 //! (`codepatch::redirect_rel32`, see `multi_spirit.rs` - Seamless Co-op
 //! aborts the game when its own byte signatures stop matching).
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::time::Duration;
 
-use eldenring::cs::{BuddyStoneParam, CSTaskGroupIndex, SoloParamRepository, WorldChrMan};
+use eldenring::cs::{BuddyStoneParam, CSEventFlagMan, CSTaskGroupIndex, SoloParamRepository, WorldChrMan};
 use fromsoftware_shared::FromStatic;
 
 use common::{codepatch, config, logger, memscan};
@@ -282,6 +290,9 @@ pub fn run() {
     // None = not captured yet; Some(None) = capture failed, stay off.
     let mut originals: Option<Option<Vec<Original>>> = None;
     let mut applied: Option<(bool, bool)> = None;
+    // Original summonedEventFlagId per stone entity id (row id).
+    let mut lock_flags: HashMap<u32, u32> = HashMap::new();
+    let mut locked = false;
     // Last real current stone (+0x38) seen, else the default row.
     let mut fallback_stone: Option<u32> = None;
 
@@ -306,6 +317,25 @@ pub fn run() {
                 }
             }
 
+            // NoRestResummon=false: keep the vanilla once-per-rest lock (4.).
+            if let (Some((false, true)), true) = (applied, patched) {
+                let stone = unsafe { WorldChrMan::instance() }
+                    .ok()
+                    .filter(|w| !w.summon_buddy_manager.player_has_alive_summon)
+                    .map(|w| w.summon_buddy_manager.buddy_stone_entity_id)
+                    .map(|current| if current != 0 { current } else { fallback_stone.unwrap_or(0) });
+                let now_locked = stone
+                    .and_then(|id| lock_flags.get(&id).copied())
+                    .filter(|&flag| flag != 0)
+                    .and_then(|flag| unsafe { CSEventFlagMan::instance() }.ok().map(|m| m.virtual_memory_flag.get_flag(flag)))
+                    .unwrap_or(false);
+                if now_locked != locked {
+                    locked = now_locked;
+                    ANYWHERE.store(!locked as u8, Ordering::Relaxed);
+                    logger::log(&format!("SummonAnywhere: once-per-rest lock {}.", if locked { "on" } else { "off" }));
+                }
+            }
+
             elapsed_ms += (data.delta_time.time as f64) * 1000.0;
             if elapsed_ms < TICK_INTERVAL_MS {
                 return;
@@ -320,6 +350,11 @@ pub fn run() {
             let Some(rows) = originals.get_or_insert_with(|| capture(repo)) else {
                 return;
             };
+            if lock_flags.is_empty() {
+                if let Some(ids) = common::params::row_ids::<BuddyStoneParam>(repo) {
+                    lock_flags = rows.iter().map(|r| (ids[r.index], r.summoned_event_flag_id)).collect();
+                }
+            }
             if fallback_stone.is_none() {
                 fallback_stone = default_stone(repo);
             }
@@ -345,6 +380,7 @@ pub fn run() {
                 }
             }
             let active = anywhere && patched;
+            locked = false;
             ANYWHERE.store(active as u8, Ordering::Relaxed);
             FALLBACK_STONE.store(if active { fallback_stone.unwrap_or(0) } else { 0 }, Ordering::Relaxed);
             if active {

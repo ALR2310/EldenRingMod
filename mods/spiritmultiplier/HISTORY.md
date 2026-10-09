@@ -28,3 +28,4 @@ lịch sử git của `README.md`.
 | 2026-10-08 | Tách README thành README + HISTORY + docs/; các vấn đề còn mở (Reforged Fury, Seamless mất màu ma, warp) ghi ở `docs/open_issues.md` | [docs](docs/open_issues.md) |
 | 2026-10-08 | `MultiSpirit`: spirit đã chết vẫn nằm trong `groups` nên bấm lại Ash của nó (khi Ash khác còn sống) bị coi là "đang out" và chỉ thu hồi; nay kiểm tra HP chr_ins. Đã test in-game (2026-10-08): đúng | |
 | 2026-10-08 | Thêm `SpiritThink.ini` (tuỳ chọn, thử nghiệm): chỉnh field NpcThinkParam của spirit khi đang chơi, không cần build lại, để nghiên cứu độ hung hăng | [docs](docs/think_override.md) |
+| 2026-10-09 | Sửa `NoRestResummon=false` không có tác dụng khi `SummonAnywhere=true` (báo cáo trên Nexus): stub stateInfo 373 ép "được dùng" nên đè luôn khoá của vanilla; nay mod tự đọc cờ `summonedEventFlagId` gốc của bia và tắt stub khi cờ bật và không còn spirit. Đã test in-game (2026-10-09): đúng | [docs](docs/summon_anywhere.md) |

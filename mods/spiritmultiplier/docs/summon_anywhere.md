@@ -8,6 +8,8 @@ Chỉ sửa param (cách của Solid Uncapper, quét chuỗi trong DLL của h�
 
 Giới hạn: không gỡ được luật của Reforged (sau Spirit-Severing Blade ô Ash xám tới khi ngồi grace) - xem [open_issues.md](open_issues.md).
 
+**Tương tác với SummonAnywhere (2026-10-09, đã test in-game: đúng):** khoá của vanilla (Ash xám sau khi thu hồi/chết tới khi ngồi grace) chỉ có khi `SummonAnywhere` tắt; bật thì stub stateInfo 373 ép `al = 1` nên đè luôn khoá, `NoRestResummon=false` mất tác dụng (người dùng Nexus báo, bạn xác nhận bằng cách tắt SummonAnywhere). Sửa: khi `NoRestResummon=false` + Anywhere, mỗi frame tick đọc event flag `summonedEventFlagId` gốc của bia hiện tại (`CSEventFlagMan`); cờ bật và không còn spirit thì `ANYWHERE = 0` để game tự trả lời (xám). Khoá theo từng bia, nên sang bia khác (ô map khác) thì mở lại.
+
 ## SummonAnywhere
 
 Sửa param như Solid Uncapper (`activateRange +0x1C = 65535`, `overwriteReturnRange +0x1E = -1`, `overwriteActivateRegionEntityId +0x20 = 0`, `eliminateTargetEntityId +0x8 = 0`) **chưa đủ**: bản 1.1.0 báo lỗi ở Shadowlands và ngoài pool. Còn 3 chỗ cần đối tượng bia đá đang được nạp gần người chơi:

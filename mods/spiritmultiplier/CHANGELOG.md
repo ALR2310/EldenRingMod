@@ -6,6 +6,7 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+- Fixed the once-per-rest summoning limit not applying when summoning anywhere was on and the no-rest option was off.
 - Fixed re-summoning a dead spirit taking two button presses while another spirit is still alive.
 
 ## [1.1.4] - 2026-10-01
