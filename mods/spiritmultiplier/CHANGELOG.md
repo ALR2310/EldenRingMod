@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-10
+
 - Fixed a crash when summoning the Mimic Tear in Seamless Co-op.
 
 ## [1.2.1] - 2026-10-09
