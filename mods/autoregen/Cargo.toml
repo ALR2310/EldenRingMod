@@ -1,6 +1,6 @@
 [package]
 name = "autoregen"
-version = "2.6.3"
+version = "2.6.4"
 edition = "2024"
 publish = false
 

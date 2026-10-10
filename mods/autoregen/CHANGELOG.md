@@ -6,6 +6,10 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+## [2.6.4] - 2026-10-10
+
+- Fixed the Ash of War exclusion not working for stance-type Ashes, e.g. Unsheathe.
+
 ## [2.6.3] - 2026-09-24
 
 - Fixed install paths with non-ASCII characters.

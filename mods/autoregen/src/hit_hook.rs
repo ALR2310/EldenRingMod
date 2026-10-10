@@ -314,7 +314,8 @@ fn apply_hit_heal(ctx: *mut c_void, attacker_ptr: *mut c_void, hit_info: *mut c_
 
     if ENABLED.load(Ordering::Relaxed) == 0
         || !matches_damage_type(hit_info, DAMAGE_TYPE.load(Ordering::Relaxed))
-        || (EXCLUDE_AOW.load(Ordering::Relaxed) != 0 && regen::is_last_attack_skill())
+        || (EXCLUDE_AOW.load(Ordering::Relaxed) != 0
+            && (regen::is_last_attack_skill() || regen::is_skill_anim()))
     {
         return;
     }

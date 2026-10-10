@@ -1,6 +1,6 @@
 # Regen Per Hit: hook, phân loại đòn, ExcludeAow
 
-**Status 2026-10-08: hoạt động (hit_hook.rs, viết lại 2026-09-12), đã test trong game. Còn mở: `ExcludeAow=true` vẫn hồi FP với Unsheathe (xem cuối). Mã: `src/hit_hook.rs`, `src/regen.rs`.**
+**Status 2026-10-10: hoạt động (hit_hook.rs, viết lại 2026-09-12), đã test trong game, kể cả Ash dạng Stance (Unsheathe, Square-Off). Mã: `src/hit_hook.rs`, `src/regen.rs`.**
 
 ## Hook hiện tại (`src/hit_hook.rs`)
 
@@ -20,7 +20,10 @@ Cách tìm hàm (Ghidra headless trên bản copy `eldenring.exe` ở đường 
 
 Không có ngưỡng `atkId` hay field `AtkParam` nào phân biệt được Ash of War (so ~200 field giữa nhóm `[AOW]` và `Default` trong `AtkParam_Pc.csv`, field tốt nhất vẫn overlap 44.6%; Beast Claw heavy thường nằm chung dải ID với nhiều AoW). Hướng dùng: input pad qua `CSChrActionRequestModule` - Weapon Art luôn bằng `L2`. Chỉ đọc `l2` tại lúc trúng thì sót (nút đã nhả từ lâu), nên **chốt (latch) theo lần bấm mới nhất** mỗi frame qua `new_action_presses`: `R1`/`R2`/`L1` → "đòn thường"; `L2` → "Weapon Art"; giữ tới lần bấm kế (`LAST_ATTACK_WAS_SKILL`, `update_last_attack_input()` trong `regen.rs`). `L1` gộp vào đòn thường vì không bao giờ kích hoạt Weapon Art.
 
-**Còn mở (Nexus, Brokensword7, 2026-10-04):** Unsheathe = bấm `L2` vào tư thế rồi `R1`/`R2` để chém; latch thấy `R1`/`R2` → chốt "đòn thường" nên nhát chém bị tính là đòn thường và vẫn hồi FP. Ash 2 bước tương tự có thể bị cùng lỗi (Sacred Blade, Lion's Claw, Bloodhound's Step... cần kiểm tra). Cần log xác nhận (`atkId` + `l2`/`r1` lúc trúng); hướng sửa: giữ latch tới khi anim/action của Ash kết thúc thay vì đổi ngay khi `R1`/`R2` bấm. Chưa có ini đầy đủ của người dùng.
+**Ash dạng Stance (Nexus, Brokensword7, 2026-10-04/10):** Unsheathe, Square-Off, Stomp vào tư thế bằng `L2` rồi chém bằng `R1`/`R2`, nên latch nút bấm bị ghi đè thành "đòn thường" và FP vẫn hồi. Ash bấm `L2` một lần (Spinning Slash...) thì latch vẫn đúng. Sửa bằng lớp thứ hai: **prefix TAE** `aXXX` của anim đang chạy (`CSChrTimeActModule`, `is_skill_anim()` trong `regen.rs`). Prefix 600-999 là Sword Art (tra `mods/speedmultiplier/docs/tae-ids.md`), trừ 6 bộ chiêu vũ khí đặc biệt (a831, a832, a839, a852, a935, a953) có đòn thường cũng nằm trong dải đó; cùng quy tắc và cùng danh sách với `speedmultiplier::speed::group_of`. Một hit bị loại nếu latch báo Skill **hoặc** anim thuộc dải Sword Art.
+
+Bằng chứng (log probe, 2026-10-10): Unsheathe = `a614_040060`, Square-Off = `a615_040060/040070`, tất cả `latchSkill=false` nhưng đều bị loại; đòn thường (`a029_0320x0`, `atkId` 900200-900240) vẫn hồi. Chưa test riêng Stomp và Ash `L2` đơn. Hạn chế: Ash của 6 vũ khí trên vẫn dựa vào latch. Đã thử/bỏ: SpEffect `45` xuất hiện lúc trúng đòn Unsheathe nhưng chưa rõ nghĩa, không dùng.
+
 
 ## Lỗi đã gặp (bài học)
 

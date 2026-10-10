@@ -17,10 +17,6 @@ Chi tiết: `mods/spiritmultiplier/docs/open_issues.md`, `docs/warp_research.md`
 - [ ] [research] Spirit cỡ lớn (mod Elden Lord Army of Summons) đứng im đến khi địch lại gần người chơi; muốn chủ động tấn công (almasakmal123, 2026-10-08); thử bằng `SpiritThinkParam.ini`, xem `mods/spiritmultiplier/docs/think_override.md`
 - [ ] Spirit không bị sát thương khi rơi từ chỗ cao (almasakmal123, 2026-10-08); phần đưa về chỗ người chơi khi rơi khỏi map gộp vào warp hoãn ở trên
 
-## AutoRegen
-
-- [ ] `Regen.PerHit.ExcludeAow=true` vẫn hồi FP khi dùng Unsheathe (Brokensword7, 2026-10-04): nghi latch `LAST_ATTACK_WAS_SKILL` đổi khi bấm `R1`/`R2` giữa Ash 2 bước; cần log xác nhận (`regen.rs::update_last_attack_input`; chi tiết `mods/autoregen/docs/per_hit.md`)
-
 ## SpeedMultiplier
 
 - [ ] Seamless Co-op: đồng bộ hình ảnh tốc độ giữa các máy bằng Steam P2P (hướng B, chốt 2026-10-03; xem `docs/seamless.md`)

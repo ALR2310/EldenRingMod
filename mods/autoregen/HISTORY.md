@@ -31,3 +31,4 @@ lịch sử git của `README.md`.
 | 2026-10-05 | Version thật trong thuộc tính file DLL (`build.rs` + `winresource`); thêm key `ReloadBanner` | |
 | 2026-10-07 | Đổi thư mục `crates/` thành `mods/`; đường dẫn script/dump dịch ngược đổi chỗ | |
 | 2026-10-08 | Tách README thành README + HISTORY + docs/ | |
+| 2026-10-10 | `ExcludeAow`: thêm nhận diện theo prefix TAE của anim đang chạy (600-999), vì Ash dạng Stance (Unsheathe, Square-Off) vào tư thế bằng `L2` rồi chém bằng `R1`/`R2` nên latch nút bấm bị đánh lừa | [docs](docs/per_hit.md) |

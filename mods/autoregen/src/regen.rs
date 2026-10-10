@@ -267,6 +267,22 @@ fn current_anim_id() -> Option<i32> {
     Some(time_act.anim_queue[read_idx as usize % time_act.anim_queue.len()].anim_id)
 }
 
+/// Special-weapon movesets whose TAE prefix falls inside the Sword Arts range
+/// (their plain attacks use it too). Same list as `speedmultiplier::speed`'s
+/// `WEAPON_TAES_IN_SKILL_RANGE` (docs/tae-ids.md there).
+const WEAPON_TAES_IN_SKILL_RANGE: [i32; 6] = [831, 832, 839, 852, 935, 953];
+
+/// Whether the player's current animation is an Ash of War one: TAE prefix
+/// `aXXX` in 600..1000 (e.g. Unsheathe `a614_040060`, observed 2026-10-10),
+/// same rule `speedmultiplier` uses and has tested in game. Catches stance
+/// Ashes whose follow-up R1/R2 fools the input latch.
+pub fn is_skill_anim() -> bool {
+    current_anim_id().is_some_and(|id| {
+        let prefix = id / 1_000_000;
+        (600..1000).contains(&prefix) && !WEAPON_TAES_IN_SKILL_RANGE.contains(&prefix)
+    })
+}
+
 // Timestamp (`now_ms()`) the player became idle (`busy` went false), or 0
 // while currently busy - backs `is_idle()`'s `IDLE_GRACE_MS` delay below.
 // 0 doubles as "currently busy" since `now_ms()` is relative to process
