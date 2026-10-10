@@ -6,6 +6,8 @@ user-facing change, plain text. Add new items under `[Unreleased]`; the
 
 ## [Unreleased]
 
+- Fixed a crash when summoning the Mimic Tear in Seamless Co-op.
+
 ## [1.2.1] - 2026-10-09
 
 - Fixed spirits not teleporting to you in Seamless Co-op.

@@ -225,6 +225,15 @@ fn local_handles(world_chr_man: &WorldChrMan) -> Vec<u64> {
         .collect()
 }
 
+/// Whether the game can find the chr of `handle`. The warp update looks each
+/// entry's chr up by handle and uses the result without a null check, so an
+/// entry whose chr is missing (or never findable, as it seems for Seamless's
+/// Mimic Tear: crash right after summoning it) takes the game down.
+fn resolvable(world_chr_man: &WorldChrMan, handle: u64) -> bool {
+    let handle = unsafe { (&handle as *const u64 as *const eldenring::cs::FieldInsHandle).read_unaligned() };
+    world_chr_man.chr_ins_by_handle(&handle).is_some()
+}
+
 /// Registers with the warp manager every spirit of the local player that has
 /// no entry. The game does it when it creates the spirit's chr, but with
 /// Seamless Co-op the spirits are created by Seamless's own code, which skips
@@ -241,14 +250,14 @@ unsafe fn register_missing(a1: usize, world_chr_man: &WorldChrMan, registry: Reg
     unsafe { for_each_node(a1, |node| have.push(rd(node, 32))) };
     let local = local_handles(world_chr_man);
     for &handle in &local {
-        if !have.contains(&handle) {
+        if !have.contains(&handle) && resolvable(world_chr_man, handle) {
             unsafe { (registry.register)(a1, handle) };
             ours.push(handle);
             logger::log(&format!("Warp: registered spirit {handle:#x} with the warp manager."));
         }
     }
     ours.retain(|handle| {
-        if local.contains(handle) {
+        if local.contains(handle) && resolvable(world_chr_man, *handle) {
             return true;
         }
         if have.contains(handle) {
@@ -500,6 +509,18 @@ pub fn run() {
             // module registered (Seamless: every flag stayed 0 and a requested
             // warp stayed at stage 1, log 2026-10-09), so run it here, once a
             // frame, as `SummonBuddyManager::Update` would.
+            if let (Some(registry), false) = (registry, ours.is_empty()) {
+                // The engine's update must never meet an entry whose chr is
+                // gone: drop it first, not at the next 100 ms tick.
+                ours.retain(|&handle| {
+                    if resolvable(world_chr_man, handle) {
+                        return true;
+                    }
+                    unsafe { (registry.unregister)(a1, handle) };
+                    logger::log(&format!("Warp: removed spirit {handle:#x} from the warp manager (chr not found)."));
+                    false
+                });
+            }
             if let (Some(registry), false) = (registry, ours.is_empty()) {
                 let time = FrameTime { vftable: 0, seconds: data.delta_time.time, pad: 0 };
                 unsafe { (registry.update)(a1, &time) };

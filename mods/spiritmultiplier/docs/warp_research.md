@@ -38,3 +38,7 @@ Cùng ini, cùng DLL, cùng khu vực: vanilla có 3 mục trong danh sách dị
 Cách mod xử lý (`warp.rs`): mỗi 0,1 s đăng ký các spirit sống của người chơi này chưa có mục (và gỡ mục của spirit đã đi, chỉ những mục mod đã đăng ký); nếu có mục do mod đăng ký thì mỗi frame tự gọi `sub_1404C2890` với một `FrameTime` giả (chỉ đọc số giây ở +8); đo khoảng cách tới người chơi và đặt stage = 1 khi xa hơn ngưỡng liên tục 1,5 s. Sau đó engine tự chạy cờ và stage 1 → 2 → 3 → 0 (log: spirit hiện tới chỗ người chơi). Vanilla không đổi: game tự đăng ký nên mod không có mục nào của riêng nó.
 
 Solo khi `ersc.dll` đã nạp (kiểm tra sau khi `CSTaskImp` có, lúc mọi DLL đã nạp): vanilla không đổi hành vi, vì game tự đăng ký spirit (và cố ý không đăng ký trong đấu trường).
+
+## Crash với Mimic Tear trong Seamless (2026-10-10)
+
+Báo cáo Nexus, tái hiện được: bật Seamless + triệu hồi Mimic Tear thì game crash ngay sau khi mod đăng ký spirit với `warp_manager` (vanilla không crash). `sub_1404C28D0` (update) lấy chr bằng `sub_140508A50(handle)` rồi đọc `chr+400` không kiểm null. Sửa: `resolvable()` (`WorldChrMan::chr_ins_by_handle`) trước khi đăng ký và trước mỗi lần gọi update; entry của mod không tra được chr thì gỡ ngay. Đã test in-game, hết crash. Chưa có dump nên nguyên nhân chính xác (Mimic không tra được hay biến mất giữa 2 nhịp) chưa chốt.
